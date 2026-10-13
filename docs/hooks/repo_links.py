@@ -11,7 +11,7 @@ file's URL on the repository's main branch. Links inside ``docs/`` are untouched
 
 Example:
     In ``docs/production.md``, ``[x](../deploy/prod/README.md)`` becomes
-    ``[x](https://git.example.com/globius-oss/switchyard/-/blob/main/deploy/prod/README.md)``.
+    ``[x](https://github.com/globius/switchyard/blob/main/deploy/prod/README.md)``.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ def on_page_markdown(markdown: str, page: Any, config: Any, files: Any) -> str:
     Returns:
         The page source with out-of-tree links made absolute.
     """
-    base = config["repo_url"].rstrip("/") + "/-/blob/main/"
+    base = config["repo_url"].rstrip("/") + "/blob/main/"
     here = posixpath.dirname("docs/" + page.file.src_uri)
 
     def fix(m: re.Match[str]) -> str:

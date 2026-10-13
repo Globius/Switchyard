@@ -3,7 +3,7 @@
 Read-only inventory. Nothing here is a decision; an ADR comes first if we pursue it.
 
 Status: backlog, low priority (feature-completeness first). Chosen direction: FIPS mode on Rocky Linux with free software,
-claimed as "FIPS mode", not "validated". Tracked in [work item #1](https://git.example.com/globius-oss/switchyard/-/work_items/1).
+claimed as "FIPS mode", not "validated". Tracked in [issue #1](https://github.com/globius/switchyard/issues/1).
 
 "FIPS-enabled" here means every crypto operation runs in a CMVP-validated module in approved mode. In practice that
 means building on a vendor's validated OpenSSL/Go module (RHEL/UBI, Ubuntu Pro FIPS) with the OS FIPS flag on. Check the

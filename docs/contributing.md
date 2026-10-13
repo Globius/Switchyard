@@ -67,3 +67,10 @@ Why a maintainer label first: the build runners there are privileged, so nobody'
 ## Releases
 
 Releases and nightly builds are made by CI from `main`; see [runbooks/release.md](runbooks/release.md). You never need to touch version numbers.
+
+## Secrets
+
+CI scans the whole history for secrets with [gitleaks](https://github.com/gitleaks/gitleaks) (`.gitleaks.toml`). Never commit real keys, tokens or
+passwords, even in tests: use obvious placeholders. A value that only looks like a secret (an example token, a test certificate placeholder) can be
+marked with a `gitleaks:allow` comment on its line. Findings already reviewed are in `.gitleaksignore`. If you committed a real secret, tell a
+maintainer: it must be revoked, not just deleted.

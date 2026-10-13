@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Secret scanning (gitleaks), run in CI on GitLab and GitHub over the whole history.
+# Findings that were reviewed and are not secrets are listed in .gitleaksignore.
+title = "Switchyard"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Generated files that carry example values"
+paths = [
+  '''docs/api/openapi\.json''',
+  '''ui/src/api/schema\.d\.ts''',
+]

@@ -11,8 +11,8 @@ stages: [check, deploy]
 # ghcr.io and quay.io images are pulled directly.
 default:
   image: ghcr.io/astral-sh/uv:python3.12-bookworm
-  # The Kubernetes runner: privileged pods (docker:dind for the test job) and no host Docker socket needed.
-  tags: [kubernetes, docker-privileged]
+  # Runner group 250 runs jobs in Docker; jobs that start a Docker daemon (dind) ask for `docker-privileged` below.
+  tags: [docker, x86_64]
   interruptible: true
   cache:
     key: uv-$CI_COMMIT_REF_SLUG
@@ -48,6 +48,7 @@ test:
 
 .docker-tests:
   extends: .controller
+  tags: [docker-privileged]
   # Docker-backed tests (PostgreSQL, HAProxy) need a Docker daemon; use the dind service.
   services:
     - name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:27-dind
@@ -175,6 +176,7 @@ audit-ui:
 
 se-image:
   stage: check
+  tags: [docker-privileged]
   image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:27
   services:
     - name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:27-dind
@@ -205,6 +207,19 @@ helm:
 
 # Docs site (ADR 0190): strict MkDocs build with link checking on every pipeline, published to GitLab
 # Pages from main. Same as `make docs` locally.
+# Secret scan over the whole history (gitleaks). Findings that were reviewed and are not secrets are in
+# .gitleaksignore; a new one fails the job. Mark a deliberate example with `gitleaks:allow` on its line.
+gitleaks:
+  stage: check
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/zricethezav/gitleaks:v8.21.2
+    entrypoint: [""]
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - gitleaks detect --source . --config .gitleaks.toml --redact --no-banner -v
+
 # Licensing and SBOMs (ADR 0200, docs/sbom-and-licensing.md).
 reuse:
   stage: check
@@ -252,6 +267,7 @@ sbom-helm:
 # The SE image: build the image the se-image job tests (Debian 13 plus every binary) and scan it.
 sbom-se-image:
   extends: .sbom
+  tags: [docker-privileged]
   image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:27
   services:
     - name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:27-dind
@@ -364,6 +380,7 @@ release-version:
 # Registry. The images are too big for job artifacts, so everything happens in this one job.
 release-build:
   extends: .publisher
+  tags: [docker-privileged]
   stage: deploy
   interruptible: false
   # Publish only a main (or tag) that passes the quick checks; test-full still runs beside it.
