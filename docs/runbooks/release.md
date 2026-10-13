@@ -37,7 +37,7 @@ behind then gets the chain of releases to go through.
 ## Nightlies
 
 They run from a pipeline schedule (GitLab: CI/CD > Schedules, daily, branch `main`, variable `NIGHTLY=1`) or the cron in `release.yml` (GitHub).
-Run one by hand with `FORCE_NIGHTLY=1` (GitLab) or the "force nightly" input (GitHub) when nothing changed. They are signed with the nightly key and are
+Run one by hand: GitLab, Build > Pipelines > Run pipeline on `main` with variables `NIGHTLY=1` (and `FORCE_NIGHTLY=1` when nothing changed); GitHub, the "force nightly" input of the release workflow. They are signed with the nightly key and are
 only seen by installations that chose the `nightly` channel **and** trust that key.
 
 ## Setting it up once
