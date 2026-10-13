@@ -13757,7 +13757,7 @@ export interface components {
              * @default stable
              * @enum {string}
              */
-            channel: "stable" | "candidate";
+            channel: "stable" | "candidate" | "nightly";
             /**
              * Enabled
              * @default false
@@ -13787,7 +13787,7 @@ export interface components {
              * @default stable
              * @enum {string}
              */
-            channel: "stable" | "candidate";
+            channel: "stable" | "candidate" | "nightly";
             /**
              * Checked At
              * @description When the feed was last fetched.
@@ -13854,7 +13854,7 @@ export interface components {
              * @default stable
              * @enum {string}
              */
-            channel: "stable" | "candidate";
+            channel: "stable" | "candidate" | "nightly";
             /** Date */
             date: string;
             /**

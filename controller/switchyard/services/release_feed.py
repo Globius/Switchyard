@@ -31,9 +31,14 @@ CONFIG_KEY = "release_feed"
 STATE_KEY = "release_feed_state"
 CHECK_RELEASES_JOB = "check_releases"
 MAX_FEED_BYTES = 1024 * 1024
-#: Public keys the project signs feeds with (key id to base64 Ed25519 public key). Empty until the
-#: project publishes its first key; operators can always add their own in the feed settings.
-PROJECT_KEYS: dict[str, str] = {}
+#: Public keys the project signs releases with (key id to base64 Ed25519 public key, 32 raw bytes).
+#: `release-2026` is the maintainers' offline key; `ci-release-2026` is the key CI signs tagged
+#: releases with. The nightly key (`nightly-2026`) is deliberately NOT here: operators who want
+#: nightlies trust it themselves (docs/keys.md).
+PROJECT_KEYS: dict[str, str] = {
+    "release-2026": "Lr/O9yFbtWHxGa/ZO/U1ASnRHuFHFYu/TJka8C/o6do=",
+    "ci-release-2026": "Agmhby6SCFD0+xxnencGqcICks5CxnOp3O4UrsNL+D0=",
+}
 
 
 @dataclass(frozen=True)
@@ -64,8 +69,8 @@ def _check_config(body: dict[str, Any]) -> FeedConfig:
     if url and (parts.scheme != "https" or not parts.hostname or parts.username or parts.password):
         errors.add("url", "invalid", "must be an https URL without credentials")
     channel = body.get("channel", "stable")
-    if channel not in ("stable", "candidate"):
-        errors.add("channel", "invalid", "must be stable or candidate")
+    if channel not in ("stable", "candidate", "nightly"):
+        errors.add("channel", "invalid", "must be stable, candidate or nightly")
     keys = body.get("trusted_keys") or {}
     if not isinstance(keys, dict) or len(keys) > 10:
         errors.add("trusted_keys", "invalid", "must be an object of at most 10 key ids")

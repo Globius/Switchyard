@@ -141,8 +141,32 @@ controller node, and lets you download the verified file to take to another node
 
 ### Release feed: where the signature comes from
 
-Maintainers sign releases with the project key ([runbooks/release.md](runbooks/release.md)): `syctl release keygen`, `build`, `feed`. Controllers trust the
+Maintainers sign releases with the project key; CI builds, signs and publishes them ([runbooks/release.md](runbooks/release.md), ADR 0206): `syctl release keygen`, `build`, `feed`. Controllers trust the
 keys in `PROJECT_KEYS` (and any `trusted_keys` an operator adds); until the project key is published, set your own.
+
+### Channels: stable, candidate, nightly
+
+Every release in a feed has a channel. **stable** is a plain version (`0.2.0`), **candidate** a release candidate (`0.2.0-rc1`), **nightly** a build of
+the day (`0.2.0-nightly.20261014`). The channel you choose in Admin > Upgrades also includes the narrower ones: candidate sees stable and
+candidate, nightly sees all three. Versions order by semantic-version precedence, so `0.2.0-nightly.…` < `0.2.0-rc1` < `0.2.0`, and a
+newer nightly replaces an older one.
+
+To follow the nightlies on a test system:
+
+1. Set the feed address to the nightly feed (`nightly.json`; for GitLab/GitHub see [runbooks/release.md](runbooks/release.md)) and the channel to **nightly**.
+2. Add the nightly key under **Extra trusted signing keys** (`id=public key`; the current one is on [keys.md](keys.md)). The nightly key is separate from the
+   release key and not trusted by default, so a leaked nightly key cannot affect production sites.
+3. Check now. Bundles install the same way as releases, with the same checks.
+
+Nightlies are not releases: they carry no release notes, they can break things, and the project makes no promise to upgrade between them.
+
+### Unsigned bundles (development only)
+
+A bundle needs a signature from a trusted key everywhere it matters (Admin > Upgrades staging, `syctl upgrade plan` and `apply`). For a development
+build without one: `syctl release build --unsigned …`, then `syctl upgrade apply BUNDLE … --allow-unsigned --confirm-unsigned <version>` (type the
+version back). The file hashes are still checked, so a damaged download is caught, but nobody vouches for who made the bundle. The controller's own
+staging and the UI never accept unsigned bundles.
+
 ## Engine roll (built; lab-tested with two QEMU engines)
 
 `POST /tenants/{t}/se-groups/{group}/rolls {"template_vmid": 9770}` replaces every enabled engine of the group with one cloned from a new

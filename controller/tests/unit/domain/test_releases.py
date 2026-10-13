@@ -92,3 +92,25 @@ def test_upgrade_path_follows_the_documented_chain() -> None:
     assert upgrade_path(feed, "0.3.0", "0.3.0") == []
     assert upgrade_path(feed, "dev", "0.3.0") == []
     assert upgrade_path(feed, "0.0.5", "0.3.0") == ["0.1.0", "0.2.0", "0.3.0"]
+
+
+def test_the_nightly_channel_sees_everything_and_orders_by_precedence() -> None:
+    feed = ReleaseFeed.model_validate(
+        {
+            "schema": 1,
+            "releases": [
+                {"version": "0.2.0", "date": "2026-10-20"},
+                {"version": "0.3.0-nightly.20261013", "channel": "nightly", "date": "2026-10-13"},
+                {"version": "0.3.0-nightly.20261014", "channel": "nightly", "date": "2026-10-14"},
+                {"version": "0.3.0-rc1", "channel": "candidate", "date": "2026-10-12"},
+            ],
+        }
+    )
+    assert latest(feed).version == "0.2.0"  # type: ignore[union-attr]
+    assert latest(feed, "candidate").version == "0.3.0-rc1"  # type: ignore[union-attr]
+    # By semantic-version precedence nightly < rc < release, so an rc outranks the nightlies before it.
+    assert latest(feed, "nightly").version == "0.3.0-rc1"  # type: ignore[union-attr]
+    only_nightly = ReleaseFeed.model_validate(
+        {"schema": 1, "releases": feed.model_dump(mode="json")["releases"][:3]}
+    )
+    assert latest(only_nightly, "nightly").version == "0.3.0-nightly.20261014"  # type: ignore[union-attr]

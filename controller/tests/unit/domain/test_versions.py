@@ -59,3 +59,32 @@ def test_backup_age() -> None:
     assert [f.code for f in check_backup(None, now)] == ["backup_missing"]
     assert [f.code for f in check_backup(now - timedelta(days=9), now)] == ["backup_stale"]
     assert check_backup(now - timedelta(days=2), now) == []
+
+
+def test_version_precedence_follows_semver() -> None:
+    from switchyard.domain.versions import version_key
+
+    order = [
+        "0.1.9",
+        "0.2.0-nightly.9",
+        "0.2.0-nightly.20261013",
+        "0.2.0-nightly.20261014",
+        "0.2.0-rc1",
+        "0.2.0",
+        "0.2.1-nightly.1",
+        "0.10.0",
+        "1.0.0",
+    ]
+    keys = [version_key(v) for v in order]
+    assert None not in keys and keys == sorted(keys)  # type: ignore[type-var]
+    assert version_key("v1.0.0+build5") == version_key("1.0.0")
+    assert version_key("dev") is None and version_key("1.0") is None
+
+
+def test_a_nightly_agent_is_behind_the_release_it_leads_to() -> None:
+    from switchyard.domain.versions import check_agent
+
+    compat = Compat(min_agent="0.1.0", recommended_min_agent="0.2.0")
+    codes = [f.code for f in check_agent("0.2.0-nightly.1", "0.2.0", compat)]
+    assert codes == ["agent_behind"]
+    assert check_agent("0.2.0-nightly.2", "0.2.0-nightly.2", Compat("0.1.0", "0.1.0")) == []

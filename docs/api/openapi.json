@@ -4311,7 +4311,7 @@
         "description": "Which release to download from the release feed.",
         "properties": {
           "version": {
-            "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.]{1,16})?$",
+            "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.]{1,32})?$",
             "title": "Version",
             "type": "string"
           }
@@ -18918,7 +18918,8 @@
             "default": "stable",
             "enum": [
               "stable",
-              "candidate"
+              "candidate",
+              "nightly"
             ],
             "title": "Channel",
             "type": "string"
@@ -18954,7 +18955,8 @@
             "default": "stable",
             "enum": [
               "stable",
-              "candidate"
+              "candidate",
+              "nightly"
             ],
             "title": "Channel",
             "type": "string"
@@ -19091,7 +19093,8 @@
             "default": "stable",
             "enum": [
               "stable",
-              "candidate"
+              "candidate",
+              "nightly"
             ],
             "title": "Channel",
             "type": "string"

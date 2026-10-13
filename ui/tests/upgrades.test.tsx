@@ -10,7 +10,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createQueryClient } from "@/auth/session";
-import { headline, type Check } from "@/features/admin/Upgrades";
+import { formatKeys, headline, parseKeys, type Check } from "@/features/admin/Upgrades";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "@/routeTree.gen";
 
@@ -63,6 +63,7 @@ const STAGED = {
   files: [],
 };
 let bundles: (typeof STAGED)[] = [];
+let feedChannel: "stable" | "candidate" | "nightly" = "stable";
 
 const calls: Record<string, unknown> = {};
 const server = setupServer(
@@ -127,7 +128,7 @@ const server = setupServer(
   http.get("*/api/v1/system/releases", () =>
     HttpResponse.json({
       url: "https://git.example.test/releases.json",
-      channel: "stable",
+      channel: feedChannel,
       enabled: true,
       trusted_keys: {},
       checked_at: "2026-10-13T04:00:00Z",
@@ -162,6 +163,10 @@ const server = setupServer(
     calls.deleted = params.name;
     return new HttpResponse(null, { status: 204 });
   }),
+  http.put("*/api/v1/system/releases", async ({ request }) => {
+    calls.feedSaved = await request.json();
+    return HttpResponse.json({});
+  }),
   http.post("*/api/v1/system/releases/check", () => {
     calls.checked = true;
     return HttpResponse.json({});
@@ -171,6 +176,7 @@ beforeAll(() => server.listen());
 afterEach(() => {
   server.resetHandlers();
   bundles = [];
+  feedChannel = "stable";
   for (const k of Object.keys(calls)) delete calls[k];
 });
 afterAll(() => server.close());
@@ -269,5 +275,37 @@ describe("upgrade bundles", () => {
     expect(calls.deleted).toBeUndefined();
     await userEvent.click((await screen.findAllByRole("button", { name: "Remove" })).at(-1)!);
     await waitFor(() => expect(calls.deleted).toBe("switchyard-0.2.0-0123456789ab.sybundle"));
+  });
+});
+
+describe("release feed channels and keys", () => {
+  it("parses and prints trusted keys, one per line", () => {
+    const key = "A".repeat(43) + "=";
+    expect(parseKeys(`# note\nnightly=${key}\n\n`)).toEqual({ keys: { nightly: key } });
+    expect(parseKeys("nightly=short")).toHaveProperty("error");
+    expect(parseKeys("no-equals")).toHaveProperty("error");
+    expect(formatKeys({ a: key })).toBe(`a=${key}`);
+    expect(formatKeys(undefined)).toBe("");
+  });
+
+  it("warns about the nightly channel and saves a trusted key with the channel kept", async () => {
+    feedChannel = "nightly";
+    renderAt("/admin/upgrades");
+    expect(await screen.findByText(/Nightly builds are not releases/)).toBeInTheDocument();
+    const box = await screen.findByPlaceholderText("nightly=BASE64PUBLICKEY=");
+    const key = "B".repeat(43) + "=";
+    await userEvent.type(box, `nightly=${key}`);
+    await userEvent.click(screen.getByRole("button", { name: "Save keys" }));
+    await waitFor(() =>
+      expect(calls.feedSaved).toMatchObject({ channel: "nightly", trusted_keys: { nightly: key } }),
+    );
+  });
+
+  it("refuses a malformed key line before sending anything", async () => {
+    renderAt("/admin/upgrades");
+    await userEvent.type(await screen.findByPlaceholderText("nightly=BASE64PUBLICKEY="), "oops");
+    await userEvent.click(screen.getByRole("button", { name: "Save keys" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Use one key per line");
+    expect(calls.feedSaved).toBeUndefined();
   });
 });
