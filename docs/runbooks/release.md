@@ -15,7 +15,7 @@ tag v0.2.0-rc1 ──► the same, channel "candidate"
 
 - `VERSION` (repo root) is the version **under development**. Nightlies are `<VERSION>-nightly.<date>`. A release tag must name `VERSION`
   (`v0.2.0` needs `VERSION` = `0.2.0`), or the job refuses before building.
-- Both GitLab and GitHub run the same scripts (`tools/release/`). Only one host publishes: the CI variable `RELEASE_HOST` (`gitlab` by default,
+- On GitLab the publish job waits only for `lint`, `typecheck`, `test` and `ui` (not the long `test-full`), so tag a commit whose main pipeline you have seen go green. Both GitLab and GitHub run the same scripts (`tools/release/`). Only one host publishes: the CI variable `RELEASE_HOST` (`gitlab` by default,
   `github` to switch). The other host still runs every check.
 
 ## Cut a release
