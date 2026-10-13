@@ -455,18 +455,27 @@ def grafana_url() -> str | None:
     return value.rstrip("/")
 
 
-def proxmox_client() -> HttpProxmox | None:
-    """The Proxmox client, if ``SWITCHYARD_PVE_URL``, the token id and its secret are set."""
+def proxmox_client(secrets: SecretsReader | None = None) -> HttpProxmox | None:
+    """The Proxmox client, if ``SWITCHYARD_PVE_URL``, the token id and its secret are set.
+
+    The secret comes from the environment (``SWITCHYARD_SECRET_KV_PROXMOX_TOKEN``, the quick
+    start) or, when OpenBao is configured, from ``kv/proxmox/token`` (production, granted by
+    ``syctl openbao-policy --platform``).
+    """
     url = os.environ.get("SWITCHYARD_PVE_URL")
     token_id = os.environ.get("SWITCHYARD_PVE_TOKEN_ID")
     if not url or not token_id:
         return None
     ref = os.environ.get("SWITCHYARD_PVE_TOKEN_REF", "kv/proxmox/token")
-    secret = os.environ.get(EnvSecrets.variable_name(ref))
-    if not secret:
-        return None
     ca = os.environ.get("SWITCHYARD_PVE_CA")
-    return HttpProxmox(url, token_id, secret, verify=ca or True)
+    secret = os.environ.get(EnvSecrets.variable_name(ref))
+    if secret:
+        return HttpProxmox(url, token_id, secret, verify=ca or True)
+    # Production: the secret is in OpenBao, read on first use with the controller's AppRole.
+    backend = secrets or secrets_backend()
+    if isinstance(backend, EnvSecrets):
+        return None
+    return HttpProxmox(url, token_id, lambda: backend.get(ref), verify=ca or True)
 
 
 def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:

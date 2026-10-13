@@ -4,10 +4,28 @@
 name: switchyard
 x-patroni-env: &patroni-env
   PATRONI_NAME: ${NODE_NAME}
+  PATRONI_RESTAPI_LISTEN: ${NODE_IP}:8008
   PATRONI_RESTAPI_CONNECT_ADDRESS: ${NODE_IP}:8008
-  PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
+  PATRONI_POSTGRESQL_LISTEN: ${NODE_IP},127.0.0.1:5432
   PATRONI_POSTGRESQL_CONNECT_ADDRESS: ${NODE_IP}:5432
   PATRONI_ETCD3_HOSTS: ${ETCD_HOSTS}
+  # Hardening (docs/production.md, "Securing the database tier"): TLS and client certificates for etcd, https and a
+  # password for Patroni's REST API, TLS for PostgreSQL, and a pg_hba that admits only the three nodes and this stack's
+  # own Docker network. The certificates are in PKI_DIR (ca.crt, node.crt, node.key).
+  PATRONI_ETCD3_PROTOCOL: https
+  PATRONI_ETCD3_CACERT: /pki/ca.crt
+  PATRONI_ETCD3_CERT: /pki/node.crt
+  PATRONI_ETCD3_KEY: /pki/node.key
+  PATRONI_RESTAPI_CERTFILE: /pki/node.crt
+  PATRONI_RESTAPI_KEYFILE: /pki/node.key
+  PATRONI_RESTAPI_USERNAME: patroni
+  PATRONI_RESTAPI_PASSWORD: ${PATRONI_API_PASSWORD}
+  PATRONI_CTL_CACERT: /pki/ca.crt
+  PATRONI_CTL_USERNAME: patroni
+  PATRONI_CTL_PASSWORD: ${PATRONI_API_PASSWORD}
+  PGSSLMODE: require
+  SY_NODE_IPS: ${NODE_IPS}
+  SY_DOCKER_SUBNET: ${DOCKER_SUBNET:-172.29.77.0/24}
   PATRONI_SUPERUSER_PASSWORD: ${PG_SUPERUSER_PASSWORD}
   PATRONI_REPLICATION_PASSWORD: ${PG_REPLICATION_PASSWORD}
   PATRONI_TAGS_NOFAILOVER: ${PATRONI_NOFAILOVER:-false}
@@ -23,6 +41,9 @@ x-patroni-env: &patroni-env
   PGBACKREST_REPO1_S3_KEY: ${BACKUP_S3_KEY:-}
   PGBACKREST_REPO1_S3_KEY_SECRET: ${BACKUP_S3_SECRET:-}
   PGBACKREST_REPO1_S3_URI_STYLE: ${BACKUP_S3_URI_STYLE:-path}
+  # pgBackRest speaks only TLS to S3. A private CA or a self-signed endpoint: mount its certificate and set
+  # PGBACKREST_REPO1_STORAGE_CA_FILE in an override, or (labs only) BACKUP_S3_VERIFY_TLS=n.
+  PGBACKREST_REPO1_STORAGE_VERIFY_TLS: ${BACKUP_S3_VERIFY_TLS:-y}
   PGBACKREST_REPO1_RETENTION_FULL: "4"
   PGBACKREST_REPO1_CIPHER_TYPE: ${BACKUP_CIPHER_TYPE:-aes-256-cbc}
   PGBACKREST_REPO1_CIPHER_PASS: ${BACKUP_CIPHER_PASS}
@@ -31,7 +52,9 @@ x-controller: &controller
   image: ${CONTROLLER_IMAGE:-switchyard-controller:latest}
   restart: unless-stopped
   environment: &controller-env
-    SWITCHYARD_DATABASE_URL: postgresql+psycopg://${DB_USER:-postgres}:${PG_SUPERUSER_PASSWORD}@${DB_HOSTS}/switchyard?target_session_attrs=read-write
+    SWITCHYARD_DATABASE_URL: postgresql+psycopg://${DB_USER:-postgres}:${PG_SUPERUSER_PASSWORD}@${DB_HOSTS}/switchyard?target_session_attrs=read-write&sslmode=verify-full&sslrootcert=/run/switchyard/pki/ca.crt
+    # Patroni's REST API is https with the private CA (members shown on Admin > Controller).
+    SWITCHYARD_PATRONI_CA: /run/switchyard/pki/ca.crt
     SWITCHYARD_PUBLIC_URL: ${PUBLIC_URL}
     # Behind the proxy: login throttling uses the last X-Forwarded-For entry (ADR 0072).
     SWITCHYARD_TRUST_FORWARDED: "1"
@@ -58,14 +81,21 @@ x-controller: &controller
     SWITCHYARD_OPENBAO_SECRET_ID: ${OPENBAO_SECRET_ID:-}
     SWITCHYARD_PVE_URL: ${PVE_URL:-}
     SWITCHYARD_PVE_TOKEN_ID: ${PVE_TOKEN_ID:-}
+    # The token secret is read from OpenBao (kv/proxmox/token). PVE_CA_FILE is a path inside the container: put the
+    # Proxmox root CA (/etc/pve/pve-root-ca.pem) next to the mTLS files, for example /run/switchyard/mtls/pve-ca.pem.
+    SWITCHYARD_PVE_CA: ${PVE_CA_FILE:-}
     SWITCHYARD_BUNDLE_KEY_FILE: /run/switchyard/bundle.key
     # mTLS to agents and Data Plane APIs. The controller refuses to start with a bundle key but no CA.
     SWITCHYARD_DATAPLANE_CA: /run/switchyard/mtls/ca.crt
     SWITCHYARD_DATAPLANE_CERT: /run/switchyard/mtls/client.crt
     SWITCHYARD_DATAPLANE_KEY: /run/switchyard/mtls/client.key
+  # Lets the controller reach Proxmox by the name in its certificate when that name does not resolve from the container
+  # (PVE_NAME=pve01 PVE_ADDR=10.0.0.1); harmless when unset.
+  extra_hosts: ["${PVE_NAME:-pve}:${PVE_ADDR:-127.0.0.1}"]
   volumes:
     - ${BUNDLE_KEY_FILE:-./secrets/bundle.key}:/run/switchyard/bundle.key:ro
     - ${MTLS_DIR:-./secrets/mtls}:/run/switchyard/mtls:ro
+    - ${PKI_DIR:-./secrets/pki}:/run/switchyard/pki:ro
 services:
   etcd:
     image: quay.io/coreos/etcd:v3.5.17
@@ -75,27 +105,38 @@ services:
       - etcd
       - --name=${NODE_NAME}
       - --data-dir=/etcd-data
-      - --listen-client-urls=http://${NODE_IP}:2379,http://127.0.0.1:2379
-      - --advertise-client-urls=http://${NODE_IP}:2379
-      - --listen-peer-urls=http://${NODE_IP}:2380
-      - --initial-advertise-peer-urls=http://${NODE_IP}:2380
+      - --listen-client-urls=https://${NODE_IP}:2379,https://127.0.0.1:2379
+      - --advertise-client-urls=https://${NODE_IP}:2379
+      - --listen-peer-urls=https://${NODE_IP}:2380
+      - --initial-advertise-peer-urls=https://${NODE_IP}:2380
+      # TLS everywhere; only holders of a certificate from the CA in PKI_DIR can talk to etcd, clients and peers alike.
+      - --cert-file=/pki/node.crt
+      - --key-file=/pki/node.key
+      - --trusted-ca-file=/pki/ca.crt
+      - --client-cert-auth=true
+      - --peer-cert-file=/pki/node.crt
+      - --peer-key-file=/pki/node.key
+      - --peer-trusted-ca-file=/pki/ca.crt
+      - --peer-client-cert-auth=true
       - --initial-cluster=${ETCD_INITIAL_CLUSTER}
       - --initial-cluster-state=${ETCD_CLUSTER_STATE:-new}
       - --initial-cluster-token=switchyard
-    volumes: [etcd-data:/etcd-data]
+    volumes: [etcd-data:/etcd-data, "${PKI_DIR:-./secrets/pki}:/pki:ro"]
   patroni:
     build: ./patroni
     image: switchyard-patroni:17
     restart: unless-stopped
     network_mode: host
     environment: *patroni-env
-    volumes: [pgdata:/data, pgbackrest-repo:/var/lib/pgbackrest, pgbackrest-log:/var/log/pgbackrest]
+    volumes: [pgdata:/data, pgbackrest-repo:/var/lib/pgbackrest, pgbackrest-log:/var/log/pgbackrest, "${PKI_DIR:-./secrets/pki}:/pki:ro"]
     stop_grace_period: 60s
     depends_on: [etcd]
   migrate:
     <<: *controller
     restart: "no"
-    command: ["db", "upgrade"]   # reads SWITCHYARD_DATABASE_URL
+    # Reads SWITCHYARD_DATABASE_URL. On a first start the three databases are still electing a primary, so retry for up
+    # to five minutes instead of failing the whole `docker compose up`.
+    entrypoint: ["sh", "-c", "n=0; until syctl db upgrade; do n=$$((n+1)); [ $$n -lt 60 ] || exit 1; echo 'database not ready, retrying'; sleep 5; done"]
   api:
     <<: *controller
     # Direct access for recovery only (loopback by default); users and Prometheus go through the proxy.
@@ -117,3 +158,12 @@ services:
     command: ["worker", "--name", "${NODE_NAME}"]
     depends_on: {migrate: {condition: service_completed_successfully}}
 volumes: {etcd-data: {}, pgdata: {}, pgbackrest-repo: {}, pgbackrest-log: {}}
+# MTU of the stack's Docker network. Docker's default 1500 breaks TLS where the host's NIC or underlay is smaller (a Proxmox
+# VXLAN overlay, WireGuard, some clouds): the controller then cannot reach the engines' agents (mTLS handshakes are dropped
+# and the engines show "unreachable"). Set DOCKER_MTU in node.env to the host NIC's MTU or less.
+# The subnet is fixed so that pg_hba can admit exactly this stack's containers (the API, worker and migrate reach PostgreSQL
+# on the node address and arrive from this network); change DOCKER_SUBNET if it overlaps yours.
+networks:
+  default:
+    driver_opts: {com.docker.network.driver.mtu: "${DOCKER_MTU:-1500}"}
+    ipam: {config: [{subnet: "${DOCKER_SUBNET:-172.29.77.0/24}"}]}

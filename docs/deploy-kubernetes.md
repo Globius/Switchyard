@@ -28,7 +28,7 @@ The chart never creates a Secret and never holds key material; you give it the n
 - Kubernetes 1.27 or later, a default StorageClass for the database, and a way in: a `LoadBalancer` Service, a NodePort, or an
   Ingress.
 - The [CloudNativePG](https://cloudnative-pg.io) operator installed, unless you point the chart at your own PostgreSQL.
-- An **OpenBao** the cluster can reach, set up as described in [production.md](production.md), section 4: the KV mount, the PKI
+- An **OpenBao** the cluster can reach, set up as described in [production.md](production.md), section 6: the KV mount, the PKI
   mount with the `agents` role (`use_csr_sans=false`, `use_csr_common_name=false`), the controller policy from
   `syctl openbao-policy --shared kv/se/`, and an AppRole for it. It is not part of the chart.
 - The two images, built from the repository root and pushed to a registry the cluster can pull from:
@@ -107,6 +107,14 @@ Everything after that (tenants, networks, SE groups, deploying and enrolling eng
 enrollment, run `deploy/quickstart/enroll-engine.sh` with `HOST_ADDR` and `HTTPS_PORT` set to the controller's public address
 and `SECRETS_DIR` holding `ca.pem` (the CA in `switchyard-secrets`) and `dp_password` (the secret stored at `kv/se/dataplane`).
 
+### Exposure on a bare cluster, and a database failover
+
+On a cluster without a cloud load balancer, k3s's built-in `servicelb` answers `type: LoadBalancer` with the node addresses (it is
+on by default in k3s; it was off in the first lab run). The lab's second install used `service: {type: LoadBalancer}`
+with `publicUrl: https://<node address>:8443`, which worked. With three CloudNativePG instances on two nodes, deleting the
+primary's pod promoted another instance in about 30 seconds and the first database write through the API
+succeeded about 35 seconds after the deletion ([lab/2026-10-13-prod-deploy](lab/2026-10-13-prod-deploy/index.md)).
+
 ## How it behaves with several replicas
 
 - **API pods** hold no state; any pod answers any request.
@@ -122,7 +130,7 @@ and `SECRETS_DIR` holding `ca.pem` (the CA in `switchyard-secrets`) and `dp_pass
 2. `helm upgrade sy deploy/helm/switchyard -n switchyard -f values.yaml` with the new image tags. A new migration Job runs, the
    pods wait for it, and the Deployments roll one pod at a time.
 3. Check `kubectl -n switchyard rollout status deploy/sy-api` and the UI. Agents and controllers are upgraded together
-   ([production.md](production.md), section 9).
+   ([production.md](production.md), section 11).
 
 Rolling back the chart does not roll back the schema: restore the database backup as well if a migration must be undone
 ([runbooks/restore-database.md](runbooks/restore-database.md) describes the Patroni install; for CloudNativePG use its
@@ -133,7 +141,7 @@ point-in-time recovery).
 - Pods run as uid 10001 with a read-only root file system, no Linux capabilities and the `RuntimeDefault` seccomp profile.
 - The controller uses the CloudNativePG superuser Secret (`<release>-db-superuser`); limit who can read Secrets in the
   namespace, and add NetworkPolicies so only the API, worker and migration pods reach the database and OpenBao.
-- All the checklist items in [production.md](production.md), section 3 apply (no lab switches, mTLS to engines, break-glass off
+- All the checklist items in [production.md](production.md), section 5 apply (no lab switches, mTLS to engines, break-glass off
   in normal operation).
 
 ## Not covered

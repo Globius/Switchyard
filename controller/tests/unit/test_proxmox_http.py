@@ -273,3 +273,42 @@ async def test_ipv6_addresses_use_the_ip6_options() -> None:
     assert q["ipconfig1"] == ["ip6=fd00:99::5/64"]
     assert c["net0"] == ["name=eth0,bridge=vmbr0,ip6=fd00:30::5/64,gw6=fd00:30::1"]
     assert c["net1"] == ["name=eth1,bridge=vnet1,ip6=fd00:99::5/64"]
+
+
+async def test_the_token_secret_can_come_from_openbao_on_first_use() -> None:
+    """Production keeps the Proxmox token in OpenBao (``kv/proxmox/token``), not in the environment."""
+    seen: list[str] = []
+    asked: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers["authorization"])
+        return httpx.Response(200, json={"data": []})
+
+    async def secret() -> str:
+        asked.append(1)
+        return "from-openbao"
+
+    client = HttpProxmox(
+        "https://pve", "sy@pve!ctl", secret, transport=httpx.MockTransport(handler)
+    )
+    await client.list_nodes()
+    await client.list_nodes()
+    assert seen == ["PVEAPIToken=sy@pve!ctl=from-openbao"] * 2
+    assert asked == [1], "read once, then kept"
+    await client.close()
+
+
+def test_the_runtime_reads_the_token_from_openbao_when_the_environment_has_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from switchyard import runtime
+
+    for name in ("SWITCHYARD_SECRET_KV_PROXMOX_TOKEN",):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("SWITCHYARD_PVE_URL", "https://pve")
+    monkeypatch.setenv("SWITCHYARD_PVE_TOKEN_ID", "sy@pve!ctl")
+    assert runtime.proxmox_client() is None, "no environment secret and no OpenBao: not configured"
+    monkeypatch.setenv("SWITCHYARD_OPENBAO_ADDR", "http://bao:8200")
+    monkeypatch.setenv("SWITCHYARD_OPENBAO_ROLE_ID", "r")
+    monkeypatch.setenv("SWITCHYARD_OPENBAO_SECRET_ID", "s")
+    assert runtime.proxmox_client() is not None

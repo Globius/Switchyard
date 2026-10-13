@@ -308,7 +308,7 @@ class HttpProxmox:
         self,
         base_url: str,
         token_id: str,
-        token_secret: str,
+        token_secret: str | Callable[[], Awaitable[str]],
         *,
         verify: bool | str = True,
         transport: httpx.AsyncBaseTransport | None = None,
@@ -316,10 +316,16 @@ class HttpProxmox:
         task_timeout_s: float = 300.0,
         poll_s: float = 1.0,
     ) -> None:
-        """Create a client for ``base_url`` (for example ``https://pve1:8006``)."""
+        """Create a client for ``base_url`` (for example ``https://pve1:8006``).
+
+        ``token_secret`` is the secret itself or an async function that returns it (resolved on the
+        first request, so the token can live in OpenBao).
+        """
+        self._token_id = token_id
+        self._secret_source = token_secret
+        self._header: str | None = None
         self._http = httpx.AsyncClient(
             base_url=base_url.rstrip("/") + "/api2/json",
-            headers={"Authorization": self.auth_header(token_id, token_secret)},
             verify=verify,
             transport=transport,
             timeout=30.0,
@@ -333,6 +339,13 @@ class HttpProxmox:
         """Return the ``Authorization`` header value."""
         return f"PVEAPIToken={token_id}={secret}"
 
+    async def _auth(self) -> str:
+        if self._header is None:
+            secret = self._secret_source
+            value = secret if isinstance(secret, str) else await secret()
+            self._header = self.auth_header(self._token_id, value)
+        return self._header
+
     async def _call(
         self,
         method: str,
@@ -342,7 +355,9 @@ class HttpProxmox:
         ok_missing: bool = False,
     ) -> Any:
         try:
-            response = await self._http.request(method, path, data=data)
+            response = await self._http.request(
+                method, path, data=data, headers={"Authorization": await self._auth()}
+            )
         except httpx.HTTPError as exc:
             raise ProxmoxError(f"{method} {path}: {exc}") from exc
         if ok_missing and _is_missing(response):
