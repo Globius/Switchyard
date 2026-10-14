@@ -17,6 +17,7 @@ bootstrap:
       use_pg_rewind: true
       parameters:
         wal_level: replica
+        max_connections: 200            # three nodes of API and worker pools (SWITCHYARD_DB_POOL_SIZE)
         max_wal_senders: 10
         max_replication_slots: 10
         hot_standby: "on"

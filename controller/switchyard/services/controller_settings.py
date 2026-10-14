@@ -26,6 +26,7 @@ Example:
     (120, 30, 600)
 """
 
+import asyncio
 import ipaddress
 import logging
 import time
@@ -201,6 +202,7 @@ class ControllerSettings:
         self._change_sets = change_sets
         self._clock = clock
         self._cache: tuple[float, str | None, dict[str, Any] | None] | None = None
+        self._refresh = asyncio.Lock()  # one refresh at a time, not one per waiting request
 
     # -- reading ----------------------------------------------------------------------------------
 
@@ -329,10 +331,14 @@ class ControllerSettings:
         """
         now = time.monotonic()
         if self._cache is None or now - self._cache[0] > CACHE_S:
-            async with admin_session(self._db.admin) as session:
-                row = await self._row(session)
-                self._cache = (now, row.public_url, row.pending)
-        _, stored, pending = self._cache
+            async with self._refresh:
+                # Requests that waited here find the refresh done (a stampede of them used to open
+                # one database connection each when the cache expired under load).
+                if self._cache is None or time.monotonic() - self._cache[0] > CACHE_S:
+                    async with admin_session(self._db.admin) as session:
+                        row = await self._row(session)
+                        self._cache = (time.monotonic(), row.public_url, row.pending)
+        _, stored, pending = self._cache or (0.0, None, None)
         if pending and pending.get("state") == "waiting" and host:
             after = pending.get("after", {})
             if after.get("fqdn") and _same_host(host_of(host), after["fqdn"]):
