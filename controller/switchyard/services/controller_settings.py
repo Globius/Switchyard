@@ -26,6 +26,7 @@ Example:
     (120, 30, 600)
 """
 
+import asyncio
 import ipaddress
 import logging
 import time
@@ -104,6 +105,8 @@ MAX_WINDOW_S = 600
 #: A change set that has not finished applying after this long is given up on.
 APPLY_GIVE_UP = timedelta(minutes=20)
 CACHE_S = 5.0
+#: Seconds one read of the settings row may take before the cached value is kept.
+READ_TIMEOUT_S = 2.0
 
 
 def window_seconds(requested: int | None) -> int:
@@ -201,6 +204,8 @@ class ControllerSettings:
         self._change_sets = change_sets
         self._clock = clock
         self._cache: tuple[float, str | None, dict[str, Any] | None] | None = None
+        self._refresh = asyncio.Lock()  # one refresh at a time, not one per waiting request
+        self._background: set[asyncio.Task[None]] = set()
 
     # -- reading ----------------------------------------------------------------------------------
 
@@ -327,17 +332,39 @@ class ControllerSettings:
         URL is also used for requests that arrive on the pending host, so signing in works there.
         Read at most every few seconds.
         """
-        now = time.monotonic()
-        if self._cache is None or now - self._cache[0] > CACHE_S:
-            async with admin_session(self._db.admin) as session:
-                row = await self._row(session)
-                self._cache = (now, row.public_url, row.pending)
-        _, stored, pending = self._cache
+        if self._cache is None:
+            await self._refresh_cache()  # the first request waits (a failure reaches the caller)
+        elif time.monotonic() - self._cache[0] > CACHE_S and not self._refresh.locked():
+            # Stale: answer with what we have and refresh in the background. A request must never
+            # wait on the database for this: with a database node down it waited for the connect
+            # timeout, health checks (/healthz passes through here too) timed out, and the load
+            # balancer took every controller node out for over a minute.
+            task = asyncio.create_task(self._refresh_cache(quiet=True))
+            self._background.add(task)
+            task.add_done_callback(self._background.discard)
+        _, stored, pending = self._cache or (0.0, None, None)
         if pending and pending.get("state") == "waiting" and host:
             after = pending.get("after", {})
             if after.get("fqdn") and _same_host(host_of(host), after["fqdn"]):
                 return str(after["public_url"])
         return stored or env_default
+
+    async def _refresh_cache(self, *, quiet: bool = False) -> None:
+        """Read the settings row into the cache, one reader at a time, within ``READ_TIMEOUT_S``."""
+        async with self._refresh:
+            if self._cache is not None and time.monotonic() - self._cache[0] <= CACHE_S:
+                return  # a request that waited here finds the refresh done
+            try:
+                async with (
+                    asyncio.timeout(READ_TIMEOUT_S),
+                    admin_session(self._db.admin) as session,
+                ):
+                    row = await self._row(session)
+                    self._cache = (time.monotonic(), row.public_url, row.pending)
+            except Exception:
+                if not quiet:
+                    raise
+                log.warning("could not refresh the controller settings", exc_info=True)
 
     def _forget(self) -> None:
         self._cache = None

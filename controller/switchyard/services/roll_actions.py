@@ -151,8 +151,14 @@ class AutoscaleRollActions:
                 return await self._enrollment(ctx, step, jobs, now)
             case machine.Phase.REAPPLYING | machine.Phase.REAPPLYING_AFTER:
                 job = await self._job(jobs.get("reapply_job"))
-                done = job is not None and job.state == JobState.SUCCEEDED.value
-                return machine.Facts(now, reapplied=done)
+                if job is None or job.state in (JobState.QUEUED.value, JobState.RUNNING.value):
+                    return machine.Facts(now)
+                result = job.result or {}
+                # A reapply job can end "succeeded" with ok false (an engine timed out): not applied
+                if job.state != JobState.SUCCEEDED.value or result.get("ok") is False:
+                    why = str(result.get("error") or job.last_error or "the job failed")
+                    return machine.Facts(now, reapply_error=why)
+                return machine.Facts(now, reapplied=True)
             case machine.Phase.SETTLING | machine.Phase.SETTLING_AFTER:
                 return await self._health(ctx, step, now)
             case machine.Phase.RETIRING:

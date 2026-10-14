@@ -52,7 +52,9 @@ x-controller: &controller
   image: ${CONTROLLER_IMAGE:-switchyard-controller:latest}
   restart: unless-stopped
   environment: &controller-env
-    SWITCHYARD_DATABASE_URL: postgresql+psycopg://${DB_USER:-postgres}:${PG_SUPERUSER_PASSWORD}@${DB_HOSTS}/switchyard?target_session_attrs=read-write&sslmode=verify-full&sslrootcert=/run/switchyard/pki/ca.crt
+    # connect_timeout and the keepalive options matter when a database node disappears (power loss, network): without them
+    # a new connection waits two minutes for the dead host before trying the next one and every request waits with it.
+    SWITCHYARD_DATABASE_URL: postgresql+psycopg://${DB_USER:-postgres}:${PG_SUPERUSER_PASSWORD}@${DB_HOSTS}/switchyard?target_session_attrs=read-write&sslmode=verify-full&sslrootcert=/run/switchyard/pki/ca.crt&connect_timeout=3&tcp_user_timeout=10000&keepalives_idle=5&keepalives_interval=2&keepalives_count=3
     # Patroni's REST API is https with the private CA (members shown on Admin > Controller).
     SWITCHYARD_PATRONI_CA: /run/switchyard/pki/ca.crt
     SWITCHYARD_PUBLIC_URL: ${PUBLIC_URL}

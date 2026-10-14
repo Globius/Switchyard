@@ -13,6 +13,7 @@ System administration uses a separate database role (``switchyard_admin``, ``BYP
 never turns RLS off; it connects as a different role.
 """
 
+import os
 import re
 from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
@@ -47,7 +48,10 @@ def make_engine(url: str, *, role: str | None = None) -> AsyncEngine:
             be a member of it. Production deployments connect as a dedicated login role instead.
 
     Returns:
-        The engine. Dispose it when done.
+        The engine. Dispose it when done. Its pool keeps ``SWITCHYARD_DB_POOL_SIZE`` connections
+        (default 8) and allows ``SWITCHYARD_DB_POOL_OVERFLOW`` more (default 8) under load.
+        SQLAlchemy's own default (5 and 10) made every request beyond five at a time open and
+        close a TLS connection, which capped one API process near 100 requests a second.
 
     Example:
         >>> engine = make_engine("postgresql+psycopg://u:p@localhost/db", role=APP_ROLE)
@@ -59,7 +63,22 @@ def make_engine(url: str, *, role: str | None = None) -> AsyncEngine:
         if not _ROLE.fullmatch(role):
             raise ValueError(f"invalid role name {role!r}")
         connect_args["options"] = f"-c role={role}"
-    return create_async_engine(normalize_database_url(url), connect_args=connect_args)
+    return create_async_engine(
+        normalize_database_url(url),
+        connect_args=connect_args,
+        pool_size=_env_int("SWITCHYARD_DB_POOL_SIZE", 8),
+        max_overflow=_env_int("SWITCHYARD_DB_POOL_OVERFLOW", 8),
+        # A connection to a node that stopped being the primary (a failover) is replaced.
+        pool_pre_ping=True,
+    )
+
+
+def _env_int(name: str, default: int) -> int:
+    """An integer from the environment, ``default`` when unset or not a number."""
+    try:
+        return int(os.environ.get(name, default))
+    except ValueError:
+        return default
 
 
 def format_tenant_ids(tenant_ids: Iterable[UUID]) -> str:

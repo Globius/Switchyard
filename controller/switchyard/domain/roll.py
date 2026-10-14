@@ -99,7 +99,9 @@ class Facts:
         deployed: Engine id of the replacement once its deploy job has finished, else ``None``.
         deploy_failed: The deploy job failed.
         enrolled: The replacement is reachable and its agent is connected.
-        reapplied: The reapply job has finished.
+        reapplied: The reapply job has finished and applied the configuration.
+        reapply_error: The reapply job finished without applying it (an engine did not
+            answer); the text says why. A roll pauses on it instead of carrying on.
         group_score: The group's health score (0 to 100), or ``None`` when unknown.
         engine_scores_ok: Every engine meets the minimum score.
         smoke_ok: The smoke check passed (login, a read-only call, the VIP answers, no new drift).
@@ -111,6 +113,7 @@ class Facts:
     deploy_failed: bool = False
     enrolled: bool = False
     reapplied: bool = False
+    reapply_error: str | None = None
     group_score: int | None = None
     engine_scores_ok: bool = True
     smoke_ok: bool = True
@@ -285,6 +288,10 @@ def advance(roll: Roll, facts: Facts) -> tuple[Roll, Command | None]:
                 roll = _enter(roll, step, Phase.REAPPLYING, now, f"{step.new}: enrolled")
                 return send(roll, roll.current or step, Reapply())
         case Phase.REAPPLYING:
+            if facts.reapply_error:
+                return pause(
+                    roll, f"{step.new}: the group could not be reapplied: {facts.reapply_error}"
+                ), None
             if facts.reapplied:
                 return _enter(roll, step, Phase.SETTLING, now, "configuration applied"), None
         case Phase.SETTLING:
@@ -300,6 +307,10 @@ def advance(roll: Roll, facts: Facts) -> tuple[Roll, Command | None]:
                 roll = _enter(roll, step, Phase.REAPPLYING_AFTER, now, f"{step.old}: retired")
                 return send(roll, roll.current or step, Reapply())
         case Phase.REAPPLYING_AFTER:
+            if facts.reapply_error:
+                return pause(
+                    roll, f"{step.old}: the group could not be reapplied: {facts.reapply_error}"
+                ), None
             if facts.reapplied:
                 return _enter(roll, step, Phase.SETTLING_AFTER, now, "configuration applied"), None
         case Phase.SETTLING_AFTER:
