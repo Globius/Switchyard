@@ -8,10 +8,3 @@ title = "Switchyard"
 
 [extend]
 useDefault = true
-
-[allowlist]
-description = "Generated files that carry example values"
-paths = [
-  '''docs/api/openapi\.json''',
-  '''ui/src/api/schema\.d\.ts''',
-]
