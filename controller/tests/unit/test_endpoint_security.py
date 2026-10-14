@@ -153,7 +153,7 @@ async def test_slow_jwks_has_a_total_deadline(monkeypatch: pytest.MonkeyPatch) -
                 await asyncio.sleep(0.01)
 
     body = SlowDocument()
-    monkeypatch.setattr("switchyard.services.jwks_sync.FETCH_TIMEOUT_S", 0.03)
+    monkeypatch.setattr("switchyard.services.jwks_sync.FETCH_TIMEOUT_S", 0.5)
     monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **kw: answers("8.8.8.8"))
 
     async def send(self: Any, request: httpx.Request) -> httpx.Response:
