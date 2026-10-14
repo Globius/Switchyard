@@ -53,3 +53,35 @@ async def test_many_requests_at_cache_expiry_read_the_settings_once(
     answers = await asyncio.gather(*(settings.public_url("x.test", None) for _ in range(50)))
     assert set(answers) == {"https://x.test"} and reads == 1
     assert tenancy.make_engine  # the module under test is imported
+
+
+async def test_a_stale_cache_answers_at_once_while_the_database_is_unreachable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The lab: a database node powered off froze every request (and /healthz) for over a minute."""
+    import time
+
+    @asynccontextmanager
+    async def fake_session(_: object) -> Any:
+        yield object()
+
+    calls = 0
+
+    async def row(self: Any, session: Any, *, lock: bool = False) -> Any:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            await asyncio.sleep(30)  # an unreachable database: the connect hangs
+        return SimpleNamespace(public_url="https://x.test", pending=None)
+
+    monkeypatch.setattr(cs, "admin_session", fake_session)
+    monkeypatch.setattr(cs.ControllerSettings, "_row", row)
+    monkeypatch.setattr(cs, "CACHE_S", 0.05)
+    settings = cs.ControllerSettings(SimpleNamespace(admin=object()), object())  # type: ignore[arg-type]
+    assert await settings.public_url("x.test", None) == "https://x.test"
+    await asyncio.sleep(0.1)  # the cached value is now stale
+    started = time.monotonic()
+    assert await settings.public_url("x.test", None) == "https://x.test"
+    assert time.monotonic() - started < 0.5
+    for task in list(settings._background):
+        task.cancel()
