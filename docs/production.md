@@ -122,6 +122,9 @@ The full list from the fresh three-node install, with timings and screenshots, i
   cluster against an old repository needs a new `BACKUP_REPO_PATH`.
 - `syctl adopt` creates no revision: the first apply in the locked `management` tenant is a draft change set with a
   break-glass reason. Break-glass is off in production until a system administrator enables it.
+- Keep `connect_timeout` and the TCP keepalive options in the database URL (the Compose file has them, 3 s): without them a database node that
+  disappears freezes every request of the other nodes, `/healthz` included, for about two minutes. With your own PostgreSQL on Kubernetes
+  put them in `database.external.options`.
 - Give engines addresses nothing else uses; re-enrolling an engine needs `tls.crt`, `tls.key` and `renew.token` removed and
   `dataplaneapi` restarted.
 
@@ -156,6 +159,7 @@ Nothing here has been load-tested. Start with these and watch the dashboards.
 | | |
 | --- | --- |
 | Controller VM | 2 to 4 vCPU, 4 to 8 GB RAM, 40 GB disk (PostgreSQL, etcd, Docker); NTP synchronized |
+| API capacity | measured on 2 vCPU nodes: one API process per node serves about 10 authenticated reads and 165 health checks a second, writes about 13 a second; data-plane load never touches it ([load test](lab/2026-10-14-load-test/index.md)). Size by the people and automation using the API, not by the traffic the engines carry |
 | Database | small: desired state, revisions, audit and the job queue. Backup repository sized for 4 full backups plus WAL |
 | Engine | the deploy default is 2 vCPU and 2 GB RAM; HAProxy needs CPU for TLS and RAM for connections (`maxconn` on the SE group, default 20 000). Size by the busiest group and test it |
 | Telemetry VM | 30 days of metrics and 14 days of logs by default; disk follows your request rate (`PROM_RETENTION`, `loki.yaml`) |

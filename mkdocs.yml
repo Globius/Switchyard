@@ -145,3 +145,4 @@ nav:
       - Feature pass on two Proxmox hosts (2026-10-13): lab/2026-10-13-feature-pass.md
       - Production deployment, all methods (2026-10-13): lab/2026-10-13-prod-deploy/index.md
       - Upgrades, backups, restore and engine roll (2026-10-13): lab/2026-10-13-upgrade-lab/index.md
+      - Load and failure test (2026-10-14): lab/2026-10-14-load-test/index.md
