@@ -37,7 +37,8 @@ Destinations (`POST /system/backup-targets`), all with credentials as `secret_re
 | `sftp` | SSH key login with the host key pinned by SHA-256 fingerprint (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`, any of the server's host key types); no trust on first use. The private key is a `secret_ref`. |
 
 `keep` archives are retained per target; older ones are deleted after each successful backup. Only files named
-`switchyard-<version>-<UTC time>.syb` are ever listed or deleted.
+`switchyard-<version>-<UTC time>.syb` are accepted for reads, writes and deletes by every target, including FTP. Archive names cannot contain paths
+or control characters. Local backups use exclusive, randomly named temporary files before atomic replacement, with owner-only file permissions.
 
 ```sh
 curl -X POST $URL/api/v1/system/backup-targets -d '{"name":"nightly","passphrase_ref":"secret/backup/pass",
@@ -111,7 +112,8 @@ syctl upgrade apply switchyard-0.2.0.sybundle --trust release=<key> \
   --compose-file deploy/prod/compose.yaml --env-file node.env --backup-target nightly
 ```
 
-Run it on **one controller node at a time**; that is the canary. It verifies the bundle, writes a pre-upgrade configuration backup (or
+Run it on **one controller node at a time**; that is the canary. It verifies the bundle, rechecks each extracted file against the signed manifest,
+writes a pre-upgrade configuration backup (or
 needs `--no-backup`), loads the images, points `CONTROLLER_IMAGE` and `PROXY_IMAGE` in the env file at them, runs the migration once, recreates
 `api`, `worker` and `proxy`, and waits for `/api/v1/healthz`. If the node does not come back healthy, the env file gets its old image names back and
 the services are recreated on the old images, so a node is never left half-way. A failed migration changes nothing: migrations are additive by

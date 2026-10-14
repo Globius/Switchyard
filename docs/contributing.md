@@ -57,7 +57,7 @@ A check on your pull request lists any commit that is missing it. To fix the las
 2. A maintainer reviews it on GitHub and asks for changes, or approves and adds the label `ready-for-gitlab`.
 3. That label forwards your commits, unchanged, to the project's GitLab, where code is merged (and where releases are built). You will see a comment
    with the merge request link, and a bot-opened merge request there titled `[GitHub #123] ...`. You do not need a GitLab account; keep working on
-   your GitHub branch and new commits follow automatically.
+   your GitHub branch. Each new revision needs another maintainer review and label before it reaches GitLab; the bridge consumes the label after review.
 4. When the merge request is merged, `main` is mirrored back to GitHub. Your commits are in it, under your name, and GitHub shows the pull request as
    **Merged**. If the maintainers had to squash or rebase, the pull request is closed with a link to the commit.
 

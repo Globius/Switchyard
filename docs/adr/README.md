@@ -151,3 +151,5 @@ Date: YYYY-MM-DD
 | [0206](0206-nightly-and-release-builds.md) | Nightly builds, releases and CI on GitLab and GitHub | Accepted |
 | [0208](0208-github-front-door.md) | GitHub as the front door, GitLab as the merge point: pull request bridge, DCO | Accepted |
 | [0210](0210-security-review-2026-10-13.md) | Fixes from the 2026-10-13 security review | Accepted |
+| [0211](0211-public-repository-security-boundaries.md) | Public repository and runtime security boundaries | Accepted |
+| [0212](0212-reviewed-commits-and-verified-archive-bytes.md) | Reviewed commits and verified archive bytes | Accepted |
