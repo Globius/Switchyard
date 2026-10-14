@@ -13,6 +13,7 @@ draft, ``?apply=true`` opens an implicit single-operation change set and applies
 import hmac
 import logging
 import os
+import re
 import uuid
 from collections.abc import AsyncIterator, Callable
 from contextvars import ContextVar
@@ -1507,7 +1508,8 @@ def create_app(
 
     @app.middleware("http")
     async def request_id(request: Request, call_next: Any) -> Response:
-        rid = request.headers.get("x-request-id") or uuid.uuid4().hex
+        supplied = request.headers.get("x-request-id", "")
+        rid = supplied if re.fullmatch(r"[A-Za-z0-9-]{1,64}", supplied) else uuid.uuid4().hex
         token = request_id_var.set(rid)
         try:
             response: Response = await call_next(request)

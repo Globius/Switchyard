@@ -111,7 +111,7 @@ def archive_name(version: str, when: datetime) -> str:
 
 def is_archive_name(name: str) -> bool:
     """Whether ``name`` is one this module would produce (targets list and prune only these)."""
-    return _NAME.match(name) is not None
+    return _NAME.fullmatch(name) is not None
 
 
 def _stamp(name: str) -> str:

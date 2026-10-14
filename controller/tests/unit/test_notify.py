@@ -4,10 +4,11 @@
 
 """Alert senders: webhook signing, chat formats, address policy at send time (ADR 0121)."""
 
+import asyncio
 import hashlib
 import hmac
 import json
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 
 import httpx
@@ -68,6 +69,7 @@ async def test_a_webhook_gets_a_stable_json_body_and_a_signature() -> None:
     expected = hmac.new(b"s3cret", request.content, hashlib.sha256).hexdigest()
     assert request.headers[SIGNATURE_HEADER] == f"sha256={expected}"
     assert request.headers[EVENT_HEADER] == "firing"
+    assert request.headers["Connection"] == "close"
     assert sign("s3cret", request.content) == request.headers[SIGNATURE_HEADER]
 
 
@@ -76,6 +78,38 @@ async def test_no_secret_means_no_signature() -> None:
     notifier = HttpNotifier(client=client(recording(seen)), allow_private=True)
     await notifier.send("webhook", {"url": "https://hooks.example.test/in"}, None, ALERT)
     assert SIGNATURE_HEADER not in seen[0].headers
+
+
+async def test_a_webhook_reply_body_is_never_downloaded() -> None:
+    class UnboundedReply(httpx.AsyncByteStream):
+        chunks = 0
+        closed = False
+
+        async def __aiter__(self) -> AsyncIterator[bytes]:
+            for _ in range(20):
+                self.chunks += 1
+                yield b"x" * (1024 * 1024)
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    reply = UnboundedReply()
+    async with client(lambda r: httpx.Response(200, stream=reply)) as http:
+        notifier = HttpNotifier(client=http, allow_private=True)
+        await notifier.send("webhook", {"url": "https://hooks.example.test/in"}, None, ALERT)
+    assert reply.chunks == 0
+    assert reply.closed
+
+
+async def test_slow_webhook_headers_have_a_total_deadline() -> None:
+    async def slow(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(0.2)
+        return httpx.Response(200)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(slow)) as http:
+        notifier = HttpNotifier(client=http, allow_private=True, timeout=0.01)
+        with pytest.raises(NotifyError, match="TimeoutError"):
+            await notifier.send("webhook", {"url": "https://hooks.example.test/in"}, None, ALERT)
 
 
 @pytest.mark.parametrize(

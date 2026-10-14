@@ -14,7 +14,9 @@ import asyncio
 import datetime as dt
 import ftplib
 import io
+import os
 import ssl
+import tempfile
 import xml.etree.ElementTree as ET
 from collections.abc import Awaitable, Callable
 from pathlib import Path, PurePosixPath
@@ -108,9 +110,14 @@ class LocalStore:
 
         def write() -> None:
             self._dir.mkdir(parents=True, exist_ok=True)
-            tmp = path.with_suffix(".part")
-            tmp.write_bytes(data)
-            tmp.replace(path)
+            fd, temporary = tempfile.mkstemp(dir=self._dir, suffix=".part")
+            tmp = Path(temporary)
+            try:
+                with os.fdopen(fd, "wb") as out:
+                    out.write(data)
+                tmp.replace(path)
+            finally:
+                tmp.unlink(missing_ok=True)
 
         await asyncio.to_thread(write)
 
@@ -243,6 +250,7 @@ class FtpStore:
 
     async def put(self, name: str, data: bytes) -> None:
         """Upload via a temporary name, then rename."""
+        _checked(name)
 
         def work() -> None:
             ftp = self._connect()
@@ -256,6 +264,7 @@ class FtpStore:
 
     async def get(self, name: str) -> bytes:
         """Download the archive."""
+        _checked(name)
         buf = io.BytesIO()
 
         def work() -> None:
@@ -284,6 +293,7 @@ class FtpStore:
 
     async def delete(self, name: str) -> None:
         """Remove the archive."""
+        _checked(name)
 
         def work() -> None:
             ftp = self._connect()

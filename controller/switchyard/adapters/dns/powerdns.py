@@ -8,12 +8,14 @@ A record set holds every value of a name, so adding or removing one value reads 
 replaces it.
 """
 
+from functools import partial
 from typing import Any
 
 import httpx
 
 from switchyard.adapters.dns.base import DnsError
 from switchyard.adapters.dns.zones import in_zone
+from switchyard.adapters.endpoint import pin_request
 
 
 def _quote(value: str) -> str:
@@ -36,7 +38,14 @@ class PowerDns:
         self._zone = zone.strip(".")
         self._url = f"{api_url.rstrip('/')}/api/v1/servers/{server_id}/zones/{self._zone}."
         self._http = httpx.AsyncClient(
-            headers={"X-API-Key": api_key}, transport=transport, timeout=30.0
+            headers={"X-API-Key": api_key},
+            transport=transport,
+            timeout=30.0,
+            event_hooks={
+                "request": [partial(pin_request, what="api_url", env="SWITCHYARD_DNS_CIDRS")]
+                if transport is None
+                else []
+            },
         )
 
     async def _request(
