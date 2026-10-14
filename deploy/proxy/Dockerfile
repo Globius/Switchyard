@@ -1,6 +1,6 @@
 # Serves the built UI and proxies /api, /metrics to the controller. Build from the repository root:
 #   docker build -f deploy/proxy/Dockerfile -t switchyard-proxy .
-FROM node:22-slim AS ui
+FROM node:26-slim AS ui
 RUN corepack enable
 WORKDIR /ui
 COPY ui/package.json ui/pnpm-lock.yaml ./
