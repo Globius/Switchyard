@@ -20,6 +20,10 @@ default:
 
 variables:
   UV_CACHE_DIR: $CI_PROJECT_DIR/.cache/uv
+  # Security scanning is enabled outside this file; these variables tune it. Tests and generated
+  # files hold fixtures (throwaway keys, example URLs), not shipped code or real secrets.
+  SAST_EXCLUDED_PATHS: "spec, test, tests, tmp, node_modules, controller/tests, ui/tests, docs/api"
+  SECRET_DETECTION_EXCLUDED_PATHS: "controller/tests, ui/tests, ui/src/api/schema.d.ts, docs/api/openapi.json"
 
 .controller:
   stage: check

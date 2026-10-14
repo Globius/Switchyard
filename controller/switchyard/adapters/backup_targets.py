@@ -235,11 +235,11 @@ class FtpStore:
         t = self._t
         ftp: ftplib.FTP
         if t.tls:
-            ftp = ftplib.FTP_TLS(  # noqa: S321 (explicit FTPS, verified)
+            ftp = ftplib.FTP_TLS(  # noqa: S321 (explicit FTPS, verified)  # nosemgrep: python-lang-crypto-ftplib-atomic
                 context=ssl.create_default_context(), timeout=self._timeout
             )
         else:
-            ftp = ftplib.FTP(timeout=self._timeout)  # noqa: S321 (operator chose plain FTP)
+            ftp = ftplib.FTP(timeout=self._timeout)  # noqa: S321 (operator chose plain FTP)  # nosemgrep: python-lang-crypto-ftplib-atomic
         ftp.connect(t.host, t.port)
         ftp.login(t.username, self._password)
         if isinstance(ftp, ftplib.FTP_TLS):

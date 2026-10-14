@@ -111,7 +111,7 @@ def encrypt_password(password: bytes, secret: bytes, authenticator: bytes) -> by
     out = b""
     prev = authenticator
     for i in range(0, len(padded), 16):
-        key = hashlib.md5(secret + prev).digest()  # noqa: S324 - mandated by RFC 2865
+        key = hashlib.md5(secret + prev).digest()  # noqa: S324 - mandated by RFC 2865  # nosemgrep: python-lang-crypto-weak-algo-atomic
         block = bytes(a ^ b for a, b in zip(padded[i : i + 16], key, strict=True))
         out += block
         prev = block
@@ -202,7 +202,7 @@ def verify_response(
     if packet.identifier != request[1]:
         raise RadiusError("identifier mismatch")
     raw = packet.raw
-    expected = hashlib.md5(  # noqa: S324 - mandated by RFC 2865
+    expected = hashlib.md5(  # noqa: S324 - mandated by RFC 2865  # nosemgrep: python-lang-crypto-weak-algo-atomic
         raw[:4] + request[4:20] + raw[20:] + secret
     ).digest()
     if not hmac.compare_digest(expected, packet.authenticator):
@@ -455,7 +455,7 @@ class FakeRadiusServer:
         out = b""
         prev = packet.authenticator
         for i in range(0, len(blob), 16):
-            key = hashlib.md5(self.secret + prev).digest()  # noqa: S324
+            key = hashlib.md5(self.secret + prev).digest()  # noqa: S324  # nosemgrep: python-lang-crypto-weak-algo-atomic
             out += bytes(a ^ b for a, b in zip(blob[i : i + 16], key, strict=True))
             prev = blob[i : i + 16]
         return out.rstrip(b"\x00").decode("utf-8", "replace")

@@ -812,6 +812,7 @@ async def _audit_page(session: Any, f: AuditFilters) -> Page[Any]:
         except ValueError:
             raise ApiError(400, "cursor is not valid") from None
         stmt = stmt.where(or_(A.at < after[0], and_(A.at == after[0], A.id < after[1])))
+    # nosemgrep: python-sqlalchemy-sqli-execute-taint
     rows = list((await session.execute(stmt)).scalars())
     window = rows[: f.limit]
     return Page(

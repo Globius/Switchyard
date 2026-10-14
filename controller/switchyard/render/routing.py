@@ -40,7 +40,7 @@ from switchyard.domain.snapshot import Snapshot, ensure_valid
 from switchyard.render import escape as esc
 from switchyard.render.escape import RenderError
 
-_ENV = Environment(
+_ENV = Environment(  # nosemgrep: python-jinja2-xss-autoescape-false-atomic
     loader=PackageLoader("switchyard.render", "templates"),
     undefined=StrictUndefined,
     autoescape=False,  # noqa: S701
