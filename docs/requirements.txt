@@ -1,3 +1,3 @@
 # Docs site toolchain. Pinned so local, GitLab and GitHub builds match. See docs/adr/0190-docs-site-mkdocs-material.md.
 mkdocs==1.6.1
-mkdocs-material==9.6.14
+mkdocs-material==9.7.7
