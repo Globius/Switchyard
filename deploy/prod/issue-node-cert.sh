@@ -10,6 +10,7 @@
 # PKI_MOUNT and PKI_ROLE default to pki and internal; the role must allow IP SANs and both server and client use.
 # The key is made readable by uid 999 (postgres in the Patroni image); etcd runs as root.
 set -eu
+umask 077
 : "${NODE_NAME:?}" "${NODE_IP:?}"
 MOUNT=${PKI_MOUNT:-pki}
 ROLE=${PKI_ROLE:-internal}

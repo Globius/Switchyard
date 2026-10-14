@@ -9,6 +9,7 @@
 #   sh bootstrap.sh --host ADDRESS[,ADDRESS...] [--port 8443] [--ipv6] [--mtu N] [--rebuild]
 # ADDRESS is how browsers and engines reach this machine (an IP or DNS name); --port is the HTTPS port to publish.
 set -eu
+umask 077
 cd "$(dirname "$0")"
 HOST=""; PORTARG=""; IPV6ARG=""; REBUILD=""; MTUARG=""
 while [ $# -gt 0 ]; do case "$1" in --host) HOST=$2; shift 2 ;; --port) PORTARG=$2; shift 2 ;; --ipv6) IPV6ARG=1; shift ;; --mtu) MTUARG=$2; shift 2 ;; --rebuild) REBUILD=1; shift ;; *) echo "usage: sh bootstrap.sh --host ADDRESS[,ADDRESS...] [--port 8443] [--ipv6] [--mtu N] [--rebuild]" >&2; exit 2 ;; esac; done
@@ -19,8 +20,9 @@ rand() { openssl rand -hex 16; }
 ENVSET() { grep -q "^$1=" .env 2>/dev/null && sed -i "s#^$1=.*#$1=$2#" .env || echo "$1=$2" >> .env; }
 ENVGET() { sed -n "s/^$1=//p" .env 2>/dev/null | head -1; }
 
-mkdir -p secrets; chmod 755 secrets   # the controller containers (uid 10001) read it; keep it on an encrypted disk
+mkdir -p secrets; chmod 755 secrets   # files below grant only the service-specific group access
 [ -f .env ] || : > .env
+chmod 600 .env
 # --host takes one address, or several separated by commas ("192.0.2.10,2001:db8::10"): the first is what browsers and
 # engines are told to use, and every one is a name in the TLS certificate. IPv6 literals are fine.
 [ -z "$HOST" ] || { ENVSET HOST_ALL "$HOST"; ENVSET HOST_ADDR "${HOST%%,*}"; }
@@ -37,11 +39,15 @@ case "$HOST" in *:*) ENVSET HOST_URL "[$HOST]" ; HOSTURL="[$HOST]" ;; *) ENVSET 
 IMG=$(ENVGET CONTROLLER_IMAGE); IMG=${IMG:-switchyard-controller:latest}
 dc() { docker compose --env-file .env "$@"; }
 BAO() { dc exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e BAO_TOKEN="$(cat secrets/root.token)" openbao bao "$@"; }
-PY() { docker run --rm -i --user 0 -v "$(pwd -W 2>/dev/null || pwd)/secrets:/secrets" --entrypoint python "$IMG" - "$@"; }
+PY() { { printf 'import os; os.umask(0o077)\n'; cat; } | docker run --rm -i --user "$(id -u):$(id -g)" -v "$(pwd -W 2>/dev/null || pwd)/secrets:/secrets" --entrypoint python "$IMG" - "$@"; }
+secure() { docker run --rm --user 0 -v "$(pwd -W 2>/dev/null || pwd)/secrets:/secrets" \
+  -v "$(pwd -W 2>/dev/null || pwd)/secure-secrets.py:/secure-secrets.py:ro" \
+  --entrypoint python "$IMG" /secure-secrets.py /secrets "$(id -u)" "$(id -g)"; }
 
 say "controller image"
 # --network host: the build uses the host's own network, so it also works on a host with only IPv6.
 [ -z "$REBUILD" ] && docker image inspect "$IMG" >/dev/null 2>&1 || docker build --network host -q -f ../controller/Dockerfile -t "$IMG" ../.. >/dev/null
+secure   # also repairs file modes from an earlier quickstart run
 
 say "PostgreSQL and OpenBao"
 dc up -d postgres openbao >/dev/null
@@ -96,6 +102,7 @@ d = json.load(open(f"/secrets/{name}.json"))["data"]
 open(f"/secrets/{name}.crt", "w").write(d["certificate"] + "\n" + d["issuing_ca"] + "\n")
 open(f"/secrets/{name}.key", "w").write(d["private_key"] + "\n")
 PYEOF
+  rm -f "secrets/$1.json"
 }
 SANIP=127.0.0.1,::1; SANDNS=localhost
 for h in $(echo "$HOSTS" | tr ',' ' '); do
@@ -109,15 +116,21 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 k = Ed25519PrivateKey.generate()
 open("/secrets/bundle.key", "wb").write(k.private_bytes(s.Encoding.PEM, s.PrivateFormat.PKCS8, s.NoEncryption()))
 PYEOF
-chmod 644 secrets/*.crt secrets/ca.pem secrets/*.key secrets/bundle.key   # read by the controller container (uid 10001)
+secure
+rm -f secrets/server.json secrets/client.json   # old issuance responses also contain private keys
 
 say "controller, UI and TLS front"
 # The UI image is built from the sources; an image that is already there is reused unless --rebuild (the build needs
 # access to npm and Docker Hub, which a locked-down host may not have: `docker load` the image instead).
 PX=$(ENVGET PROXY_IMAGE); PX=${PX:-switchyard-proxy:latest}
 if [ -z "$REBUILD" ] && docker image inspect "$PX" >/dev/null 2>&1; then dc up -d >/dev/null; else dc up -d --build >/dev/null; fi
+# Trust only this stack's TLS front, not every private host. Its addresses remain stable while we recreate the proxy.
+TLSID=$(dc ps -q tls)
+TRUSTED=$(docker inspect --format '{{range .NetworkSettings.Networks}}{{if .IPAddress}}{{.IPAddress}}/32 {{end}}{{if .GlobalIPv6Address}}{{.GlobalIPv6Address}}/128 {{end}}{{end}}' "$TLSID")
+ENVSET TRUSTED_PROXY_CIDRS "$TRUSTED"
+dc up -d --no-deps proxy >/dev/null
 PORT=$(ENVGET HTTPS_PORT); PORT=${PORT:-8443}
-n=0; until [ "$(curl -sk -o /dev/null -w '%{http_code}' "https://127.0.0.1:$PORT/api/v1/healthz")" = 200 ]; do
+n=0; until [ "$(curl -s --ssl-no-revoke --cacert secrets/ca.pem -o /dev/null -w '%{http_code}' "https://127.0.0.1:$PORT/api/v1/healthz")" = 200 ]; do
   n=$((n+1)); [ $n -lt 60 ] || { dc logs --tail 30 api; echo "the API did not come up" >&2; exit 1; }; sleep 3; done
 
 say "first login"
@@ -148,7 +161,7 @@ END_PY
 fi
 echo
 echo "Switchyard is up:  https://$HOSTURL:$PORT/   (the certificate is signed by secrets/ca.pem)"
-echo "Admin API token:   $(cat secrets/admin-token)"
+echo "Admin API token:   secrets/admin-token (operator-readable only; do not paste into logs)"
 echo "                   syctl api login --url https://$HOSTURL:$PORT --token <token>"
 echo "CA for engines:    $(pwd)/secrets/ca.pem"
 echo "Browser sign-in (break-glass): user, password and TOTP secret are in secrets/breakglass.txt"

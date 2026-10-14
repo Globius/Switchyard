@@ -32,6 +32,13 @@ ui/storybook-static/
 *.crt
 !**/testdata/**/*.crt
 
+# OpenTofu local state, credentials and caches (keep dependency lockfiles tracked).
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+
 # Avi exports and other real config never go in the repo
 backup_*.json
 *avi*backup*
@@ -50,4 +57,5 @@ ui/playwright-report/
 # two-host lab: local access details and run output
 deploy/lab/hosts/hosts.env
 deploy/lab/hosts/work/
+deploy/lab/e2e/work/
 /public/

@@ -46,6 +46,7 @@ def test_names_and_pruning() -> None:
     assert archive_name("0.1.0", when) == "switchyard-0.1.0-20261013T040000Z.syb"
     assert is_archive_name(archive_name("0.1.0", when))
     assert not is_archive_name("../etc/passwd") and not is_archive_name("a.syb")
+    assert not is_archive_name(archive_name("0.1.0", when) + "\n")
     names = [archive_name("0.1.0", datetime(2026, 10, d, tzinfo=UTC)) for d in (3, 1, 2)]
     assert prune([*names, "keep-me.txt"], 2) == [names[1]]
     assert prune(names, 5) == []

@@ -18,7 +18,7 @@ import dns.rcode
 import dns.tsigkeyring
 import dns.update
 
-from switchyard.adapters.dns.base import DnsError
+from switchyard.adapters.dns.base import DnsError, resolve_endpoint
 from switchyard.adapters.dns.zones import in_zone
 
 
@@ -51,8 +51,9 @@ class Rfc2136:
 
     def _send(self, update: dns.update.UpdateMessage) -> None:
         try:
-            response = dns.query.tcp(update, self._server, port=self._port, timeout=self._timeout)
-        except (dns.exception.DNSException, OSError) as exc:
+            address = resolve_endpoint(self._server, "server")[0]
+            response = dns.query.tcp(update, address, port=self._port, timeout=self._timeout)
+        except (dns.exception.DNSException, OSError, ValueError) as exc:
             raise DnsError(f"RFC 2136 update to {self._server}: {exc}") from exc
         rcode = response.rcode()
         if rcode != dns.rcode.NOERROR:

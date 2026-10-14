@@ -18,9 +18,12 @@ Needed RBAC (``docs/kubernetes.md`` has the manifest): ``get, list`` on ``nodes`
 import ssl
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import partial
 from typing import Any, Protocol
 
 import httpx
+
+from switchyard.adapters.endpoint import pin_request
 
 GATEWAY_API = "/apis/gateway.networking.k8s.io/v1"
 DISCOVERY_API = "/apis/discovery.k8s.io/v1"
@@ -98,6 +101,11 @@ class HttpKube:
             verify=verify,
             transport=transport,
             timeout=timeout_s,
+            event_hooks={
+                "request": [partial(pin_request, what="api_url", env="SWITCHYARD_K8S_CIDRS")]
+                if transport is None
+                else []
+            },
         )
 
     async def _get(self, path: str, *, optional: bool = False) -> Any:

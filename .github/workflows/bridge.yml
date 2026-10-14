@@ -5,6 +5,7 @@
 # The contribution bridge (ADR 0208, docs/runbooks/github-front-door.md). Code is merged on GitLab; GitHub is where
 # the community opens pull requests. A maintainer reviews a pull request and adds the label `ready-for-gitlab`;
 # this workflow then pushes its commits, unchanged, to GitLab as `github/pr-<n>` and opens a merge request.
+# The label is consumed for that event's head SHA. New commits require a fresh review and label.
 #
 # SECURITY: pull_request_target runs with secrets, so this workflow never builds, installs or executes anything from
 # the pull request. It checks out the BASE branch, fetches the pull request's commits as data, and pushes them.
@@ -25,7 +26,8 @@ concurrency:
 jobs:
   forward:
     if: >-
-      vars.GITLAB_URL != '' && github.event.pull_request.state == 'open' &&
+      vars.GITLAB_URL != '' && github.event.action == 'labeled' &&
+      github.event.label.name == 'ready-for-gitlab' && github.event.pull_request.state == 'open' &&
       contains(github.event.pull_request.labels.*.name, 'ready-for-gitlab')
     runs-on: ubuntu-latest
     env:
@@ -36,8 +38,10 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       PR: ${{ github.event.pull_request.number }}
     steps:
-      - uses: actions/checkout@v4 # the base branch, on purpose
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 # the base branch, on purpose
         with: {fetch-depth: 0}
+      - name: Consume this review's label
+        run: gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --remove-label ready-for-gitlab
       - id: sync
         run: |
           set +e
@@ -55,6 +59,18 @@ jobs:
           [ -z "$body" ] || gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$body"
           [ "$action" != error ] || exit 1
 
+  invalidate:
+    if: >-
+      (github.event.action == 'synchronize' || github.event.action == 'reopened') &&
+      contains(github.event.pull_request.labels.*.name, 'ready-for-gitlab')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - name: New commits and reopened pull requests need a fresh review
+        run: gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --remove-label ready-for-gitlab
+
   retract:
     if: >-
       vars.GITLAB_URL != '' && github.event.action == 'closed' && github.event.pull_request.merged == false
@@ -64,5 +80,5 @@ jobs:
       GITLAB_PROJECT: ${{ vars.GITLAB_PROJECT }}
       GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: python3 tools/bridge/bridge.py close --event "$GITHUB_EVENT_PATH"

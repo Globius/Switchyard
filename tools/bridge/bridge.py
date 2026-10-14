@@ -7,7 +7,8 @@
 
 GitLab is where code is merged; GitHub is where the community arrives. A maintainer reviews a pull request
 on GitHub and labels it ``ready-for-gitlab``. This script then pushes the pull request's commits, unchanged,
-to GitLab as the branch ``github/pr-<n>`` and opens (or updates) a merge request for it. Merging that merge
+to GitLab as the branch ``github/pr-<n>`` and opens (or updates) a merge request for it. Approval covers
+only the head commit in that label event; every new revision needs a new review and label. Merging that merge
 request with a merge commit or fast-forward keeps the contributor's commits, so GitHub shows the pull request
 as Merged once the GitLab push mirror brings ``main`` back. After a squash or rebase GitHub cannot tell, so
 ``merged`` finds the pull requests that landed and the workflow closes them with a comment.
@@ -87,6 +88,9 @@ class Pr:
     base: str
     state: str
     merged: bool
+    head_sha: str
+    action: str
+    added_label: str
     labels: tuple[str, ...] = field(default=())
 
     @classmethod
@@ -103,6 +107,9 @@ class Pr:
             base=str(pr["base"]["ref"]),
             state=str(pr["state"]),
             merged=bool(pr.get("merged")),
+            head_sha=str(pr.get("head", {}).get("sha", "")),
+            action=str(event.get("action", "")),
+            added_label=str(event.get("label", {}).get("name", "")),
             labels=tuple(str(x["name"]) for x in pr.get("labels", [])),
         )
 
@@ -195,7 +202,12 @@ class GitLab:
 
 
 def push_pull_request(
-    repo_dir: str, number: int, gitlab_git_url: str, token: str, remote: str = "origin"
+    repo_dir: str,
+    number: int,
+    gitlab_git_url: str,
+    token: str,
+    expected_head: str,
+    remote: str = "origin",
 ) -> str:
     """Fetch the pull request's commits from GitHub and push them to GitLab; returns the head commit.
 
@@ -203,9 +215,14 @@ def push_pull_request(
     the arguments, so it is not in the process list or in ``.git/config``.
     """
     number = int(number)
+    if not re.fullmatch(r"[0-9a-f]{40}", expected_head):
+        raise BridgeError("the review event has no valid head commit")
     ref = f"refs/bridge/pr-{number}"
     run = _git(repo_dir)
     run(["fetch", "--no-tags", remote, f"+refs/pull/{number}/head:{ref}"])
+    head = run(["rev-parse", "--verify", f"{ref}^{{commit}}"]).strip()
+    if head != expected_head:
+        raise BridgeError("the pull request changed after review; review it and add the label again")
     basic = base64.b64encode(f"oauth2:{token}".encode()).decode()
     env = {
         "GIT_CONFIG_COUNT": "1",
@@ -213,8 +230,9 @@ def push_pull_request(
         "GIT_CONFIG_VALUE_0": f"Authorization: Basic {basic}",
         "GIT_TERMINAL_PROMPT": "0",
     }
-    run(["push", "--force", gitlab_git_url, f"{ref}:refs/heads/{branch_for(number)}"], env)
-    return run(["rev-parse", ref]).strip()
+    # Push the immutable commit we checked, not a ref that could move after the check.
+    run(["push", "--force", gitlab_git_url, f"{head}:refs/heads/{branch_for(number)}"], env)
+    return head
 
 
 def _git(repo_dir: str) -> Callable[..., str]:
@@ -247,8 +265,8 @@ class Result:
 def sync(pr: Pr, gl: GitLab, push: Callable[[], str], target: str = "main") -> Result:
     """Make GitLab match an approved pull request: push its commits, then open or refresh the merge request.
 
-    Ignored (with a reason) when the pull request is closed, is not labelled ``ready-for-gitlab`` or
-    does not target ``target``. Pushing is done only after those checks.
+    Only adding ``ready-for-gitlab`` to an open pull request aimed at ``target`` approves a push.
+    Synchronizing, reopening, or adding another label never reuses an earlier approval.
     """
     if pr.state != "open":
         return Result("ignored", message="the pull request is not open")
@@ -256,6 +274,10 @@ def sync(pr: Pr, gl: GitLab, push: Callable[[], str], target: str = "main") -> R
         return Result("ignored", message=f"it has no `{LABEL}` label")
     if pr.base != target:
         return Result("ignored", message=f"it targets `{pr.base}`, not `{target}`")
+    if pr.action != "labeled" or pr.added_label != LABEL:
+        return Result("ignored", message=f"a new review and `{LABEL}` label are required")
+    if not re.fullmatch(r"[0-9a-f]{40}", pr.head_sha):
+        raise BridgeError("the review event has no valid head commit")
     push()
     branch = branch_for(pr.number)
     existing = gl.find_mr(branch)
@@ -315,7 +337,7 @@ def main(argv: list[str] | None = None) -> int:
                 pr,
                 gl,
                 lambda: push_pull_request(
-                    a.repo_dir, pr.number, git_url, os.environ["GITLAB_TOKEN"]
+                    a.repo_dir, pr.number, git_url, os.environ["GITLAB_TOKEN"], pr.head_sha
                 ),
             )
         print(json.dumps(result.__dict__))

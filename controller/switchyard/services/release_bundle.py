@@ -170,7 +170,9 @@ def unpack(
     """Verify ``path`` and write its files under ``dest`` (created if needed).
 
     Returns the manifest. Files land at ``dest/<manifest path>``; ``dest`` must not already
-    hold files of the same name, so an old unpack is never mixed with a new one.
+    hold files of the same name, so an old unpack is never mixed with a new one. Extracted bytes
+    are checked against the verified manifest again: replacing or changing ``path`` after the
+    first verification cannot smuggle unsigned bytes into the files used by an upgrade.
     """
     manifest = verify(path, trusted, allow_unsigned=allow_unsigned)
     root = dest.resolve()
@@ -182,10 +184,26 @@ def unpack(
             if target.exists():
                 raise BundleError(f"{entry.path} already exists in the destination")
             target.parent.mkdir(parents=True, exist_ok=True)
-            fh = tar.extractfile(entry.path)
+            try:
+                member = tar.getmember(entry.path)
+            except KeyError as exc:
+                raise BundleError("the bundle changed after verification") from exc
+            if not member.isreg() or member.size != entry.size_bytes:
+                raise BundleError(f"{entry.path} does not match the manifest")
+            fh = tar.extractfile(member)
             if fh is None:  # pragma: no cover - verified above
                 raise BundleError(f"{entry.path} cannot be read")
-            with target.open("wb") as out:
+            digest, size = hashlib.sha256(), 0
+            try:
+                out = target.open("xb")
+            except FileExistsError as exc:
+                raise BundleError(f"{entry.path} already exists in the destination") from exc
+            with out:
                 while chunk := fh.read(_CHUNK):
+                    digest.update(chunk)
+                    size += len(chunk)
                     out.write(chunk)
+            if size != entry.size_bytes or digest.hexdigest() != entry.sha256:
+                target.unlink()
+                raise BundleError(f"{entry.path} does not match the manifest")
     return manifest

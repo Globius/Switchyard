@@ -171,3 +171,26 @@ def test_allow_unsigned_does_not_skip_a_present_but_wrong_signature_check_elsewh
     out = make(tmp_path)
     with pytest.raises(BundleError, match="not trusted"):
         verify(out, {})
+
+
+def test_unpack_checks_bytes_even_if_the_archive_changes_after_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from switchyard.services import release_bundle
+
+    out = make(tmp_path)
+    swapped = tmp_path / "swapped.sybundle"
+    # Keep the signed manifest and member sizes unchanged, but replace the image content.
+    rewrite(out, swapped, {"files/controller-image/controller.tar": b"hostile-img" * 1000}, {})
+    original_verify = release_bundle.verify
+
+    def swap_after_verify(path: Path, trusted: dict[str, str], **kwargs: bool) -> object:
+        manifest = original_verify(path, trusted, **kwargs)
+        swapped.replace(path)
+        return manifest
+
+    monkeypatch.setattr(release_bundle, "verify", swap_after_verify)
+    dest = tmp_path / "unpacked"
+    with pytest.raises(BundleError, match="does not match the manifest"):
+        unpack(out, dest, TRUSTED)
+    assert not (dest / "files/controller-image/controller.tar").exists()

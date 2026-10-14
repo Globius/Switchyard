@@ -45,12 +45,16 @@ requests in its sandbox, and forwards a pull request to GitLab only after a main
    `github/pr-<n>` with the author's commits and an MR titled `[GitHub #<n>] ...`, labelled `from-github`, with its pipeline running.
 3. Merge the MR on GitLab. Within minutes the mirror pushes `main`; the pull request on GitHub turns purple (**Merged**). With a squash it is closed by
    the `merged` workflow with a comment.
-4. Push another commit to the pull request first and check the MR picks it up; close a pull request without merging and check its MR is closed.
+4. Push another commit to the pull request and check the GitLab branch stays at the reviewed commit. Review the new diff and add
+   `ready-for-gitlab` again; only then should the MR pick it up. Close a pull request without merging and check its MR is closed.
 
 ## Rules for maintainers
 
 - **Read the diff before you label.** The label is what lets the code reach GitLab's privileged runners (`docker-privileged`). Look especially at
   `.gitlab-ci.yml`, `tools/`, `deploy/`, `Dockerfile`s and anything that runs in tests. If a change to CI files is needed, a maintainer should make it.
+- **Review each revision.** The bridge consumes the label for the head commit captured by that label event. New commits and reopened pull requests
+  require a fresh review and label; they never forward automatically. If the head moves before the bridge fetches it, forwarding fails without
+  updating GitLab. Review the new head and label it again ([ADR 0212](../adr/0212-reviewed-commits-and-verified-archive-bytes.md)).
 - The bridge never builds or runs the pull request: it fetches the commits (`refs/pull/<n>/head`) as data and pushes them. Keep it that way; do not add
   a step to `bridge.yml` that checks out or runs the pull request's code.
 - Protected CI variables (the signing keys) are not available to `github/pr-*` branches, because those branches are not protected. Do not protect that
@@ -64,6 +68,7 @@ requests in its sandbox, and forwards a pull request to GitLab only after a main
 | No comment after labelling | `GITLAB_URL` variable unset (the job is skipped); or the label was added on a closed pull request |
 | `GitLab answered 401/403` | the bridge token expired, lost its scope, or the role is below Developer |
 | `git push failed` | the token lacks `write_repository`; or a branch `github/pr-<n>` exists protected |
+| `the pull request changed after review` | a newer head arrived before the bridge fetched the approved commit; review the new head and add the label again |
 | MR opened but no pipeline | MR pipelines are disabled for the project, or the pipeline needs a runner approval |
 | PR stays open after the MR merged | the merge was a squash and the `merged` workflow did not run: check the mirror pushed `main`, and that the merge commit subject names `github/pr-<n>` |
 | Mirror fails with "protected branch" | the GitHub ruleset blocks the mirror account: add it to the bypass list |

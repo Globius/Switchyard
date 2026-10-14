@@ -1,6 +1,6 @@
 # 0208. GitHub as the front door, GitLab as the merge point
 
-Status: Accepted
+Status: Accepted; review-label reuse superseded by [0212](0212-reviewed-commits-and-verified-archive-bytes.md)
 Date: 2026-10-13
 
 ## Context

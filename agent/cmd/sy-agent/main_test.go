@@ -30,6 +30,18 @@ func TestAllowedClientNames(t *testing.T) {
 	}
 }
 
+func TestDefaultIdentityPolicyRefusesAnotherEngine(t *testing.T) {
+	check := allowedClient(splitNames(defaultControllerCN))
+	controller := &x509.Certificate{Subject: pkix.Name{CommonName: "switchyard-controller"}}
+	engine := &x509.Certificate{Subject: pkix.Name{CommonName: "tenant-engine"}}
+	if err := check(nil, [][]*x509.Certificate{{controller}}); err != nil {
+		t.Fatalf("the default controller identity was refused: %v", err)
+	}
+	if err := check(nil, [][]*x509.Certificate{{engine}}); err == nil {
+		t.Fatal("a different certificate from the same trusted CA may not call the agent by default")
+	}
+}
+
 func TestSplitNamesAndMissingCertificate(t *testing.T) {
 	if got := splitNames(" a, b ,,"); len(got) != 2 || got[0] != "a" || got[1] != "b" {
 		t.Errorf("splitNames = %v", got)
