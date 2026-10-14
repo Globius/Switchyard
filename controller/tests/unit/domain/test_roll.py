@@ -197,3 +197,18 @@ def test_schedule_survives_storage() -> None:
     for key in ("window", "not_before", "soak_s", "holding"):
         old.pop(key)
     assert from_json(old) == Roll.start(["a"])  # rolls stored before schedules existed
+
+
+def test_a_reapply_that_did_not_apply_pauses_instead_of_carrying_on() -> None:
+    """The lab: a reapply job finished 'succeeded' with a ReadTimeout error and the roll went on."""
+    roll, cmds = drive(
+        Roll.start(["a"]),
+        Facts(0),
+        Facts(1, deployed="a2"),
+        Facts(2, enrolled=True),
+        Facts(3, reapply_error="a2: ReadTimeout"),
+    )
+    assert roll.status is Status.PAUSED and "could not be reapplied" in roll.reason
+    assert roll.steps[0].phase is Phase.REAPPLYING and cmds[-1] == Reapply()
+    roll, cmds = drive(resume(roll, 4.0), Facts(5), Facts(6, reapplied=True))
+    assert roll.steps[0].phase is Phase.SETTLING and cmds == [Reapply()]  # the retry was sent
