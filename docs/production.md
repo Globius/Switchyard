@@ -152,18 +152,63 @@ The full list from the fresh three-node install, with timings and screenshots, i
 Keep the management network separate from the VIP and backend networks; the exporter refuses requests that do not arrive on
 a management address. The controller never opens SSH to an engine. Engines need no internet access to start.
 
-## 4. Sizing (starting points, not measurements)
+## 4. Sizing
 
-Nothing here has been load-tested. Start with these and watch the dashboards.
+Sizes are T-shirt sizes. What was **measured** is marked as such ([load test of 2026-10-14](lab/2026-10-14-load-test/index.md), on a lab
+with 2 vCPU engines and nodes over a VXLAN overlay); the rest is **estimated** by scaling that, and should be checked with your own traffic
+before you rely on it. All vCPU counts are virtual CPUs on a host that is not oversubscribed (the lab showed 8 to 15 % steal on a busy host).
 
-| | |
-| --- | --- |
-| Controller VM | 2 to 4 vCPU, 4 to 8 GB RAM, 40 GB disk (PostgreSQL, etcd, Docker); NTP synchronized |
-| API capacity | measured on 2 vCPU nodes: one API process per node serves about 10 authenticated reads and 165 health checks a second, writes about 13 a second; data-plane load never touches it ([load test](lab/2026-10-14-load-test/index.md)). Size by the people and automation using the API, not by the traffic the engines carry |
-| Database | small: desired state, revisions, audit and the job queue. Backup repository sized for 4 full backups plus WAL |
-| Engine | the deploy default is 2 vCPU and 2 GB RAM; HAProxy needs CPU for TLS and RAM for connections (`maxconn` on the SE group, default 20 000). Size by the busiest group and test it |
-| Telemetry VM | 30 days of metrics and 14 days of logs by default; disk follows your request rate (`PROM_RETENTION`, `loki.yaml`) |
-| Proxmox hosts | enough for engines (each group at least two, on different hosts) plus the three controller VMs placed as above |
+### Engines (HAProxy VMs)
+
+Measured on the 2 vCPU engine: it carried **about 5 000 plain-HTTP requests per second** (small objects, keep-alive, 128 connections) before
+both vCPUs were busy (HAProxy 140 % of 200 %), so about **2 500 requests per second per vCPU**, and used 380 MB of its 2 GB (HAProxy itself 35 MB).
+Plan to use at most 70 % of that. With VRRP the master carries all the traffic of its VIPs and the backup waits, so size one engine for the whole group;
+with BGP the group's traffic spreads over its engines (ECMP) and each engine needs its share plus the share of one engine that fails.
+
+| Size | vCPU | RAM | Disk | Plain HTTP, planned (70 %) | Concurrent connections | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| XS | 1 | 1 GB | 8 GB | 1 200 requests/s | 5 000 | estimated; labs and small internal services |
+| S | 2 | 2 GB | 8 GB | 3 500 requests/s | 20 000 (the default `maxconn`) | **measured** (5 000 at saturation); the deploy default |
+| M | 4 | 4 GB | 8 GB | 7 000 requests/s | 40 000 | estimated |
+| L | 8 | 8 GB | 8 GB | 14 000 requests/s | 80 000 | estimated |
+| XL | 16 | 16 GB | 8 GB | 28 000 requests/s | 160 000 | estimated; above this add engines (BGP) instead |
+
+TLS termination costs more CPU per new connection than the plain-HTTP figures above and **was not measured**: with many short TLS connections
+expect a fraction of those rates, and test with your certificates and key type (ECDSA is much cheaper than RSA). RAM: 1 GB plus about 1 GB
+per 20 000 concurrent TLS connections. Raise `maxconn` on the SE group only with the RAM to match. Large objects are limited by the network before
+the CPU: the lab moved 1.1 Gbit/s through a 2 vCPU engine from one generator.
+
+### Controller nodes (three, each running etcd, PostgreSQL, API, worker and proxy)
+
+Measured: the whole stack of one node used about 400 MB of RAM and a few percent of a vCPU idle; the database was 33 MB. **The API is one process
+per node and CPU-bound**: on 2 vCPU a node served about 10 authenticated reads, 13 writes (change sets) and 165 health checks per second, and a
+power-off of any one node or of the database leader was survived (the controller answered again after 25 to 30 s). The data-plane traffic never touches the
+controller. So size by how many people and how much automation use the API, and by how many objects exist, not by request rate on the engines.
+More vCPU than M does not raise API throughput until the API runs several processes (not yet), so L and XL are listed for databases with
+very many objects and not as a way to get more API capacity.
+
+| Size | vCPU | RAM | Disk | Fits (estimated) | Status |
+| --- | --- | --- | --- | --- | --- |
+| XS | 2 | 4 GB | 20 GB | a lab or pilot: 2 tenants, about 10 engines, 100 virtual services, a few users | **measured** (the test cluster) |
+| S | 2 | 4 GB | 40 GB | 5 tenants, 20 engines, 300 virtual services, ten or so users | estimated; the minimum for production |
+| M | 4 | 8 GB | 60 GB | 20 tenants, 60 engines, 1 000 virtual services, tens of users | estimated |
+| L | 8 | 16 GB | 100 GB | 100 tenants, 200 engines, 5 000 virtual services | estimated; the database and the worker are the users of the extra CPU |
+| XL | 16 | 32 GB | 200 GB | more than that | estimated; watch the API's single process first |
+
+Disk holds PostgreSQL (desired state, revisions, audit, jobs), etcd, Docker images (about 4 GB for the images of one release; keep two) and the
+pgBackRest spool. Put etcd and PostgreSQL on storage that is not shared with bulk copies (a template clone on the same thin-provisioned volume stalled
+etcd for about 10 s in the lab and caused a leader change). NTP must be synchronized on every node. Database connections: each API and worker process
+keeps up to 16 per database role (`SWITCHYARD_DB_POOL_SIZE` and `_OVERFLOW`); `max_connections` is 200.
+
+### Everything else
+
+| Component | Size | Notes |
+| --- | --- | --- |
+| OpenBao | S: 2 vCPU, 2 GB, 10 GB, three nodes (raft) | small; a few requests per engine enrollment and per certificate. The lab ran one node |
+| Backup repository (S3) | disk of 5 times the database size, at least 100 GB | four full backups plus WAL; configuration backups are tiny (1.5 KB in the lab) |
+| Telemetry VM (Prometheus, Loki, Grafana) | S: 2 vCPU, 4 GB, 100 GB; M: 4 vCPU, 8 GB, 300 GB | **not measured**. Disk follows your request rate: 30 days of metrics and 14 days of logs by default (`PROM_RETENTION`, `loki.yaml`); watch the disk after the first week |
+| Kubernetes (Helm) | the chart's requests are API 100m, worker 100m, proxy 20m; start each database instance of CloudNativePG at the controller node size above | the lab k3s ran 3 database instances, 2 API, 2 worker and 2 proxy pods on two small nodes |
+| Proxmox hosts | enough for the engines (each group at least two, on different hosts) plus the three controller VMs placed as above | an engine roll needs room for one extra engine per group |
 
 ## 5. Security checklist
 
