@@ -11,7 +11,6 @@ from typing import Any
 
 import pytest
 
-from switchyard.db import tenancy
 from switchyard.db.tenancy import make_engine
 from switchyard.services import controller_settings as cs
 
@@ -52,7 +51,6 @@ async def test_many_requests_at_cache_expiry_read_the_settings_once(
     settings = cs.ControllerSettings(SimpleNamespace(admin=object()), object())  # type: ignore[arg-type]
     answers = await asyncio.gather(*(settings.public_url("x.test", None) for _ in range(50)))
     assert set(answers) == {"https://x.test"} and reads == 1
-    assert tenancy.make_engine  # the module under test is imported
 
 
 async def test_a_stale_cache_answers_at_once_while_the_database_is_unreachable(
