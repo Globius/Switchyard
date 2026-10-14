@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# GitLab SAST ruleset. Disables rules whose findings were reviewed and are intended behaviour.
+# Rules cannot be scoped to paths here, so keep this list short and justified.
+
+# The renderer writes configuration text, not HTML; values are validated and escaped by
+# switchyard.render.escape before interpolation (see docs/render.md).
+[[sast.ruleset]]
+  disable = true
+  [sast.ruleset.identifier]
+    type = "semgrep_id"
+    value = "python-jinja2-xss-autoescape-false-atomic"
+
+# The RADIUS adapter uses MD5 where RFC 2865 mandates it; nothing else in the code base does.
+[[sast.ruleset]]
+  disable = true
+  [sast.ruleset.identifier]
+    type = "semgrep_id"
+    value = "python-lang-crypto-weak-algo-atomic"
+
+# Backup targets offer FTP/FTPS because the operator chooses the protocol; FTPS is verified.
+[[sast.ruleset]]
+  disable = true
+  [sast.ruleset.identifier]
+    type = "semgrep_id"
+    value = "python-lang-crypto-ftplib-atomic"
