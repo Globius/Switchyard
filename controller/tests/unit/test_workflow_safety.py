@@ -65,6 +65,21 @@ def test_the_bridge_never_checks_out_or_runs_the_pull_request() -> None:
             }, f"{job}: runs {word}"
 
 
+def test_the_bridge_consumes_review_and_does_not_forward_synchronization_events() -> None:
+    jobs = load("bridge.yml")["jobs"]
+    gate = jobs["forward"]["if"]
+    assert "github.event.action == 'labeled'" in gate
+    assert "github.event.label.name == 'ready-for-gitlab'" in gate
+    runs = [step.get("run", "") for step in jobs["forward"]["steps"]]
+    consume = next(i for i, run in enumerate(runs) if "--remove-label ready-for-gitlab" in run)
+    push = next(i for i, run in enumerate(runs) if "bridge.py sync" in run)
+    assert consume < push
+    invalidation = jobs["invalidate"]
+    assert "github.event.action == 'synchronize'" in invalidation["if"]
+    assert "github.event.action == 'reopened'" in invalidation["if"]
+    assert "GITLAB_TOKEN" not in invalidation.get("env", {})
+
+
 def test_the_gitlab_token_is_only_given_to_the_steps_that_need_it() -> None:
     for name in ("bridge.yml", "merged.yml", "dco.yml", "ci.yml", "docs.yml"):
         path = WORKFLOWS / name
@@ -84,3 +99,26 @@ def test_pull_request_workflows_run_without_secrets() -> None:
     triggers = dco.get("on") or dco[True]
     assert "pull_request" in triggers and "pull_request_target" not in triggers
     assert "${{ secrets" not in (WORKFLOWS / "dco.yml").read_text()
+
+
+def test_external_actions_are_pinned_to_immutable_commits() -> None:
+    for path in WORKFLOWS.glob("*.yml"):
+        for job, step in steps(load(path.name)):
+            uses = step.get("uses", "")
+            if uses:
+                assert re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", uses), (path.name, job, uses)
+
+
+def test_pull_request_docs_build_cannot_publish_or_mint_identity_tokens() -> None:
+    docs = load("docs.yml")
+    assert docs["permissions"] == {"contents": "read"}
+    assert docs["jobs"]["build"].get("permissions", docs["permissions"]) == {"contents": "read"}
+    assert docs["jobs"]["deploy"]["if"] == "github.ref == 'refs/heads/main'"
+
+
+def test_vulnerability_scans_are_required_on_both_ci_hosts() -> None:
+    github = load("ci.yml")["jobs"]
+    gitlab = yaml.safe_load((WORKFLOWS.parents[1] / ".gitlab-ci.yml").read_text())
+    for name in ("audit-python", "audit-go", "audit-ui"):
+        assert not github[name].get("continue-on-error", False), name
+        assert not gitlab[name].get("allow_failure", False), name

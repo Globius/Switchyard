@@ -39,10 +39,16 @@ def event(**over: Any) -> dict[str, Any]:
         "base": {"ref": "main"},
         "state": "open",
         "merged": False,
+        "head": {"sha": "a" * 40},
         "labels": [{"name": b.LABEL}],
     }
     pr.update(over)
-    return {"pull_request": pr, "repository": {"full_name": "org/switchyard"}}
+    return {
+        "action": "labeled",
+        "label": {"name": b.LABEL},
+        "pull_request": pr,
+        "repository": {"full_name": "org/switchyard"},
+    }
 
 
 class PushSpy:
@@ -134,6 +140,22 @@ def test_nothing_is_pushed_unless_the_pull_request_is_open_labelled_and_aimed_at
     assert pushed == [] and gitlab.calls == []
 
 
+@pytest.mark.parametrize("action", ["synchronize", "reopened", "edited"])
+def test_an_existing_label_never_approves_a_new_revision(action: str) -> None:
+    data = {**event(), "action": action}
+    gitlab, spy = FakeGitLab(), PushSpy("a" * 40)
+    result = b.sync(b.Pr.from_event(data), gitlab.client(), spy)
+    assert result.action == "ignored"
+    assert spy.calls == [] and gitlab.calls == []
+
+
+def test_adding_an_unrelated_label_does_not_reuse_approval() -> None:
+    data = {**event(), "label": {"name": "bug"}}
+    gitlab, spy = FakeGitLab(), PushSpy("a" * 40)
+    assert b.sync(b.Pr.from_event(data), gitlab.client(), spy).action == "ignored"
+    assert spy.calls == [] and gitlab.calls == []
+
+
 def test_a_closed_pull_request_closes_its_merge_request() -> None:
     gitlab = FakeGitLab({"iid": 5, "web_url": "https://gitlab.example/mr/5"})
     assert b.close(b.Pr.from_event(event(state="closed")), gitlab.client()).action == "closed"
@@ -181,7 +203,7 @@ def test_the_pull_requests_commits_reach_gitlab_unchanged(tmp_path: Path) -> Non
     git(github, "checkout", "-q", "main")
     subprocess.run(["git", "init", "-q", "--bare", str(gitlab)], check=True)
 
-    sha = b.push_pull_request(str(github), 7, str(gitlab), "t0ken", remote=str(github))
+    sha = b.push_pull_request(str(github), 7, str(gitlab), "t0ken", head, remote=str(github))
     assert sha == head
     assert git(gitlab, "rev-parse", "refs/heads/github/pr-7") == head  # same commit, same author
     assert git(gitlab, "log", "-1", "--format=%an <%ae>", "github/pr-7") == "Ann <ann@example.org>"
@@ -195,7 +217,12 @@ def test_the_pull_requests_commits_reach_gitlab_unchanged(tmp_path: Path) -> Non
     git(github, "commit", "-q", "-a", "-s", "--amend", "-m", "Add b, better")
     git(github, "update-ref", "refs/pull/7/head", git(github, "rev-parse", "HEAD"))
     git(github, "checkout", "-q", "main")
-    again = b.push_pull_request(str(github), 7, str(gitlab), "t0ken", remote=str(github))
+    # The old review cannot forward a newly pushed revision to GitLab's privileged runners.
+    with pytest.raises(b.BridgeError, match="changed after review"):
+        b.push_pull_request(str(github), 7, str(gitlab), "t0ken", head, remote=str(github))
+    assert git(gitlab, "rev-parse", "refs/heads/github/pr-7") == head
+    reviewed = git(github, "rev-parse", "refs/pull/7/head")
+    again = b.push_pull_request(str(github), 7, str(gitlab), "t0ken", reviewed, remote=str(github))
     assert again != head and git(gitlab, "rev-parse", "refs/heads/github/pr-7") == again
 
 

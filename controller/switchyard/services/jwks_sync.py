@@ -23,8 +23,10 @@ Example:
     True
 """
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from functools import partial
 from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID
@@ -32,7 +34,7 @@ from uuid import UUID
 import httpx
 from sqlalchemy import select
 
-from switchyard.adapters.dns.base import check_endpoint
+from switchyard.adapters.endpoint import pin_request
 from switchyard.db.models import TenantRow
 from switchyard.db.repository import load_snapshot
 from switchyard.db.tenancy import admin_session, tenant_session
@@ -49,6 +51,7 @@ log = logging.getLogger("switchyard.jwks")
 SYNC_JWKS_JOB = "sync_jwks"
 ACTOR = "system:jwks"
 MAX_BYTES = 256 * 1024
+FETCH_TIMEOUT_S = 10.0
 _OPEN_STATES = {ChangeSetState.DRAFT, ChangeSetState.PENDING_APPROVAL, ChangeSetState.APPLYING}
 
 Fetch = Callable[[str], Awaitable[str]]
@@ -60,21 +63,40 @@ async def http_fetch(url: str) -> str:
     Raises:
         JwksError: If the address is not allowed, the answer is not ``200`` or is too long.
     """
-    host = urlparse(url).hostname or ""
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username is not None:
+        raise JwksError("jwks_url must use https without credentials")
     try:
-        check_endpoint(host, "jwks_url", env="SWITCHYARD_JWKS_CIDRS")
-    except ValueError as exc:
-        raise JwksError(str(exc)) from exc
-    try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
-            response = await client.get(url, headers={"Accept": "application/json"})
+        async with (
+            asyncio.timeout(FETCH_TIMEOUT_S),
+            httpx.AsyncClient(
+                timeout=FETCH_TIMEOUT_S,
+                follow_redirects=False,
+                event_hooks={
+                    "request": [partial(pin_request, what="jwks_url", env="SWITCHYARD_JWKS_CIDRS")]
+                },
+            ) as client,
+            client.stream(
+                "GET", url, headers={"Accept": "application/json", "Accept-Encoding": "identity"}
+            ) as response,
+        ):
+            if response.status_code != 200:
+                raise JwksError(f"{url} answered HTTP {response.status_code}")
+            if response.headers.get("content-encoding", "identity").lower() != "identity":
+                raise JwksError("JWKS response must be uncompressed")
+            content = bytearray()
+            async for chunk in response.aiter_raw():
+                if len(content) + len(chunk) > MAX_BYTES:
+                    raise JwksError(f"{url} answered with more than {MAX_BYTES // 1024} KiB")
+                content.extend(chunk)
+    except TimeoutError as exc:
+        raise JwksError(f"JWKS fetch exceeded {FETCH_TIMEOUT_S:g} seconds") from exc
     except httpx.HTTPError as exc:
         raise JwksError(f"cannot fetch {url}: {exc}") from exc
-    if response.status_code != 200:
-        raise JwksError(f"{url} answered HTTP {response.status_code}")
-    if len(response.content) > MAX_BYTES:
-        raise JwksError(f"{url} answered with more than {MAX_BYTES // 1024} KiB")
-    return response.text
+    try:
+        return content.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise JwksError("JWKS document is not UTF-8") from exc
 
 
 def _norm(keys: Any) -> list[tuple[str, str, str]]:

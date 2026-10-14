@@ -79,6 +79,16 @@ async def test_request_id_is_echoed(api: Api) -> None:
     assert (await api.client.get(f"{V1}/healthz")).headers["x-request-id"]
 
 
+@pytest.mark.parametrize("value", ["x" * 65, "forged\nlog", "\tentry", "bad id", ""])
+async def test_untrusted_request_ids_are_replaced(api: Api, value: str) -> None:
+    response = await api.client.get(f"{V1}/healthz", headers={"X-Request-ID": value})
+    assert response.status_code == 200
+    rid = response.headers["x-request-id"]
+    assert rid != value
+    assert len(rid) == 32
+    int(rid, 16)
+
+
 async def test_tenants_are_invisible_to_other_tenants(api: Api) -> None:
     other = uuid.UUID(int=4242)
     await api.services.tenants.create(ROOT, "globex")

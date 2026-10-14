@@ -13,6 +13,7 @@ import pytest
 
 from switchyard.adapters.backup_targets import (
     BackupTargetError,
+    FtpStore,
     LocalStore,
     MemoryStore,
     S3Store,
@@ -21,7 +22,7 @@ from switchyard.adapters.backup_targets import (
 )
 from switchyard.adapters.dns.route53 import AwsCredentials
 from switchyard.adapters.secrets import MemorySecrets
-from switchyard.domain.backup import BackupTargetConfig, S3Target
+from switchyard.domain.backup import BackupTargetConfig, FtpTarget, S3Target
 
 A = "switchyard-0.1.0-20261001T000000Z.syb"
 B = "switchyard-0.1.0-20261002T000000Z.syb"
@@ -70,6 +71,39 @@ async def test_local_ignores_other_files(tmp_path: Path) -> None:
     await store.put(A, b"x")
     assert await store.list() == [A]
     assert (tmp_path / "keep.txt").read_text() == "mine"
+
+
+@pytest.mark.parametrize("name", ["../private.syb", "/etc/passwd", A + "\n", A + "\r\nDELE x"])
+async def test_ftp_refuses_invalid_names_before_connecting(
+    name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = FtpStore(
+        FtpTarget(host="ftp.example.test", username="backup", password_ref="r/p"), "pw"
+    )
+
+    def unexpected_connection() -> None:
+        pytest.fail("an invalid archive name must be refused before connecting")
+
+    monkeypatch.setattr(store, "_connect", unexpected_connection)
+    with pytest.raises(BackupTargetError, match="not a backup archive name"):
+        await store.put(name, b"backup")
+    with pytest.raises(BackupTargetError, match="not a backup archive name"):
+        await store.get(name)
+    with pytest.raises(BackupTargetError, match="not a backup archive name"):
+        await store.delete(name)
+
+
+async def test_local_backup_does_not_follow_a_planted_temporary_symlink(tmp_path: Path) -> None:
+    victim = tmp_path / "unrelated"
+    victim.write_bytes(b"preserve me")
+    root = tmp_path / "backups"
+    root.mkdir()
+    (root / A).with_suffix(".part").symlink_to(victim)
+    store = LocalStore(root)
+    await store.put(A, b"encrypted archive")
+    assert victim.read_bytes() == b"preserve me"
+    assert await store.get(A) == b"encrypted archive"
+    assert (root / A).stat().st_mode & 0o077 == 0
 
 
 def fake_s3() -> tuple[httpx.AsyncClient, dict[str, bytes], list[httpx.Request]]:

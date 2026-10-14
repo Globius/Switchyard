@@ -309,6 +309,39 @@ def allowed_dns_networks(
     return [ipaddress.ip_network(p.strip()) for p in raw.split(",") if p.strip()]
 
 
+def resolve_endpoint(host: str, what: str, *, env: str = "SWITCHYARD_DNS_CIDRS") -> list[str]:
+    """Resolve and validate every address, returning the addresses safe to connect to.
+
+    Callers must connect to one returned literal instead of resolving the host again.
+    """
+    if not host:
+        raise ValueError(f"{what}: no host")
+    try:
+        addresses = [ipaddress.ip_address(host.strip("[]"))]
+    except ValueError:
+        try:
+            found = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+        except OSError as exc:
+            raise ValueError(f"{what}: cannot resolve {host}") from exc
+        addresses = [ipaddress.ip_address(item[4][0]) for item in found]
+    if not addresses:
+        raise ValueError(f"{what}: cannot resolve {host}")
+    allow = allowed_dns_networks(env)
+    for address in addresses:
+        if policy_open():
+            continue
+        blocked = (
+            address.is_loopback
+            or address.is_link_local
+            or address.is_multicast
+            or address.is_unspecified
+            or address.is_reserved
+        )
+        if blocked or (not address.is_global and not any(address in net for net in allow)):
+            raise ValueError(f"{what}: {address} is not an address the controller may contact")
+    return list(dict.fromkeys(str(address) for address in addresses))
+
+
 def check_endpoint(host: str, what: str, *, env: str = "SWITCHYARD_DNS_CIDRS") -> None:
     """Raise ``ValueError`` unless the controller may connect to ``host`` for DNS updates.
 
@@ -323,28 +356,4 @@ def check_endpoint(host: str, what: str, *, env: str = "SWITCHYARD_DNS_CIDRS") -
             ...
         ValueError: server: 169.254.169.254 is not an address the controller may contact
     """
-    if not host:
-        raise ValueError(f"{what}: no host")
-    try:
-        addresses = [ipaddress.ip_address(host.strip("[]"))]
-    except ValueError:
-        try:
-            found = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
-        except OSError as exc:
-            raise ValueError(f"{what}: cannot resolve {host}") from exc
-        addresses = [ipaddress.ip_address(item[4][0]) for item in found]
-    allow = allowed_dns_networks(env)
-    for address in addresses:
-        if policy_open():
-            continue
-        blocked = (
-            address.is_loopback
-            or address.is_link_local
-            or address.is_multicast
-            or address.is_unspecified
-            or address.is_reserved
-        )
-        # `not is_global` also covers shared address space (100.64.0.0/10, which holds some
-        # clouds' metadata address), not only the RFC 1918 ranges that `is_private` names.
-        if blocked or (not address.is_global and not any(address in net for net in allow)):
-            raise ValueError(f"{what}: {address} is not an address the controller may contact")
+    resolve_endpoint(host, what, env=env)

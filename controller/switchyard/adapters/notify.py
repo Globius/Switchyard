@@ -113,6 +113,7 @@ class HttpNotifier:
         """
         self._smtp = smtp
         self._allow_private = allow_private
+        self._timeout = timeout
         self._client = client or httpx.AsyncClient(timeout=timeout, follow_redirects=False)
 
     async def _pin(self, url: str) -> tuple[str, dict[str, str], dict[str, Any]]:
@@ -161,7 +162,14 @@ class HttpNotifier:
             return
         url = str(config["url"])
         url, pin_headers, extensions = await self._pin(url)
-        headers = {**pin_headers, "Content-Type": "application/json", EVENT_HEADER: alert.state}
+        headers = {
+            **pin_headers,
+            "Content-Type": "application/json",
+            EVENT_HEADER: alert.state,
+            # Pinned URLs share an IP origin in the pool. A connection verified for one
+            # hostname must not be reused for another tenant's destination on that IP.
+            "Connection": "close",
+        }
         payload: dict[str, Any] = (
             chat_body(str(config.get("format", "slack")), alert)
             if kind == "chat"
@@ -171,13 +179,17 @@ class HttpNotifier:
         if kind == "webhook" and secret:
             headers[SIGNATURE_HEADER] = sign(secret, body)
         try:
-            response = await self._client.post(
-                url, content=body, headers=headers, extensions=extensions
-            )
-        except httpx.HTTPError as exc:
+            async with (
+                asyncio.timeout(self._timeout),
+                self._client.stream(
+                    "POST", url, content=body, headers=headers, extensions=extensions
+                ) as response,
+            ):
+                if response.status_code >= 300:
+                    raise NotifyError(f"the receiver answered HTTP {response.status_code}")
+                # Only the status matters. Do not download a tenant-controlled reply body.
+        except (httpx.HTTPError, TimeoutError) as exc:
             raise NotifyError(f"request failed: {type(exc).__name__}") from exc
-        if response.status_code >= 300:
-            raise NotifyError(f"the receiver answered HTTP {response.status_code}")
 
     async def _email(self, config: dict[str, Any], alert: Alert) -> None:
         smtp = self._smtp

@@ -147,11 +147,9 @@ posture-agent:
     - GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/sy-posture
     - GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/sy-posture
 
-# Known-vulnerability scans of the lock files (docs/security/2026-10-13-review.md). They warn instead of
-# failing the pipeline, so a new advisory never blocks an unrelated merge; make them blocking once a run is clean.
+# Required vulnerability scans of the lock files; current scans are clean. New advisories block the gate.
 audit-python:
   stage: check
-  allow_failure: true
   script:
     - cd controller
     - uv export --no-dev --no-hashes --frozen -o /tmp/requirements.txt > /dev/null
@@ -159,7 +157,6 @@ audit-python:
 
 audit-go:
   stage: check
-  allow_failure: true
   image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/golang:1.26
   script:
     - go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
@@ -167,7 +164,6 @@ audit-go:
 
 audit-ui:
   stage: check
-  allow_failure: true
   image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/node:22-slim
   script:
     - corepack enable
@@ -405,8 +401,9 @@ release-build:
     # The Dockerfiles name Docker Hub images; fetch them through the dependency proxy and tag them as named.
     - echo "$CI_DEPENDENCY_PROXY_PASSWORD" | docker login -u "$CI_DEPENDENCY_PROXY_USER" --password-stdin "$CI_DEPENDENCY_PROXY_SERVER"
     - |
-      for img in python:3.12-slim-bookworm node:22-slim nginx:1.27-alpine; do
-        docker pull -q "$CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX/$img" && docker tag "$CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX/$img" "$img"
+      # Read the shared Dockerfiles so GitLab prefetches the same pinned bases as GitHub.
+      awk '$1 == "FROM" {print $2}' deploy/controller/Dockerfile deploy/proxy/Dockerfile | sort -u | while IFS= read -r img; do
+        docker pull -q "$CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX/$img" || exit 1
       done
     - sh tools/release/build-artifacts.sh "$VERSION" dist
     - |

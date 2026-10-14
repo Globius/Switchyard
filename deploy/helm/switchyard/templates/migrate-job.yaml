@@ -14,6 +14,7 @@ spec:
       labels: {{- include "sy.labels" . | nindent 8 }}
         app.kubernetes.io/component: migrate
     spec:
+      automountServiceAccountToken: false
       restartPolicy: OnFailure
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}

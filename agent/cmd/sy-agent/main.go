@@ -40,6 +40,8 @@ import (
 	"switchyard/agent/internal/watchdog"
 )
 
+const defaultControllerCN = "switchyard-controller"
+
 func main() {
 	if len(os.Args) > 1 && (os.Args[1] == "enroll" || os.Args[1] == "renew") {
 		os.Exit(runEnroll(os.Args[1], os.Args[2:]))
@@ -53,7 +55,7 @@ func main() {
 	stateDir := flag.String("state-dir", "/run/switchyard", "directory with vrrp-<name>.state files")
 	healthURL := flag.String("health-url", "http://127.0.0.1:8404/healthz", "local HAProxy health endpoint")
 	allowUnbound := flag.Bool("allow-unbound-bundles", false, "accept bundles without an engine name and sequence (controllers older than ADR 0074; they can be replayed)")
-	controllerCN := flag.String("controller-cn", "", "comma-separated certificate names allowed to call the agent (the controller's client certificate); empty allows any certificate the CA signed")
+	controllerCN := flag.String("controller-cn", defaultControllerCN, "comma-separated certificate names allowed to call the agent (the controller's client certificate); explicitly empty allows any certificate the CA signed")
 	failures := flag.Int("withdraw-after", 3, "consecutive failed health checks before BGP prefixes are withdrawn")
 	flag.Parse()
 
