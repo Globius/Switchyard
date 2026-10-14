@@ -92,12 +92,23 @@ services:
     build: {context: ../.., dockerfile: deploy/proxy/Dockerfile, network: host}
     image: ${PROXY_IMAGE:-switchyard-proxy:latest}
     restart: unless-stopped
-    environment: {CONTROLLER_UPSTREAM: "api:8000"}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp", "/etc/nginx/conf.d:uid=101,gid=101,mode=0750"]
+    environment: {CONTROLLER_UPSTREAM: "api:8000", TRUSTED_PROXY_CIDRS: "${TRUSTED_PROXY_CIDRS:-}"}
     depends_on: [api]
   # TLS in front of the proxy: engines enroll over https only, and browsers need it for the secure session cookie.
   tls:
-    image: nginx:1.27-alpine
+    image: ${PROXY_IMAGE:-switchyard-proxy:latest}
+    pull_policy: never  # this is the patched image built or loaded for the proxy service
+    entrypoint: [nginx]
+    command: ["-g", "daemon off;"]
     restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp"]
     ports: ["${HTTPS_BIND:-0.0.0.0}:${HTTPS_PORT:-8443}:8443"]
     volumes: ["./tls.conf:/etc/nginx/conf.d/default.conf:ro", "./secrets:/secrets:ro"]
     depends_on: [proxy]

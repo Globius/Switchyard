@@ -38,7 +38,20 @@ out=$(render --set tls.secretName=sy-tls)
 echo "$out" | grep -c 'path: /api/v1/healthz' | grep -q '^2$' || fail "the API needs a readiness and a liveness probe"
 echo "$out" | grep -q 'args: \["worker", "--name", "$(POD_NAME)"\]' || fail "the worker name must be the pod name"
 
-# 4b. Staged bundles and local backups: an emptyDir by default, an existing claim when given, and a big upload on the TLS front.out=$(render --set tls.secretName=sy-tls)echo "$out" | grep -q 'mountPath: /var/lib/switchyard' || fail "the API needs a writable /var/lib/switchyard"echo "$out" | grep -q 'location = /api/v1/system/bundles' || fail "the TLS front must allow large bundle uploads"out=$(render --set tls.secretName=sy-tls --set storage.existingClaim=sy-state)echo "$out" | grep -q 'claimName: sy-state' || fail "storage.existingClaim must be used"
+# 4b. Staged bundles and local backups: an emptyDir by default, an existing claim when given, and a big upload on the TLS front.
+out=$(render --set tls.secretName=sy-tls)
+echo "$out" | grep -q 'mountPath: /var/lib/switchyard' || fail "the API needs a writable /var/lib/switchyard"
+echo "$out" | grep -q 'location = /api/v1/system/bundles' || fail "the TLS front must allow large bundle uploads"
+out=$(render --set tls.secretName=sy-tls --set storage.existingClaim=sy-state)
+echo "$out" | grep -q 'claimName: sy-state' || fail "storage.existingClaim must be used"
+
+# 4c. All four workloads omit Kubernetes credentials; the nginx containers run without root or capabilities.
+out=$(render --set tls.secretName=sy-tls)
+echo "$out" | grep -c 'automountServiceAccountToken: false' | grep -q '^4$' || fail "unexpected service-account token mount"
+echo "$out" | grep -q 'runAsUser: 101' || fail "the proxy must use the nginx unprivileged uid"
+echo "$out" | grep -q 'name: proxy-conf' || fail "the read-only proxy needs writable generated configuration"
+echo "$out" | grep -q 'name: tls-tmp' || fail "the TLS sidecar needs its own writable tmp directory"
+echo "$out" | grep -q 'name: TRUSTED_PROXY_CIDRS' || fail "proxy trust must be configured explicitly"
 # 5. Required values are enforced.
 helm template sy . >/dev/null 2>&1 && fail "rendering without publicUrl must fail"
 echo "helm chart checks passed"

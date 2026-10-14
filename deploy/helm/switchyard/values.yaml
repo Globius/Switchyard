@@ -7,7 +7,8 @@ publicUrl: ""
 image:
   controller: {repository: switchyard-controller, tag: latest, pullPolicy: IfNotPresent}
   proxy: {repository: switchyard-proxy, tag: latest, pullPolicy: IfNotPresent}
-  tls: {repository: nginx, tag: 1.27-alpine, pullPolicy: IfNotPresent}
+  # Empty reuses the patched proxy image; an explicit override must run nginx as uid 101.
+  tls: {repository: "", tag: "", pullPolicy: IfNotPresent}
 imagePullSecrets: []
 
 # The cluster DNS domain. nginx does not use search domains, so the proxy needs the API service's full name.
@@ -83,6 +84,8 @@ worker:
 
 proxy:
   replicas: 2
+  # The in-pod TLS sidecar is loopback. Add exact ingress/SE CIDRs only when those hops are trusted.
+  trustedProxyCidrs: "127.0.0.1/32 ::1/128"
   resources: {requests: {cpu: 20m, memory: 32Mi}, limits: {memory: 128Mi}}
   nodeSelector: {}
   tolerations: []

@@ -14,6 +14,13 @@ spec:
       labels: {{- include "sy.labels" . | nindent 8 }}
         app.kubernetes.io/component: proxy
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile: {type: RuntimeDefault}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -21,6 +28,10 @@ spec:
         - name: proxy
           image: {{ .Values.image.proxy.repository }}:{{ .Values.image.proxy.tag }}
           imagePullPolicy: {{ .Values.image.proxy.pullPolicy }}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: proxy-conf, mountPath: /etc/nginx/conf.d}
+            - {name: proxy-tmp, mountPath: /tmp}
           # nginx needs the cluster DNS address for its upstream lookups (re-resolved every few seconds).
           command: ["/bin/sh", "-c"]
           args:
@@ -31,23 +42,33 @@ spec:
               exec /docker-entrypoint.sh nginx -g 'daemon off;'
           env:
             - {name: CONTROLLER_UPSTREAM, value: "{{ include "sy.name" . }}-api.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:8000"}
+            - {name: TRUSTED_PROXY_CIDRS, value: {{ .Values.proxy.trustedProxyCidrs | quote }}}
           ports: [{name: http, containerPort: 8080}]
           readinessProbe: {httpGet: {path: /, port: http}, periodSeconds: 5}
           livenessProbe: {httpGet: {path: /, port: http}, periodSeconds: 10}
           resources: {{- toYaml .Values.proxy.resources | nindent 12 }}
         {{- if .Values.tls.enabled }}
         - name: tls
-          image: {{ .Values.image.tls.repository }}:{{ .Values.image.tls.tag }}
+          image: {{ if .Values.image.tls.repository }}{{ .Values.image.tls.repository }}:{{ required "image.tls.tag is required for a separate TLS image" .Values.image.tls.tag }}{{ else }}{{ .Values.image.proxy.repository }}:{{ .Values.image.proxy.tag }}{{ end }}
           imagePullPolicy: {{ .Values.image.tls.pullPolicy }}
+          command: ["nginx", "-g", "daemon off;"]
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           ports: [{name: https, containerPort: 8443}]
           readinessProbe: {tcpSocket: {port: https}, periodSeconds: 5}
           resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 128Mi}}
           volumeMounts:
+            - {name: tls-tmp, mountPath: /tmp}
             - {name: tls-conf, mountPath: /etc/nginx/conf.d, readOnly: true}
             - {name: tls-cert, mountPath: /secrets, readOnly: true}
         {{- end }}
-      {{- if .Values.tls.enabled }}
       volumes:
+        - name: proxy-conf
+          emptyDir: {}
+        - name: proxy-tmp
+          emptyDir: {}
+        {{- if .Values.tls.enabled }}
+        - name: tls-tmp
+          emptyDir: {}
         - name: tls-conf
           configMap: {name: {{ include "sy.name" . }}-tls}
         - name: tls-cert
