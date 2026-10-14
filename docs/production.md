@@ -195,7 +195,7 @@ very many objects and not as a way to get more API capacity.
 | L | 8 | 16 GB | 100 GB | 100 tenants, 200 engines, 5 000 virtual services | estimated; the database and the worker are the users of the extra CPU |
 | XL | 16 | 32 GB | 200 GB | more than that | estimated; watch the API's single process first |
 
-Disk holds PostgreSQL (desired state, revisions, audit, jobs), etcd, Docker images (about 4 GB for the images of one release; keep two) and the
+Disk holds PostgreSQL (desired state, revisions, audit, jobs), etcd, Docker images (about 2 GB for the images of one release; keep two) and the
 pgBackRest spool. Put etcd and PostgreSQL on storage that is not shared with bulk copies (a template clone on the same thin-provisioned volume stalled
 etcd for about 10 s in the lab and caused a leader change). NTP must be synchronized on every node. Database connections: each API and worker process
 keeps up to 16 per database role (`SWITCHYARD_DB_POOL_SIZE` and `_OVERFLOW`); `max_connections` is 200.
