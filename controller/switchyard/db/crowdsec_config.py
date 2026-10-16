@@ -46,6 +46,8 @@ class CrowdSecConfig:
         key_ref: Reference of the bouncer key in the secrets backend; empty when it comes from the
             environment or is not set.
         origins: Keep only decisions from these origins; empty keeps all.
+        logs_address: ``host:port`` (UDP) of the CrowdSec syslog datasource that receives the
+            access logs of services that opt in; empty turns the feed off.
         source: ``database``, ``environment`` or ``none``.
     """
 
@@ -53,6 +55,7 @@ class CrowdSecConfig:
     key_ref: str = ""
     origins: list[str] = field(default_factory=list)
     source: str = "none"
+    logs_address: str = ""
 
     @property
     def configured(self) -> bool:
@@ -74,7 +77,11 @@ async def load_config(engine: AsyncEngine) -> CrowdSecConfig:
     raw = await get_setting(engine, CONFIG_KEY)
     if raw and raw.get("url"):
         return CrowdSecConfig(
-            raw["url"], raw.get("key_ref", ""), list(raw.get("origins", [])), "database"
+            raw["url"],
+            raw.get("key_ref", ""),
+            list(raw.get("origins", [])),
+            "database",
+            raw.get("logs_address", ""),
         )
     env_url = os.environ.get("SWITCHYARD_CROWDSEC_URL") or ""
     if env_url:
@@ -83,12 +90,32 @@ async def load_config(engine: AsyncEngine) -> CrowdSecConfig:
             "",
             normalize_origins(os.environ.get("SWITCHYARD_CROWDSEC_ORIGINS")),
             "environment",
+            os.environ.get("SWITCHYARD_CROWDSEC_LOGS_ADDRESS", ""),
         )
     return CrowdSecConfig()
 
 
-async def bouncer_settings(engine: AsyncEngine) -> tuple[str, str, str, tuple[str, ...]] | None:
-    """What an engine's bouncer needs: ``(url, key_ref, environment key, origins)``, or ``None``.
+@dataclass(frozen=True)
+class StoredBouncer:
+    """What building an engine's bundle needs from the settings (the key is read later).
+
+    Attributes:
+        url: Base URL of the CrowdSec local API.
+        key_ref: Reference of the bouncer key in the secrets backend, or empty.
+        env_key: The bouncer key from the environment when there is no reference.
+        origins: Decision origins to keep; empty keeps all.
+        logs_address: ``host:port`` (UDP) for the access log feed, or empty.
+    """
+
+    url: str
+    key_ref: str
+    env_key: str
+    origins: tuple[str, ...]
+    logs_address: str
+
+
+async def bouncer_settings(engine: AsyncEngine) -> StoredBouncer | None:
+    """What an engine's bouncer needs, or ``None`` when CrowdSec is not configured.
 
     Used when the agent bundle is built; the key itself is read from the secrets backend there.
     """
@@ -96,4 +123,4 @@ async def bouncer_settings(engine: AsyncEngine) -> tuple[str, str, str, tuple[st
     if not cfg.configured:
         return None
     env_key = "" if cfg.key_ref else os.environ.get("SWITCHYARD_CROWDSEC_API_KEY", "")
-    return cfg.url, cfg.key_ref, env_key, tuple(cfg.origins)
+    return StoredBouncer(cfg.url, cfg.key_ref, env_key, tuple(cfg.origins), cfg.logs_address)

@@ -41,6 +41,8 @@ BACKEND = "sy_crowdsec_spoa"
 SPOE_PATH = "haproxy/lists/crowdsec.spoe"
 #: Path of the bouncer configuration inside the agent bundle.
 BOUNCER_PATH = "crowdsec/spoa-bouncer.yaml"
+#: Path of the log shipper drop-in inside the agent bundle (read by Vector on the engine).
+LOG_FEED_PATH = "vector/crowdsec.yaml"
 BASE_DIR = "/etc/switchyard/haproxy"
 COMPOSE_NOTE = "# Managed by Switchyard. Do not edit: changes are reported as drift."
 
@@ -53,11 +55,14 @@ class BouncerSettings:
         url: Base URL of the CrowdSec local API.
         key: The bouncer key (a secret: it is written only to the bundle file).
         origins: Keep only decisions from these origins; empty keeps all.
+        logs_address: ``host:port`` (UDP) of the CrowdSec syslog datasource for the access log
+            feed; empty means no feed.
     """
 
     url: str
     key: str
     origins: tuple[str, ...] = ()
+    logs_address: str = ""
 
 
 def crowdsec_policy(
@@ -182,6 +187,23 @@ def backend_lines() -> list[str]:
     ]
 
 
+def sharing_services(snapshot: Snapshot, se_group_id: UUID) -> list[str]:
+    """Names of the group's enabled services whose CrowdSec policy sends access logs, sorted.
+
+    Example:
+        >>> sharing_services.__name__
+        'sharing_services'
+    """
+    view = snapshot.for_se_group(se_group_id)
+    policies = {p.id: p for p in view.policy_sets}
+    names = []
+    for svc in view.virtual_services:
+        policy = crowdsec_policy(svc, policies)
+        if svc.enabled and policy is not None and policy.share_logs:
+            names.append(esc.ident(svc.name))
+    return sorted(names)
+
+
 def uses_crowdsec(snapshot: Snapshot, se_group_id: UUID) -> bool:
     """True when an enabled service of the group carries a CrowdSec policy."""
     view = snapshot.for_se_group(se_group_id)
@@ -235,3 +257,56 @@ def render_bouncer_files(
         "      fallback_remediation: allow",
     ]
     return {BOUNCER_PATH: "\n".join(lines) + "\n"}
+
+
+def render_log_feed_files(
+    snapshot: Snapshot, se_group_id: UUID, settings: BouncerSettings | None
+) -> dict[str, str]:
+    """The Vector drop-in that sends the access logs of opted-in services to CrowdSec, or nothing.
+
+    Vector on the engine already reads HAProxy's log lines (``parse`` in the image's own
+    ``vector.yaml``, which sets ``frontend``). The drop-in keeps the lines of the services that
+    set ``share_logs``, wraps each in the RFC 3164 syslog header the CrowdSec syslog datasource and
+    its ``haproxy-logs`` parser expect (program ``haproxy``), and sends it over UDP, the only
+    transport that datasource has. The lines carry client addresses and request lines.
+
+    Raises:
+        switchyard.render.escape.RenderError: If a service shares logs but no log address is set.
+        switchyard.domain.errors.DomainValidationError: If the snapshot is not valid.
+    """
+    ensure_valid(snapshot)
+    names = sharing_services(snapshot, se_group_id)
+    if not names:
+        return {}
+    if settings is None or not settings.logs_address:
+        raise esc.RenderError(
+            "a CrowdSec policy sends access logs but no log address is set (Admin > Integrations)"
+        )
+    host, _, port = settings.logs_address.rpartition(":")
+    if not host or not port.isdigit():
+        raise esc.RenderError("the CrowdSec log address must be host:port")
+    condition = " || ".join(f'.frontend == "vs_{name}"' for name in names)
+    lines = [
+        COMPOSE_NOTE,
+        "transforms:",
+        "  crowdsec_select:",
+        "    type: filter",
+        "    inputs: [parse]",
+        f"    condition: {json.dumps(condition)}",
+        "  crowdsec_syslog:",
+        "    type: remap",
+        "    inputs: [crowdsec_select]",
+        "    source: |",
+        '      stamp = format_timestamp!(now(), format: "%b %e %H:%M:%S")',
+        '      host = string(.host) ?? "engine"',
+        '      .message = "<134>" + stamp + " " + host + " haproxy[1]: " + string!(.message)',
+        "sinks:",
+        "  crowdsec_logs:",
+        "    type: socket",
+        "    mode: udp",
+        f"    address: {json.dumps(settings.logs_address)}",
+        "    inputs: [crowdsec_syslog]",
+        "    encoding:",
+        "      codec: text",
+    ]
+    return {LOG_FEED_PATH: "\n".join(lines) + "\n"}

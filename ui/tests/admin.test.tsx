@@ -776,6 +776,7 @@ describe("Integrations: CrowdSec", () => {
     url: "",
     key_ref: "",
     origins: [] as string[],
+    logs_address: "",
     source: "none",
     configured: false,
     synced_at: null,
@@ -821,6 +822,7 @@ describe("Integrations: CrowdSec", () => {
         url: "https://crowdsec.example.test:8080",
         key_ref: "",
         origins: ["crowdsec", "CAPI"],
+        logs_address: "",
         api_key: "s3cr3t",
       }),
     );

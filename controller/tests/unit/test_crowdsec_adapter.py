@@ -45,6 +45,13 @@ def test_decisions_can_be_limited_by_origin() -> None:
     ]
 
 
+def test_origins_can_be_excluded() -> None:
+    assert parse_decisions(json.dumps(STREAM), exclude_origins=frozenset({"CAPI"})) == [
+        "192.0.2.9/32",
+        "2001:db8::7/128",
+    ]
+
+
 @pytest.mark.parametrize("body", ["not json", "[]", '{"new": 3}', '{"new": ["x"]}'])
 def test_a_wrong_answer_is_not_a_decision_stream(body: str) -> None:
     with pytest.raises(CrowdSecError):

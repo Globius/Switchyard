@@ -119,7 +119,7 @@ async def test_test_connection_reports_success_and_failure(rig: Rig) -> None:
     await rig.client.put(f"{V1}/system/crowdsec", json=settings(), headers=root)
     ok = (await rig.client.post(f"{V1}/system/crowdsec/test", headers=root)).json()
     assert ok == {"ok": True, "bans": 2, "error": None}
-    assert rig.lapi.calls[-1] == (URL, "s3cr3t-key", frozenset({"crowdsec", "CAPI"}))
+    assert rig.lapi.calls[-1] == (URL, "s3cr3t-key", frozenset({"crowdsec", "CAPI"}), frozenset())
     await rig.secrets.put(DEFAULT_KEY_REF, "rotated-elsewhere")
     bad = (await rig.client.post(f"{V1}/system/crowdsec/test", headers=root)).json()
     assert bad["ok"] is False and "403" in bad["error"]
@@ -232,3 +232,25 @@ async def test_a_crowdsec_policy_survives_the_database(pg_url: str) -> None:
     assert (policy.mode, policy.fail_mode) == ("block", "closed")
     assert [str(n) for n in policy.allow_cidrs] == ["198.51.100.0/24"]
     assert list(policy.excluded_paths) == ["/healthz"]
+
+
+async def test_the_community_blocklist_stays_out_of_lists_unless_named(rig: Rig) -> None:
+    root = await rig.token(Role.SYSTEM_ADMIN)
+    await rig.client.put(f"{V1}/system/crowdsec", json=settings(origins=[]), headers=root)
+    await rig.client.post(f"{V1}/system/crowdsec/test", headers=root)
+    assert rig.lapi.calls[-1][2:] == (None, frozenset({"CAPI"}))
+
+
+async def test_the_log_address_is_validated_and_stored(rig: Rig) -> None:
+    root = await rig.token(Role.SYSTEM_ADMIN)
+    ok = await rig.client.put(
+        f"{V1}/system/crowdsec",
+        json=settings(logs_address="CrowdSec.example.test:514"),
+        headers=root,
+    )
+    assert ok.status_code == 200 and ok.json()["logs_address"] == "crowdsec.example.test:514"
+    for bad in ("nohost", "host:0", "host:99999", "bad host:514", "[nope]:514", "http://h:514"):
+        res = await rig.client.put(
+            f"{V1}/system/crowdsec", json=settings(logs_address=bad), headers=root
+        )
+        assert res.status_code == 422, bad

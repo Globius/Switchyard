@@ -8304,6 +8304,12 @@ export interface components {
              */
             key_ref: string;
             /**
+             * Logs Address
+             * @description `host:port` (UDP) of the CrowdSec syslog datasource that receives the access logs of services that opted in with `share_logs`. Empty turns the feed off.
+             * @default
+             */
+            logs_address: string;
+            /**
              * Origins
              * @description Keep only decisions from these origins: `crowdsec`, `CAPI`, `cscli`, `lists`.
              */
@@ -8314,6 +8320,224 @@ export interface components {
              * @default
              */
             url: string;
+        };
+        /**
+         * CrowdSecPolicySet
+         * @description Block clients that a CrowdSec security engine has banned, on the engine itself (ADR 0215).
+         *
+         *     The CrowdSec SPOA bouncer runs on every engine, pulls the decision stream from the operator's
+         *     CrowdSec local API (Admin > Integrations) and answers HAProxy per request. New policies start in
+         *     ``detect`` mode: the verdict is logged (``{ban}`` before the request line) and nothing is
+         *     blocked, so a tenant can read the logs before turning blocking on. A service can carry one
+         *     CrowdSec policy. Captcha decisions are not enforced; they are let through.
+         *
+         *     Attributes:
+         *         mode: ``detect`` logs only; ``block`` refuses banned clients with 403.
+         *         fail_mode: What to do when the bouncer does not answer in ``timeout_ms``: ``open`` lets the
+         *             request through, ``closed`` refuses it with 503. Banned clients stay blocked while the
+         *             bouncer runs even if the CrowdSec API is down (it keeps its decisions in memory).
+         *         timeout_ms: How long HAProxy waits for the bouncer's verdict.
+         *         allow_cidrs: Client networks that are never checked (office, monitoring, partners).
+         *         excluded_paths: Paths that skip the check (``path_beg`` match), such as health endpoints.
+         *         share_logs: Send this service's HTTP access logs (client addresses and request lines)
+         *             to the CrowdSec engine the administrator configured, so it can detect attacks on this
+         *             service and add them to the decisions every engine enforces. Off by default; whether
+         *             the engine then shares signals with CrowdSec is the administrator's separate choice
+         *             (ADR 0215).
+         *
+         *     Example:
+         *         >>> CrowdSecPolicySet.model_validate(
+         *         ...     {"id": "00000000-0000-0000-0000-000000000001",
+         *         ...      "tenant_id": "00000000-0000-0000-0000-000000000002", "name": "c"}
+         *         ... ).mode
+         *         'detect'
+         */
+        CrowdSecPolicySet: {
+            /**
+             * Allow Cidrs
+             * @default []
+             */
+            allow_cidrs: (string)[];
+            /**
+             * Excluded Paths
+             * @default []
+             */
+            excluded_paths: string[];
+            /**
+             * Fail Mode
+             * @default open
+             * @enum {string}
+             */
+            fail_mode: "open" | "closed";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "crowdsec";
+            /**
+             * Mode
+             * @default detect
+             * @enum {string}
+             */
+            mode: "detect" | "block";
+            /** Name */
+            name: string;
+            /**
+             * Share Logs
+             * @default false
+             */
+            share_logs: boolean;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Timeout Ms
+             * @default 100
+             */
+            timeout_ms: number;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** CrowdSecPolicySetCreate */
+        CrowdSecPolicySetCreate: {
+            /**
+             * Allow Cidrs
+             * @default []
+             */
+            allow_cidrs: (string)[];
+            /**
+             * Excluded Paths
+             * @default []
+             */
+            excluded_paths: string[];
+            /**
+             * Fail Mode
+             * @default open
+             * @enum {string}
+             */
+            fail_mode: "open" | "closed";
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "crowdsec";
+            /**
+             * Mode
+             * @default detect
+             * @enum {string}
+             */
+            mode: "detect" | "block";
+            /** Name */
+            name: string;
+            /**
+             * Share Logs
+             * @default false
+             */
+            share_logs: boolean;
+            /**
+             * Timeout Ms
+             * @default 100
+             */
+            timeout_ms: number;
+        };
+        /** CrowdSecPolicySetPatch */
+        CrowdSecPolicySetPatch: {
+            /** Allow Cidrs */
+            allow_cidrs?: (string)[] | null;
+            /** Excluded Paths */
+            excluded_paths?: string[] | null;
+            /** Fail Mode */
+            fail_mode?: ("open" | "closed") | null;
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "crowdsec";
+            /** Mode */
+            mode?: ("detect" | "block") | null;
+            /** Name */
+            name?: string | null;
+            /** Share Logs */
+            share_logs?: boolean | null;
+            /** Timeout Ms */
+            timeout_ms?: number | null;
+        };
+        /**
+         * CrowdSecPolicySetRead
+         * @description CrowdSecPolicySet as returned by the API.
+         */
+        CrowdSecPolicySetRead: {
+            /**
+             * Allow Cidrs
+             * @default []
+             */
+            allow_cidrs: (string)[];
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Excluded Paths
+             * @default []
+             */
+            excluded_paths: string[];
+            /**
+             * Fail Mode
+             * @default open
+             * @enum {string}
+             */
+            fail_mode: "open" | "closed";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "crowdsec";
+            /**
+             * Mode
+             * @default detect
+             * @enum {string}
+             */
+            mode: "detect" | "block";
+            /** Name */
+            name: string;
+            /**
+             * Share Logs
+             * @default false
+             */
+            share_logs: boolean;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Timeout Ms
+             * @default 100
+             */
+            timeout_ms: number;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
         };
         /**
          * CrowdSecRead
@@ -8337,6 +8561,8 @@ export interface components {
              * @description Where the bouncer key is stored; the key is never shown.
              */
             key_ref: string;
+            /** Logs Address */
+            logs_address: string;
             /**
              * Ok
              * @description Whether the last read worked.
@@ -12085,10 +12311,10 @@ export interface components {
             /** Version */
             version: string;
         };
-        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead, DirectoryPolicySetRead, PosturePolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
-        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
+        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, CrowdSecPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead, DirectoryPolicySetRead, PosturePolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
+        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__CrowdSecPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
             /** Items */
-            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"] | components["schemas"]["DirectoryPolicySetRead"] | components["schemas"]["PosturePolicySetRead"])[];
+            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["CrowdSecPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"] | components["schemas"]["DirectoryPolicySetRead"] | components["schemas"]["PosturePolicySetRead"])[];
             /**
              * Next Cursor
              * @description Opaque cursor of the next page, or null on the last page.
@@ -15515,7 +15741,7 @@ export interface components {
              * Policy Sets
              * @default []
              */
-            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"] | components["schemas"]["WafPolicySet"] | components["schemas"]["ProtectionPolicySet"] | components["schemas"]["AccessPolicySet"] | components["schemas"]["JwtPolicySet"] | components["schemas"]["ClientCertPolicySet"] | components["schemas"]["DirectoryPolicySet"] | components["schemas"]["PosturePolicySet"])[];
+            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"] | components["schemas"]["WafPolicySet"] | components["schemas"]["CrowdSecPolicySet"] | components["schemas"]["ProtectionPolicySet"] | components["schemas"]["AccessPolicySet"] | components["schemas"]["JwtPolicySet"] | components["schemas"]["ClientCertPolicySet"] | components["schemas"]["DirectoryPolicySet"] | components["schemas"]["PosturePolicySet"])[];
             /**
              * Pools
              * @default []
@@ -23503,6 +23729,7 @@ export interface operations {
                      *       "bans": 4210,
                      *       "configured": true,
                      *       "key_ref": "kv/system/crowdsec/bouncer-key",
+                     *       "logs_address": "crowdsec.example.test:514",
                      *       "ok": true,
                      *       "origins": [
                      *         "crowdsec",
@@ -23591,6 +23818,7 @@ export interface operations {
                      *       "bans": 4210,
                      *       "configured": true,
                      *       "key_ref": "kv/system/crowdsec/bouncer-key",
+                     *       "logs_address": "crowdsec.example.test:514",
                      *       "ok": true,
                      *       "origins": [
                      *         "crowdsec",
@@ -34628,7 +34856,7 @@ export interface operations {
                      *       ]
                      *     }
                      */
-                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
+                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__CrowdSecPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
                 };
             };
             /** @description `cursor` is not a value this endpoint returned. */
@@ -34719,7 +34947,7 @@ export interface operations {
                  *       ]
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"] | components["schemas"]["WafPolicySetCreate"] | components["schemas"]["ProtectionPolicySetCreate"] | components["schemas"]["AccessPolicySetCreate"] | components["schemas"]["JwtPolicySetCreate"] | components["schemas"]["ClientCertPolicySetCreate"] | components["schemas"]["DirectoryPolicySetCreate"] | components["schemas"]["PosturePolicySetCreate"];
+                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"] | components["schemas"]["WafPolicySetCreate"] | components["schemas"]["CrowdSecPolicySetCreate"] | components["schemas"]["ProtectionPolicySetCreate"] | components["schemas"]["AccessPolicySetCreate"] | components["schemas"]["JwtPolicySetCreate"] | components["schemas"]["ClientCertPolicySetCreate"] | components["schemas"]["DirectoryPolicySetCreate"] | components["schemas"]["PosturePolicySetCreate"];
             };
         };
         responses: {
@@ -34836,7 +35064,7 @@ export interface operations {
                      *       "version": 3
                      *     }
                      */
-                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"] | components["schemas"]["DirectoryPolicySetRead"] | components["schemas"]["PosturePolicySetRead"];
+                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["CrowdSecPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"] | components["schemas"]["DirectoryPolicySetRead"] | components["schemas"]["PosturePolicySetRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -35014,7 +35242,7 @@ export interface operations {
                  *       "kind": "allow_list"
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"] | components["schemas"]["WafPolicySetPatch"] | components["schemas"]["ProtectionPolicySetPatch"] | components["schemas"]["AccessPolicySetPatch"] | components["schemas"]["JwtPolicySetPatch"] | components["schemas"]["ClientCertPolicySetPatch"] | components["schemas"]["DirectoryPolicySetPatch"] | components["schemas"]["PosturePolicySetPatch"];
+                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"] | components["schemas"]["WafPolicySetPatch"] | components["schemas"]["CrowdSecPolicySetPatch"] | components["schemas"]["ProtectionPolicySetPatch"] | components["schemas"]["AccessPolicySetPatch"] | components["schemas"]["JwtPolicySetPatch"] | components["schemas"]["ClientCertPolicySetPatch"] | components["schemas"]["DirectoryPolicySetPatch"] | components["schemas"]["PosturePolicySetPatch"];
             };
         };
         responses: {

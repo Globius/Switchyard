@@ -93,6 +93,7 @@ ln -sf /etc/switchyard/frr/frr.conf /etc/frr/frr.conf
 sed -i 's/^bgpd=no/bgpd=yes/' /etc/frr/daemons
 sed -i 's/^bfdd=no/bfdd=yes/' /etc/frr/daemons
 install -m 0644 "$SRC"/files/vector.yaml /etc/switchyard/vector.yaml
+install -d -m 0755 /etc/switchyard/vector
 install -d /etc/systemd/system/vector.service.d
 install -m 0644 "$SRC"/files/vector-dropin.conf /etc/systemd/system/vector.service.d/switchyard.conf
 # node_exporter on 9100 (SD default); HAProxy's own exporter (8405) is a rendered listener.

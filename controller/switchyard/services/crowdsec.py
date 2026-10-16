@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from switchyard.adapters.crowdsec import CrowdSec, CrowdSecError, check_url
+from switchyard.adapters.crowdsec import CrowdSec, CrowdSecError, check_address, check_url
 from switchyard.adapters.iplists import IpListError
 from switchyard.adapters.secrets import SecretNotFoundError, SecretsReader
 from switchyard.db import audit_log
@@ -62,7 +62,7 @@ class CrowdSecState:
     error: str | None = None
 
 
-def _check(body: dict[str, Any], writable: bool) -> tuple[str, str, list[str], str | None]:
+def _check(body: dict[str, Any], writable: bool) -> tuple[str, str, list[str], str | None, str]:
     errors = FieldErrors()
     url = str(body.get("url") or "")
     if url:
@@ -85,8 +85,14 @@ def _check(body: dict[str, Any], writable: bool) -> tuple[str, str, list[str], s
     origins = normalize_origins(body.get("origins"))
     if len(origins) > _MAX_ORIGINS or any(len(o) > 64 for o in origins):
         errors.add("origins", "invalid", f"at most {_MAX_ORIGINS} names of up to 64 characters")
+    logs_address = str(body.get("logs_address") or "")
+    if logs_address:
+        try:
+            logs_address = check_address(logs_address)
+        except ValueError as exc:
+            errors.add("logs_address", "invalid", str(exc))
     errors.raise_if_any()
-    return url, key_ref, origins, api_key or None
+    return url, key_ref, origins, api_key or None, logs_address
 
 
 class CrowdSecIntegration:
@@ -141,14 +147,19 @@ class CrowdSecIntegration:
         """
         require(principal, "manage", "controller")
         writer: Any = self._secrets if hasattr(self._secrets, "put") else None
-        url, key_ref, origins, api_key = _check(body, writer is not None)
+        url, key_ref, origins, api_key, logs_address = _check(body, writable=writer is not None)
         previous = await self._get(CONFIG_KEY) or {}
         if api_key:
             await writer.put(DEFAULT_KEY_REF, api_key)
             key_ref = DEFAULT_KEY_REF
         elif not key_ref:
             key_ref = previous.get("key_ref", "")
-        stored = {"url": url, "key_ref": key_ref if url else "", "origins": origins}
+        stored = {
+            "url": url,
+            "key_ref": key_ref if url else "",
+            "origins": origins,
+            "logs_address": logs_address if url else "",
+        }
         async with admin_session(self._db.admin) as session:
             await self._put(session, CONFIG_KEY, stored, principal.actor)
             await audit_log.record(
@@ -157,7 +168,12 @@ class CrowdSecIntegration:
                 actor=principal.actor,
                 action="crowdsec.configured",
                 object_ref="setting:crowdsec",
-                diff={"url": url, "origins": origins, "key_changed": bool(api_key) or None},
+                diff={
+                    "url": url,
+                    "origins": origins,
+                    "logs_address": logs_address,
+                    "key_changed": bool(api_key) or None,
+                },
                 request_id=request_id,
             )
         return await self.config()
@@ -185,7 +201,11 @@ class CrowdSecIntegration:
         if not cfg.configured:
             raise CrowdSecError("CrowdSec is not configured")
         key = await self._key(cfg)
-        return await self._client.decisions(cfg.url, key, frozenset(cfg.origins) or None)
+        # The community blocklist (origin CAPI) is for the engines that subscribe to it. Copying it
+        # into tenant lists (and the Git mirror) is not something its terms were checked for, so it
+        # stays out unless an administrator names CAPI in the origins (ADR 0215).
+        exclude = frozenset() if cfg.origins else frozenset({"CAPI"})
+        return await self._client.decisions(cfg.url, key, frozenset(cfg.origins) or None, exclude)
 
     async def networks(self) -> list[str]:
         """The banned networks, for the sync job. Records the outcome either way.

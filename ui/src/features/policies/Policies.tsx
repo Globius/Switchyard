@@ -35,7 +35,14 @@ type Policy =
   | components["schemas"]["DirectoryPolicySetRead"]
   | components["schemas"]["PosturePolicySetRead"];
 type Kind = "redirect" | "allow_list" | RuleKind | SecurityKind;
-const SECURITY_KINDS: SecurityKind[] = ["access", "jwt", "client_cert", "waf", "protection"];
+const SECURITY_KINDS: SecurityKind[] = [
+  "access",
+  "jwt",
+  "client_cert",
+  "waf",
+  "crowdsec",
+  "protection",
+];
 type Rule = components["schemas"]["RedirectRule"];
 const CODES = [301, 302, 303, 307, 308] as const;
 const CODE_NAMES: Record<(typeof CODES)[number], string> = {
@@ -763,6 +770,7 @@ export function Policies({ tenant }: { tenant: string }) {
                                 p.kind === "jwt" ||
                                 p.kind === "client_cert" ||
                                 p.kind === "waf" ||
+                                p.kind === "crowdsec" ||
                                 p.kind === "protection"
                               ? t(SECURITY_LABEL[p.kind])
                               : p.kind === "directory"

@@ -33,6 +33,13 @@ class CrowdSecIn(ApiModel):
         default_factory=list,
         description="Keep only decisions from these origins: `crowdsec`, `CAPI`, `cscli`, `lists`.",
     )
+    logs_address: str = Field(
+        default="",
+        description=(
+            "`host:port` (UDP) of the CrowdSec syslog datasource that receives the access logs of "
+            "services that opted in with `share_logs`. Empty turns the feed off."
+        ),
+    )
 
 
 class CrowdSecRead(ApiModel):
@@ -41,6 +48,7 @@ class CrowdSecRead(ApiModel):
     url: str
     key_ref: str = Field(description="Where the bouncer key is stored; the key is never shown.")
     origins: list[str]
+    logs_address: str
     source: Literal["database", "environment", "none"] = Field(
         description="Where the settings come from; the environment is the fallback."
     )

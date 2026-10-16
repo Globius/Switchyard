@@ -50,6 +50,7 @@ function CrowdSecCard() {
   });
   const [url, setUrl] = useState<string | null>(null);
   const [origins, setOrigins] = useState<string | null>(null);
+  const [logs, setLogs] = useState<string | null>(null);
   const [key, setKey] = useState("");
   const refresh = () => void qc.invalidateQueries({ queryKey: ["admin", "crowdsec"] });
   const save = useMutation({
@@ -59,6 +60,7 @@ function CrowdSecCard() {
           body: {
             url: url ?? c.url,
             origins: parseOrigins(origins ?? c.origins.join(", ")),
+            logs_address: logs ?? c.logs_address,
             key_ref: c.key_ref,
             ...(key ? { api_key: key } : {}),
           },
@@ -67,6 +69,7 @@ function CrowdSecCard() {
     onSuccess: () => {
       setUrl(null);
       setOrigins(null);
+      setLogs(null);
       setKey("");
       refresh();
     },
@@ -82,7 +85,7 @@ function CrowdSecCard() {
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   const c = q.data;
   const status = crowdSecStatus(c);
-  const dirty = url !== null || origins !== null || key !== "";
+  const dirty = url !== null || origins !== null || logs !== null || key !== "";
   return (
     <section className="overflow-hidden rounded-lg border bg-card">
       <header className="flex items-center gap-3 border-b px-4 py-3">
@@ -157,6 +160,20 @@ function CrowdSecCard() {
           <span className="text-xs text-muted-foreground">
             {t(
               "Comma separated: crowdsec (your own detections), CAPI (the community blocklist), cscli, lists. Empty uses all.",
+            )}
+          </span>
+        </label>
+        <label className="block space-y-1">
+          <span className="font-medium">{t("Access log address (UDP)")}</span>
+          <input
+            className={INPUT}
+            value={logs ?? c.logs_address}
+            placeholder="crowdsec.example.com:514"
+            onChange={(e) => setLogs(e.target.value)}
+          />
+          <span className="text-xs text-muted-foreground">
+            {t(
+              "Where engines send the access logs of services whose CrowdSec policy has “Send access logs” on: the syslog datasource of your CrowdSec engine. UDP is not encrypted, so use a private network or a tunnel. Empty turns the feed off.",
             )}
           </span>
         </label>

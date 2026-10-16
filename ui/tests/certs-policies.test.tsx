@@ -1189,6 +1189,50 @@ describe("security policies", () => {
     });
   });
 
+  it("creates a CrowdSec policy in detect mode, then blocks with exclusions", async () => {
+    await userEvent.type(await open("crowdsec"), "bans");
+    expect(screen.getByLabelText("Detect")).toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "crowdsec",
+      mode: "detect",
+      fail_mode: "open",
+      timeout_ms: 100,
+      allow_cidrs: [],
+      excluded_paths: [],
+      share_logs: false,
+    });
+  });
+
+  it("turns on the access log feed of a CrowdSec policy", async () => {
+    await userEvent.type(await open("crowdsec"), "feeding");
+    await userEvent.click(screen.getByRole("switch", { name: "Send access logs to CrowdSec" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({ kind: "crowdsec", share_logs: true });
+  });
+
+  it("sets CrowdSec to block, fail closed, with a trusted network and a path", async () => {
+    await userEvent.type(await open("crowdsec"), "strict-bans");
+    await userEvent.click(screen.getByLabelText("Block"));
+    await userEvent.selectOptions(screen.getByLabelText("Fail mode"), "closed");
+    await userEvent.type(
+      screen.getByRole("combobox", { name: "Never check these networks" }),
+      "198.51.100.0/24,",
+    );
+    await userEvent.type(screen.getByRole("combobox", { name: "Paths not checked" }), "/healthz,");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "crowdsec",
+      mode: "block",
+      fail_mode: "closed",
+      allow_cidrs: ["198.51.100.0/24"],
+      excluded_paths: ["/healthz"],
+    });
+  });
+
   it("creates a protection policy with connection limits and exempt networks", async () => {
     await userEvent.type(await open("protection"), "guard");
     await userEvent.type(screen.getByLabelText("Connections per source"), "50");

@@ -12,11 +12,18 @@ import pytest
 from pydantic import ValidationError
 
 from switchyard.adapters.secrets import MemorySecrets
+from switchyard.db.crowdsec_config import StoredBouncer
 from switchyard.domain import models as dm
 from switchyard.domain.loader import snapshot_from_mapping
 from switchyard.domain.snapshot import validate_snapshot
 from switchyard.pipeline.bundles import BundleError, engine_files
-from switchyard.render.crowdsec import BOUNCER_PATH, BouncerSettings, render_bouncer_files
+from switchyard.render.crowdsec import (
+    BOUNCER_PATH,
+    LOG_FEED_PATH,
+    BouncerSettings,
+    render_bouncer_files,
+    render_log_feed_files,
+)
 from switchyard.render.escape import RenderError
 from switchyard.render.haproxy import render_haproxy
 from switchyard.render.routing import EngineSlot
@@ -176,8 +183,10 @@ CERT = {"kv/tenants/acme/certs/wild-example-test": "BEGIN CERTIFICATE PRIVATE KE
 
 
 async def loader_with(key_ref: str = "", env_key: str = "") -> Any:
-    async def load() -> tuple[str, str, str, tuple[str, ...]]:
-        return ("https://crowdsec.example.test:8080", key_ref, env_key, ("crowdsec",))
+    async def load() -> StoredBouncer:
+        return StoredBouncer(
+            "https://crowdsec.example.test:8080", key_ref, env_key, ("crowdsec",), ""
+        )
 
     return load
 
@@ -243,3 +252,73 @@ def test_the_sample_used_by_the_image_check_is_what_the_renderer_writes() -> Non
         ),
     )[BOUNCER_PATH]
     assert sample.read_text("utf-8") == text
+
+
+# -- the access log feed -----------------------------------------------------------------------------
+
+FEED = BouncerSettings("https://crowdsec.example.test:8080", KEY, (), "crowdsec.example.test:514")
+
+
+def two_services(**extra: Any) -> dict[str, Any]:
+    d = with_policies(crowdsec(**extra))
+    other = copy.deepcopy(d["virtual_services"][0])
+    other.update(id="vs-two", name="two", vip="192.0.2.31", certificate_ids=[], routes=[])
+    other["ports"] = [{"port": 80}]
+    other["default_pool_id"] = "pool-web"
+    other["policy_set_ids"] = []
+    d["virtual_services"].append(other)
+    return d
+
+
+def feed(d: dict[str, Any], settings: BouncerSettings | None = FEED) -> dict[str, str]:
+    snap = snapshot_from_mapping(d)
+    return render_log_feed_files(snap, snap.se_groups[0].id, settings)
+
+
+def test_logs_are_not_shared_unless_the_policy_asks() -> None:
+    assert feed(with_policies(crowdsec())) == {}
+    assert feed(copy.deepcopy(BASE), None) == {}
+
+
+def test_the_feed_selects_only_the_services_that_share() -> None:
+    text = feed(two_services(share_logs=True))[LOG_FEED_PATH]
+    assert 'condition: ".frontend == \\"vs_web\\""' in text
+    assert "vs_two" not in text
+    assert 'address: "crowdsec.example.test:514"' in text
+    assert "mode: udp" in text and "inputs: [parse]" in text
+
+
+def test_the_feed_wraps_each_line_as_rfc3164_with_the_haproxy_program() -> None:
+    text = feed(with_policies(crowdsec(share_logs=True)))[LOG_FEED_PATH]
+    assert '"<134>" + stamp + " " + host + " haproxy[1]: "' in text
+    assert 'format: "%b %e %H:%M:%S"' in text
+
+
+def test_sharing_without_a_log_address_cannot_render() -> None:
+    d = with_policies(crowdsec(share_logs=True))
+    with pytest.raises(RenderError, match="no log address"):
+        feed(d, BouncerSettings("https://x.example.test", KEY, ()))
+    with pytest.raises(RenderError, match="no log address"):
+        feed(d, None)
+
+
+def test_the_feed_never_carries_the_bouncer_key() -> None:
+    assert KEY not in feed(with_policies(crowdsec(share_logs=True)))[LOG_FEED_PATH]
+
+
+async def test_the_bundle_carries_the_feed_next_to_the_bouncer_file() -> None:
+    snap = snapshot_from_mapping(with_policies(crowdsec(share_logs=True)))
+
+    async def load() -> StoredBouncer:
+        return StoredBouncer(
+            "https://crowdsec.example.test:8080", "", KEY, (), "crowdsec.example.test:514"
+        )
+
+    files = await engine_files(
+        snap,
+        snap.se_groups[0],
+        EngineSlot("se-1", 0, "192.0.2.5"),
+        MemorySecrets(CERT),
+        load,
+    )
+    assert BOUNCER_PATH in files and LOG_FEED_PATH in files

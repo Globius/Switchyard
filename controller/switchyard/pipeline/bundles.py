@@ -15,12 +15,18 @@ from uuid import UUID
 
 from switchyard.adapters.secrets import SecretsReader
 from switchyard.config import broker_url
+from switchyard.db.crowdsec_config import StoredBouncer
 from switchyard.domain import models as dm
 from switchyard.domain.snapshot import Snapshot
 from switchyard.render import captcha
 from switchyard.render import escape as esc
 from switchyard.render.auth import auth_secret_refs, render_auth_files
-from switchyard.render.crowdsec import BouncerSettings, render_bouncer_files, uses_crowdsec
+from switchyard.render.crowdsec import (
+    BouncerSettings,
+    render_bouncer_files,
+    render_log_feed_files,
+    uses_crowdsec,
+)
 from switchyard.render.escape import RenderError
 from switchyard.render.routing import EngineSlot, render_agent_bundle
 from switchyard.render.tokens import jwt_key_files
@@ -166,8 +172,8 @@ async def _captcha_files(
     return files
 
 
-#: Reads the CrowdSec integration settings (a URL and the reference of its bouncer key, or the key).
-CrowdSecLoader = Callable[[], Awaitable[tuple[str, str, str, tuple[str, ...]] | None]]
+#: Reads the CrowdSec integration settings (a URL, the reference of its bouncer key or the key).
+CrowdSecLoader = Callable[[], Awaitable[StoredBouncer | None]]
 
 
 async def _crowdsec_files(
@@ -182,8 +188,8 @@ async def _crowdsec_files(
     loaded = await loader() if loader is not None else None
     if loaded is None:
         raise BundleError("a CrowdSec policy is in use but CrowdSec is not configured")
-    url, key_ref, plain_key, origins = loaded
-    key = plain_key
+    key = loaded.env_key
+    key_ref = loaded.key_ref
     if key_ref:
         if secrets is None:
             raise BundleError("a CrowdSec policy is in use but no secrets backend is available")
@@ -194,7 +200,10 @@ async def _crowdsec_files(
     if not key or "\n" in key:
         raise BundleError("the CrowdSec bouncer key must be one non-empty line")
     try:
-        return render_bouncer_files(snapshot, group.id, BouncerSettings(url, key, origins))
+        settings = BouncerSettings(loaded.url, key, loaded.origins, loaded.logs_address)
+        return render_bouncer_files(snapshot, group.id, settings) | render_log_feed_files(
+            snapshot, group.id, settings
+        )
     except RenderError as exc:
         raise BundleError(str(exc)) from exc
 

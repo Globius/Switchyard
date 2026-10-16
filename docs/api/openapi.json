@@ -7025,6 +7025,12 @@
             "title": "Key Ref",
             "type": "string"
           },
+          "logs_address": {
+            "default": "",
+            "description": "`host:port` (UDP) of the CrowdSec syslog datasource that receives the access logs of services that opted in with `share_logs`. Empty turns the feed off.",
+            "title": "Logs Address",
+            "type": "string"
+          },
           "origins": {
             "description": "Keep only decisions from these origins: `crowdsec`, `CAPI`, `cscli`, `lists`.",
             "items": {
@@ -7045,7 +7051,7 @@
       },
       "CrowdSecPolicySet": {
         "additionalProperties": false,
-        "description": "Block clients that a CrowdSec security engine has banned, on the engine itself (ADR 0215).\n\nThe CrowdSec SPOA bouncer runs on every engine, pulls the decision stream from the operator's\nCrowdSec local API (Admin > Integrations) and answers HAProxy per request. New policies start in\n``detect`` mode: the verdict is logged (``{ban}`` before the request line) and nothing is\nblocked, so a tenant can read the logs before turning blocking on. A service can carry one\nCrowdSec policy. Captcha decisions are not enforced; they are let through.\n\nAttributes:\n    mode: ``detect`` logs only; ``block`` refuses banned clients with 403.\n    fail_mode: What to do when the bouncer does not answer in ``timeout_ms``: ``open`` lets the\n        request through, ``closed`` refuses it with 503. Banned clients stay blocked while the\n        bouncer runs even if the CrowdSec API is down (it keeps its decisions in memory).\n    timeout_ms: How long HAProxy waits for the bouncer's verdict.\n    allow_cidrs: Client networks that are never checked (office, monitoring, partners).\n    excluded_paths: Paths that skip the check (``path_beg`` match), such as health endpoints.\n\nExample:\n    >>> CrowdSecPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"c\"}\n    ... ).mode\n    'detect'",
+        "description": "Block clients that a CrowdSec security engine has banned, on the engine itself (ADR 0215).\n\nThe CrowdSec SPOA bouncer runs on every engine, pulls the decision stream from the operator's\nCrowdSec local API (Admin > Integrations) and answers HAProxy per request. New policies start in\n``detect`` mode: the verdict is logged (``{ban}`` before the request line) and nothing is\nblocked, so a tenant can read the logs before turning blocking on. A service can carry one\nCrowdSec policy. Captcha decisions are not enforced; they are let through.\n\nAttributes:\n    mode: ``detect`` logs only; ``block`` refuses banned clients with 403.\n    fail_mode: What to do when the bouncer does not answer in ``timeout_ms``: ``open`` lets the\n        request through, ``closed`` refuses it with 503. Banned clients stay blocked while the\n        bouncer runs even if the CrowdSec API is down (it keeps its decisions in memory).\n    timeout_ms: How long HAProxy waits for the bouncer's verdict.\n    allow_cidrs: Client networks that are never checked (office, monitoring, partners).\n    excluded_paths: Paths that skip the check (``path_beg`` match), such as health endpoints.\n    share_logs: Send this service's HTTP access logs (client addresses and request lines)\n        to the CrowdSec engine the administrator configured, so it can detect attacks on this\n        service and add them to the decisions every engine enforces. Off by default; whether\n        the engine then shares signals with CrowdSec is the administrator's separate choice\n        (ADR 0215).\n\nExample:\n    >>> CrowdSecPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"c\"}\n    ... ).mode\n    'detect'",
         "properties": {
           "allow_cidrs": {
             "default": [],
@@ -7106,6 +7112,11 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "share_logs": {
+            "default": false,
+            "title": "Share Logs",
+            "type": "boolean"
           },
           "tenant_id": {
             "format": "uuid",
@@ -7191,6 +7202,11 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "share_logs": {
+            "default": false,
+            "title": "Share Logs",
+            "type": "boolean"
           },
           "timeout_ms": {
             "default": 100,
@@ -7294,6 +7310,17 @@
             ],
             "title": "Name"
           },
+          "share_logs": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Logs"
+          },
           "timeout_ms": {
             "anyOf": [
               {
@@ -7388,6 +7415,11 @@
             "title": "Name",
             "type": "string"
           },
+          "share_logs": {
+            "default": false,
+            "title": "Share Logs",
+            "type": "boolean"
+          },
           "tenant_id": {
             "format": "uuid",
             "title": "Tenant Id",
@@ -7454,6 +7486,10 @@
             "title": "Key Ref",
             "type": "string"
           },
+          "logs_address": {
+            "title": "Logs Address",
+            "type": "string"
+          },
           "ok": {
             "anyOf": [
               {
@@ -7504,6 +7540,7 @@
           "url",
           "key_ref",
           "origins",
+          "logs_address",
           "source",
           "configured"
         ],
@@ -35517,6 +35554,7 @@
                   "bans": 4210,
                   "configured": true,
                   "key_ref": "kv/system/crowdsec/bouncer-key",
+                  "logs_address": "crowdsec.example.test:514",
                   "ok": true,
                   "origins": [
                     "crowdsec",
@@ -35628,6 +35666,7 @@
                   "bans": 4210,
                   "configured": true,
                   "key_ref": "kv/system/crowdsec/bouncer-key",
+                  "logs_address": "crowdsec.example.test:514",
                   "ok": true,
                   "origins": [
                     "crowdsec",

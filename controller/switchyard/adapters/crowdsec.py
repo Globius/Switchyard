@@ -16,7 +16,9 @@ Example:
     ['192.0.2.9/32']
 """
 
+import ipaddress
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Protocol
 from urllib.parse import urlsplit
@@ -34,7 +36,11 @@ class CrowdSecError(IpListError):
     """The LAPI could not be reached, refused the key, or answered with something unexpected."""
 
 
-def parse_decisions(body: str, origins: frozenset[str] | None = None) -> list[str]:
+def parse_decisions(
+    body: str,
+    origins: frozenset[str] | None = None,
+    exclude_origins: frozenset[str] = frozenset(),
+) -> list[str]:
     """Read the ban decisions of a ``/v1/decisions/stream?startup=true`` answer.
 
     Only ``ban`` decisions on an ``Ip`` or ``Range`` scope count; captcha and throttle decisions and
@@ -44,6 +50,7 @@ def parse_decisions(body: str, origins: frozenset[str] | None = None) -> list[st
         body: The JSON answer.
         origins: Keep only decisions from these origins (``crowdsec``, ``CAPI``, ``cscli``,
             ``lists``); ``None`` keeps all.
+        exclude_origins: Drop decisions from these origins (applied after ``origins``).
 
     Raises:
         CrowdSecError: If the body is not a decision stream, or the list is too long.
@@ -70,6 +77,8 @@ def parse_decisions(body: str, origins: frozenset[str] | None = None) -> list[st
         if str(decision.get("scope", "")).lower() not in _SCOPES:
             continue
         if origins is not None and decision.get("origin") not in origins:
+            continue
+        if decision.get("origin") in exclude_origins:
             continue
         lines.append(str(decision.get("value", "")))
     try:
@@ -101,11 +110,43 @@ def check_url(url: str) -> str:
     return url.rstrip("/")
 
 
+_HOST = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*")
+
+
+def check_address(value: str) -> str:
+    """A ``host:port`` for the CrowdSec syslog datasource (UDP), lower-cased.
+
+    The host is a DNS name, an IPv4 address or an IPv6 address in brackets.
+
+    Raises:
+        ValueError: If it is anything else.
+
+    Example:
+        >>> check_address("CrowdSec.example.test:514"), check_address("[2001:db8::5]:514")
+        ('crowdsec.example.test:514', '[2001:db8::5]:514')
+    """
+    host, sep, port = value.strip().lower().rpartition(":")
+    if not sep or not port.isdigit() or not 1 <= int(port) <= 65535:
+        raise ValueError("must be host:port with a port from 1 to 65535")
+    if host.startswith("[") and host.endswith("]"):
+        try:
+            ipaddress.IPv6Address(host[1:-1])
+        except ValueError as exc:
+            raise ValueError("the bracketed host must be an IPv6 address") from exc
+    elif not _HOST.fullmatch(host) or len(host) > 253:
+        raise ValueError("the host must be a DNS name or an IP address")
+    return f"{host}:{int(port)}"
+
+
 class CrowdSec(Protocol):
     """A CrowdSec local API."""
 
     async def decisions(
-        self, url: str, key: str, origins: frozenset[str] | None = None
+        self,
+        url: str,
+        key: str,
+        origins: frozenset[str] | None = None,
+        exclude_origins: frozenset[str] = frozenset(),
     ) -> list[str]:
         """The networks currently banned (see :func:`parse_decisions`)."""
         ...
@@ -119,7 +160,11 @@ class HttpCrowdSec:
         self._http = httpx.AsyncClient(timeout=30.0, transport=transport, follow_redirects=False)
 
     async def decisions(
-        self, url: str, key: str, origins: frozenset[str] | None = None
+        self,
+        url: str,
+        key: str,
+        origins: frozenset[str] | None = None,
+        exclude_origins: frozenset[str] = frozenset(),
     ) -> list[str]:
         """Fetch the stream with the bouncer ``key`` and parse the bans.
 
@@ -147,7 +192,7 @@ class HttpCrowdSec:
             ) from exc
         except ValueError as exc:
             raise CrowdSecError(f"the CrowdSec URL is not usable: {exc}") from exc
-        return parse_decisions(body.decode("utf-8", errors="replace"), origins)
+        return parse_decisions(body.decode("utf-8", errors="replace"), origins, exclude_origins)
 
     async def close(self) -> None:
         """Close the HTTP client."""
@@ -166,13 +211,19 @@ class FakeCrowdSec:
 
     banned: list[str] = field(default_factory=list)
     key: str = "bouncer-key"
-    calls: list[tuple[str, str, frozenset[str] | None]] = field(default_factory=list)
+    calls: list[tuple[str, str, frozenset[str] | None, frozenset[str]]] = field(
+        default_factory=list
+    )
 
     async def decisions(
-        self, url: str, key: str, origins: frozenset[str] | None = None
+        self,
+        url: str,
+        key: str,
+        origins: frozenset[str] | None = None,
+        exclude_origins: frozenset[str] = frozenset(),
     ) -> list[str]:
         """Return the banned networks, or fail like a refused key."""
-        self.calls.append((url, key, origins))
+        self.calls.append((url, key, origins, exclude_origins))
         if key != self.key:
             raise CrowdSecError("the CrowdSec API answered HTTP 403")
         return list(self.banned)

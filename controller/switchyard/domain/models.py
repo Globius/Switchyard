@@ -1786,6 +1786,11 @@ class CrowdSecPolicySet(TenantOwned):
         timeout_ms: How long HAProxy waits for the bouncer's verdict.
         allow_cidrs: Client networks that are never checked (office, monitoring, partners).
         excluded_paths: Paths that skip the check (``path_beg`` match), such as health endpoints.
+        share_logs: Send this service's HTTP access logs (client addresses and request lines)
+            to the CrowdSec engine the administrator configured, so it can detect attacks on this
+            service and add them to the decisions every engine enforces. Off by default; whether
+            the engine then shares signals with CrowdSec is the administrator's separate choice
+            (ADR 0215).
 
     Example:
         >>> CrowdSecPolicySet.model_validate(
@@ -1801,6 +1806,7 @@ class CrowdSecPolicySet(TenantOwned):
     timeout_ms: int = Field(default=100, ge=10, le=2000)
     allow_cidrs: tuple[IPNetwork, ...] = Field(default=(), max_length=64)
     excluded_paths: tuple[UrlPath, ...] = Field(default=(), max_length=16)
+    share_logs: bool = False
 
     @model_validator(mode="after")
     def _unique(self) -> Self:

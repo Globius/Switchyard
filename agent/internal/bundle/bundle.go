@@ -45,6 +45,7 @@ var Units = map[string]string{
 	"keepalived": "keepalived",
 	"coraza":     "coraza-spoa",
 	"crowdsec":   "crowdsec-spoa-bouncer",
+	"vector":     "vector",
 	"certs":      "haproxy",
 	"nftables":   "nftables",
 	"auth":       "sy-auth",
@@ -79,7 +80,7 @@ func verb(unit string) string {
 // keeps its crt-lists in the same directory as the certificates, so only "*.pem" files (server
 // certificates and client CA bundles) and "*.crl" files (client CA revocation lists) there are the
 // agent's; everything else is left alone and never removed.
-var suffixOnly = map[string][]string{"certs": {".pem", ".crl", ".secret"}, "auth": {".cfg", ".env", ".pem"}, "crowdsec": {".yaml"}}
+var suffixOnly = map[string][]string{"certs": {".pem", ".crl", ".secret"}, "auth": {".cfg", ".env", ".pem"}, "crowdsec": {".yaml"}, "vector": {".yaml"}}
 
 // secretDirs hold private keys and are written with owner-only permissions.
 // The auth directory is not here: its files are group-readable (0640) because the proxies run as

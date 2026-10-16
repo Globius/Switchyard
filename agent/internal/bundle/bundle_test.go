@@ -395,6 +395,25 @@ func TestCrowdSecBouncerIsOnDemandAndRestarted(t *testing.T) {
 	}
 }
 
+func TestVectorDropInsAreReloadedAndNotOnDemand(t *testing.T) {
+	a, priv, r := setup(t)
+	resp := a.Apply(context.Background(), request(t, priv, "b1", map[string]string{"vector/crowdsec.yaml": "sinks: {}\n"}))
+	if !resp.Ok || !contains(r.calls, "systemctl reload vector") {
+		t.Fatalf("a new drop-in reloads the log shipper: %v %v", resp, r.calls)
+	}
+	if contains(r.calls, "systemctl start vector") || contains(r.calls, "systemctl stop vector") {
+		t.Fatalf("the log shipper always runs: %v", r.calls)
+	}
+	if err := ValidatePath("vector/other.toml"); err == nil {
+		t.Fatal("only .yaml files are the agent's in vector/")
+	}
+	r.calls = nil
+	a.Apply(context.Background(), request(t, priv, "b2", map[string]string{"frr/frr.conf": "x\n"}))
+	if !contains(r.calls, "systemctl reload vector") {
+		t.Fatalf("removing the last drop-in reloads the shipper so it forgets the feed: %v", r.calls)
+	}
+}
+
 func contains(list []string, want string) bool {
 	for _, s := range list {
 		if s == want {
