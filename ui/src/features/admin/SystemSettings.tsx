@@ -11,6 +11,7 @@ import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
 import { StatusPill } from "@/components/sy/StatusPill";
 import { ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Switch } from "@/components/ui/switch";
+import { GitMirror } from "@/features/admin/GitMirror";
 import { t } from "@/lib/i18n";
 
 export function SystemSettings() {
@@ -92,6 +93,7 @@ export function SystemSettings() {
           </div>
         </section>
       )}
+      <GitMirror />
       <ConfirmDialog
         open={confirmOn}
         onOpenChange={setConfirmOn}

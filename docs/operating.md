@@ -43,7 +43,7 @@ Run any number of workers; one of them (whoever holds the advisory lock) schedul
 | `SWITCHYARD_GRAFANA_URL` | Grafana base URL (http or https); the UI links to it from `GET /me` `links.grafana` |
 | `SWITCHYARD_GRAFANA_INTERNAL_URL`, `_ADMIN_PASSWORD`, `_ADMIN_USER`, `_DS_SECRET`, `_DS_URL` | Grafana embedded in the UI behind the controller (ADR 0085, [runbooks/telemetry.md](runbooks/telemetry.md)). All of the first, second, fourth and fifth plus `SWITCHYARD_PROMETHEUS_URL` turn it on. `INTERNAL_URL` is Grafana as the controller reaches it (`http://host:3000`, never published to users); `ADMIN_*` is a Grafana server administrator the controller manages organizations with (user default `admin`); `DS_SECRET` (at least 32 random characters, the same on every node) keys the per-tenant data source tokens; `DS_URL` is how *Grafana* reaches this controller's `/internal/ds` (not through the public front) |
 | `SWITCHYARD_PROMETHEUS_URL`, `SWITCHYARD_LOKI_URL` | Metrics (and with Loki: access logs and p95) for the UI; see below |
-| `SWITCHYARD_GITLAB_URL`, `_PROJECT`, `_TOKEN` | Git mirror of every revision |
+| `SWITCHYARD_GITLAB_URL`, `_PROJECT`, `_TOKEN` | Git mirror of every revision. A fallback: settings saved in Admin > System settings > Git mirror replace them (see below) |
 | `SWITCHYARD_SANDBOX=docker` | Validate configuration with `haproxy -c` in a container before pushing |
 | `SWITCHYARD_BREAK_GLASS=1` | Allow the local break-glass administrator to log in |
 
@@ -162,3 +162,25 @@ it. See ADR 0056.
 
 `docker compose -f deploy/lab/pve/compose.yaml up -d`, then `sh deploy/lab/pve/bootstrap.sh` prints the `SWITCHYARD_TEST_PVE_*`
 variables; with them set, `pytest tests/integration/test_proxmox_live.py` runs the adapter against a real Proxmox VE (ADR 0054).
+
+## Git mirror
+
+Every applied revision can also be written as YAML to a GitLab repository, for review and recovery
+([ADR 0216](adr/0216-git-mirror-settings.md)). PostgreSQL stays the source of truth: a mirror failure never blocks an apply, and the
+write is retried.
+
+Configure it in **Admin > System settings > Git mirror** (system administrators), or with the API:
+
+```bash
+curl -X PUT $URL/api/v1/system/git-mirror -d '{"enabled":true,"url":"https://git.example.com",
+  "project":"ops/switchyard-mirror","branch":"main","token_ref":"kv/git/mirror-token"}'
+curl -X POST $URL/api/v1/system/git-mirror/test      # reads the branch; writes nothing
+```
+
+- `token_ref` is an OpenBao reference to a project access token with write access to that repository only. Never enter the token itself.
+  The controller's OpenBao policy must allow reading it (`syctl openbao-policy --platform kv/git/mirror-token`).
+- Test reports whether the branch can be read with the stored credentials. The page also shows when and where the last write went, and its
+  error if it failed.
+- Settings are read at write time, so a change needs no restart. Saving settings replaces `SWITCHYARD_GITLAB_*`; until then those variables
+  keep working and the page says so.
+- While the mirror is off or unconfigured, mirror jobs finish without writing.
