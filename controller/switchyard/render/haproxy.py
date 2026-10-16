@@ -110,6 +110,7 @@ TLS_PROFILES: dict[dm.TlsProfile, tuple[str, str | None, str]] = {
 # The output is configuration text, not HTML, so HTML autoescaping would corrupt it. Safety comes
 # from the strict validators and from ``switchyard.render.escape``, applied before any value is
 # interpolated.
+# deepcode ignore XSS: output is config text, not HTML; ADR 0218 explains why autoescape stays off
 _ENV = Environment(  # nosemgrep: python-jinja2-xss-autoescape-false-atomic
     loader=PackageLoader("switchyard.render", "templates"),
     undefined=StrictUndefined,

@@ -1,0 +1,10 @@
+# Snyk policy. Every entry needs a reason. See docs/adr/0218-snyk-code-triage.md.
+version: v1.25.0
+exclude:
+  code:
+    # Test fixtures: dummy credentials, never used outside the test run.
+    - controller/tests/**
+    - agent/**/*_test.go
+    - provider/**/*_test.go
+    - ui/tests/**
+    - se-image/test/**

@@ -62,6 +62,8 @@ def write_broker_files(files: dict[str, str], out: Path) -> list[str]:
     changed: list[str] = []
     for rel, content in files.items():
         target = out / rel
+        if not target.resolve().is_relative_to(out.resolve()):
+            raise BrokerError(f"{rel!r} leaves the output directory")
         if target.exists() and target.read_text("utf-8") == content:
             continue
         target.parent.mkdir(parents=True, exist_ok=True)

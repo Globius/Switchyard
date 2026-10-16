@@ -40,6 +40,7 @@ from switchyard.domain.snapshot import Snapshot, ensure_valid
 from switchyard.render import escape as esc
 from switchyard.render.escape import RenderError
 
+# deepcode ignore XSS: output is config text, not HTML; ADR 0218 explains why autoescape stays off
 _ENV = Environment(  # nosemgrep: python-jinja2-xss-autoescape-false-atomic
     loader=PackageLoader("switchyard.render", "templates"),
     undefined=StrictUndefined,
