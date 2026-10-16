@@ -1286,6 +1286,30 @@ function SettingsForm({
             />
           </Field>
           <Field
+            label={t("Deny list")}
+            name="deny_list_id"
+            changed={changed("deny_list_id")}
+            live={liveText("deny_list_id")}
+            onRevert={revert("deny_list_id")}
+            errors={er("deny_list_id")}
+          >
+            <Combobox
+              aria-label={t("Deny list")}
+              disabled={disabled || v.protocol === "udp"}
+              value={form.deny_list_id ?? ""}
+              onChange={(val) => set("deny_list_id", val || null)}
+              options={[
+                { value: "", label: t("None") },
+                ...allowLists.map((x) => ({ value: x.id, label: x.name })),
+              ]}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Refuses these networks before anything else (HTTP 403, TCP reset). Use a country or reputation list, for example the CrowdSec bans. UDP services cannot use it.",
+              )}
+            </p>
+          </Field>
+          <Field
             label={t("Enforce allow list")}
             name="enforce_allow_list"
             changed={changed("enforce_allow_list")}

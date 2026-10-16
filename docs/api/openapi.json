@@ -13488,6 +13488,20 @@
         "additionalProperties": false,
         "description": "Optional features, so the UI can show or hide controls.",
         "properties": {
+          "ip_list_feeds": {
+            "description": "Reputation feeds an allow-list policy set may name (`feed`): the operator's `SWITCHYARD_REPUTATION_FEEDS` and `crowdsec` once the integration is set up.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Ip List Feeds",
+            "type": "array"
+          },
+          "ip_list_geo": {
+            "default": false,
+            "description": "Country lists are available (`SWITCHYARD_GEO_URL` is set).",
+            "title": "Ip List Geo",
+            "type": "boolean"
+          },
           "lxc_guests": {
             "default": false,
             "description": "Container (LXC) guests may be deployed (`allow_lxc_guests`).",

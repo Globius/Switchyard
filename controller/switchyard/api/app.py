@@ -264,7 +264,7 @@ from switchyard.services.changesets import (
 from switchyard.services.context import Databases, Principal
 from switchyard.services.controller_members import ControllerMembers
 from switchyard.services.controller_settings import ControllerSettings
-from switchyard.services.crowdsec import CrowdSecIntegration
+from switchyard.services.crowdsec import CROWDSEC_FEED, CrowdSecIntegration
 from switchyard.services.devices import (
     DeviceAuthError,
     DeviceRequestError,
@@ -283,6 +283,7 @@ from switchyard.services.identity_providers import (
 )
 from switchyard.services.importers import AviImportService
 from switchyard.services.infra import DeployRequest, InfraJobs
+from switchyard.services.iplists import configured_feeds
 from switchyard.services.jobs import JobService
 from switchyard.services.kubernetes import KubernetesClusters
 from switchyard.services.members import MemberService
@@ -1855,7 +1856,16 @@ def create_app(
                 for t in tenants
             ],
             "links": {"grafana": grafana_url, "grafana_embedded": svc.grafana is not None},
-            "features": {"lxc_guests": await svc.settings.lxc_allowed()},
+            "features": {
+                "lxc_guests": await svc.settings.lxc_allowed(),
+                "ip_list_feeds": sorted(
+                    {
+                        *configured_feeds(),
+                        *([CROWDSEC_FEED] if (await svc.crowdsec.config()).configured else []),
+                    }
+                ),
+                "ip_list_geo": bool(os.environ.get("SWITCHYARD_GEO_URL")),
+            },
         }
 
     @router.post(

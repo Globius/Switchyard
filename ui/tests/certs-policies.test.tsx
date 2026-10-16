@@ -718,6 +718,49 @@ describe("policies", () => {
     );
   });
 
+  it("creates a list kept current from CrowdSec and offers no typed ranges", async () => {
+    server.use(
+      http.get("*/api/v1/me", () =>
+        HttpResponse.json({
+          auth: "session",
+          break_glass: false,
+          csrf_token: "tok",
+          email: null,
+          id: "s",
+          is_system: false,
+          name: "Me",
+          principal: "me",
+          session: null,
+          tenants: [{ id: "t1", name: "acme", role, via: [] }],
+          features: { lxc_guests: false, ip_list_feeds: ["crowdsec"], ip_list_geo: false },
+        }),
+      ),
+    );
+    renderAt("/t/acme/policies");
+    const n = await screen.findByRole("button", { name: "New allow list" });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "crowdsec-bans");
+    await userEvent.selectOptions(
+      await screen.findByLabelText("Networks come from"),
+      "CrowdSec bans",
+    );
+    expect(screen.queryByLabelText("Allowed source ranges")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() =>
+      expect(posted?.ops[0]).toMatchObject({
+        action: "create",
+        body: {
+          kind: "allow_list",
+          name: "crowdsec-bans",
+          managed_by: "reputation",
+          feed: "crowdsec",
+          cidrs: [],
+        },
+      }),
+    );
+  });
+
   it("creates a redirect policy and maps a 422 onto its rule", async () => {
     server.use(
       http.post("*/api/v1/tenants/acme/change-sets/cs1/ops", () =>

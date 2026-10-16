@@ -509,6 +509,14 @@ class MeFeatures(ApiModel):
     lxc_guests: bool = Field(
         default=False, description="Container (LXC) guests may be deployed (`allow_lxc_guests`)."
     )
+    ip_list_feeds: list[str] = Field(
+        default_factory=list,
+        description="Reputation feeds an allow-list policy set may name (`feed`): the operator's "
+        "`SWITCHYARD_REPUTATION_FEEDS` and `crowdsec` once the integration is set up.",
+    )
+    ip_list_geo: bool = Field(
+        default=False, description="Country lists are available (`SWITCHYARD_GEO_URL` is set)."
+    )
 
 
 class MeLinks(ApiModel):

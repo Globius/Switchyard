@@ -1403,6 +1403,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/crowdsec": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The CrowdSec integration settings and status
+         * @description The settings in effect and how the last read of the decision stream went.
+         *
+         *     The bouncer key is never shown, only where it is stored. `synced_at`, `bans` and `error`
+         *     say when the stream was last read, how many networks it banned and why a read failed.
+         *     Requires a system administrator.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["get_crowdsec_api_v1_system_crowdsec_get"];
+        /**
+         * Set the CrowdSec integration
+         * @description Point the controller at a CrowdSec local API.
+         *
+         *     Send `api_key` to have the controller store the bouncer key in the secrets backend, or
+         *     `key_ref` for a key stored there already. The key is never kept in the database or
+         *     returned. Audited as `crowdsec.configured`. Requires a system administrator.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        put: operations["put_crowdsec_api_v1_system_crowdsec_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/crowdsec/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync the CrowdSec lists now
+         * @description Queue the IP list sync now instead of waiting for the next run.
+         *
+         *     Requires a system administrator.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["sync_crowdsec_api_v1_system_crowdsec_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/crowdsec/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test the connection to CrowdSec
+         * @description Read the decision stream once with the stored settings.
+         *
+         *     Changes nothing. A failure is reported in `error`, not as an HTTP error. Requires a
+         *     system administrator.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["test_crowdsec_api_v1_system_crowdsec_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/releases": {
         parameters: {
             query?: never;
@@ -8203,6 +8288,97 @@ export interface components {
             vip?: string | null;
         };
         /**
+         * CrowdSecIn
+         * @description The CrowdSec integration settings. An empty `url` removes the stored settings.
+         */
+        CrowdSecIn: {
+            /**
+             * Api Key
+             * @description A bouncer key to store. It is written to the secrets backend and never returned or kept in the database. Leave out to keep the current reference.
+             */
+            api_key?: string | null;
+            /**
+             * Key Ref
+             * @description Reference (OpenBao path) of a bouncer key stored there already.
+             * @default
+             */
+            key_ref: string;
+            /**
+             * Origins
+             * @description Keep only decisions from these origins: `crowdsec`, `CAPI`, `cscli`, `lists`.
+             */
+            origins?: string[];
+            /**
+             * Url
+             * @description Base URL of the CrowdSec local API (http or https, no credentials).
+             * @default
+             */
+            url: string;
+        };
+        /**
+         * CrowdSecRead
+         * @description The settings in effect and how the last read of the decision stream went.
+         */
+        CrowdSecRead: {
+            /**
+             * Bans
+             * @description Networks banned at the last good read.
+             */
+            bans?: number | null;
+            /** Configured */
+            configured: boolean;
+            /**
+             * Error
+             * @description Why the last read failed, if it did.
+             */
+            error?: string | null;
+            /**
+             * Key Ref
+             * @description Where the bouncer key is stored; the key is never shown.
+             */
+            key_ref: string;
+            /**
+             * Ok
+             * @description Whether the last read worked.
+             */
+            ok?: boolean | null;
+            /** Origins */
+            origins: string[];
+            /**
+             * Source
+             * @description Where the settings come from; the environment is the fallback.
+             * @enum {string}
+             */
+            source: "database" | "environment" | "none";
+            /**
+             * Synced At
+             * @description When the stream was last read.
+             */
+            synced_at?: string | null;
+            /** Url */
+            url: string;
+        };
+        /**
+         * CrowdSecSyncRead
+         * @description The job queued by Sync now.
+         */
+        CrowdSecSyncRead: {
+            /** Job Id */
+            job_id: string;
+        };
+        /**
+         * CrowdSecTestRead
+         * @description The outcome of one test read.
+         */
+        CrowdSecTestRead: {
+            /** Bans */
+            bans?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
+        };
+        /**
          * CrsCatalogueRead
          * @description The rule catalogue of the CRS release a WAF policy uses.
          */
@@ -11202,6 +11378,17 @@ export interface components {
          * @description Optional features, so the UI can show or hide controls.
          */
         MeFeatures: {
+            /**
+             * Ip List Feeds
+             * @description Reputation feeds an allow-list policy set may name (`feed`): the operator's `SWITCHYARD_REPUTATION_FEEDS` and `crowdsec` once the integration is set up.
+             */
+            ip_list_feeds?: string[];
+            /**
+             * Ip List Geo
+             * @description Country lists are available (`SWITCHYARD_GEO_URL` is set).
+             * @default false
+             */
+            ip_list_geo: boolean;
             /**
              * Lxc Guests
              * @description Container (LXC) guests may be deployed (`allow_lxc_guests`).
@@ -23283,6 +23470,297 @@ export interface operations {
                 };
             };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_crowdsec_api_v1_system_crowdsec_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "bans": 4210,
+                     *       "configured": true,
+                     *       "key_ref": "kv/system/crowdsec/bouncer-key",
+                     *       "ok": true,
+                     *       "origins": [
+                     *         "crowdsec",
+                     *         "CAPI"
+                     *       ],
+                     *       "source": "database",
+                     *       "synced_at": "2026-10-16T06:00:00+00:00",
+                     *       "url": "https://crowdsec.example.test:8080"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CrowdSecRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    put_crowdsec_api_v1_system_crowdsec_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "key_ref": "kv/system/crowdsec/bouncer-key",
+                 *       "origins": [
+                 *         "crowdsec",
+                 *         "CAPI"
+                 *       ],
+                 *       "url": "https://crowdsec.example.test:8080"
+                 *     }
+                 */
+                "application/json": components["schemas"]["CrowdSecIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "bans": 4210,
+                     *       "configured": true,
+                     *       "key_ref": "kv/system/crowdsec/bouncer-key",
+                     *       "ok": true,
+                     *       "origins": [
+                     *         "crowdsec",
+                     *         "CAPI"
+                     *       ],
+                     *       "source": "database",
+                     *       "synced_at": "2026-10-16T06:00:00+00:00",
+                     *       "url": "https://crowdsec.example.test:8080"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CrowdSecRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    sync_crowdsec_api_v1_system_crowdsec_sync_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "job_id": "0190a5f2-0000-7000-8000-000000000030"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CrowdSecSyncRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    test_crowdsec_api_v1_system_crowdsec_test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "bans": 4210,
+                     *       "ok": true
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CrowdSecTestRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;

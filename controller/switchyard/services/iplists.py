@@ -24,7 +24,9 @@ Example:
 """
 
 import ipaddress
+import json
 import logging
+import os
 from collections.abc import Iterable
 from uuid import UUID
 
@@ -61,6 +63,22 @@ def merge_networks(lists: Iterable[Iterable[str]]) -> list[str]:
     return [
         str(n) for n in sorted(nets, key=lambda n: (n.version, int(n.network_address), n.prefixlen))
     ]
+
+
+def configured_feeds() -> list[str]:
+    """Names in ``SWITCHYARD_REPUTATION_FEEDS`` (JSON name to URL), sorted; bad JSON gives none.
+
+    Example:
+        >>> os.environ["SWITCHYARD_REPUTATION_FEEDS"] = '{"b": "https://x.test/b", "a": "https://x.test/a"}'
+        >>> configured_feeds()
+        ['a', 'b']
+        >>> del os.environ["SWITCHYARD_REPUTATION_FEEDS"]
+    """
+    try:
+        feeds = json.loads(os.environ.get("SWITCHYARD_REPUTATION_FEEDS") or "{}")
+    except ValueError:
+        return []
+    return sorted(str(k) for k in feeds) if isinstance(feeds, dict) else []
 
 
 def shrinks_too_far(old: int, new: int) -> bool:
