@@ -133,7 +133,7 @@ def frontend_lines(policy: dm.CrowdSecPolicySet) -> tuple[list[str], list[str]]:
         >>> o, r = frontend_lines(dm.CrowdSecPolicySet.model_construct(
         ...     mode="block", fail_mode="open", timeout_ms=100, allow_cidrs=(), excluded_paths=(),
         ... ))
-        >>> o[0].startswith("filter spoe engine crowdsec"), r[-1].endswith("-m str ban }")
+        >>> o[1].startswith("filter spoe engine crowdsec"), r[-1].endswith("-m str ban }")
         (True, True)
     """
     options = [

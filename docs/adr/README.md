@@ -155,3 +155,4 @@ Date: YYYY-MM-DD
 | [0212](0212-reviewed-commits-and-verified-archive-bytes.md) | Reviewed commits and verified archive bytes | Accepted |
 | [0213](0213-crowdsec-bouncer-source.md) | CrowdSec as a reputation source | Accepted |
 | [0214](0214-pilot-deployment-fixes.md) | Pilot deployment fixes | Accepted |
+| [0215](0215-crowdsec-engine-bouncer-and-signals.md) | CrowdSec on the engines: bouncer, access log feed and signal sharing | Accepted |

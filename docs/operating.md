@@ -23,7 +23,7 @@ Run any number of workers; one of them (whoever holds the advisory lock) schedul
 | `SWITCHYARD_BUNDLE_KEY_FILE` | Ed25519 key (PKCS#8 PEM) that signs agent bundles |
 | `SWITCHYARD_PKI_MOUNT`, `SWITCHYARD_PKI_ROLE` | OpenBao PKI role that signs agent certificates (defaults `pki`, `agents`) |
 | `SWITCHYARD_GEO_URL`, `SWITCHYARD_REPUTATION_FEEDS` | Sources of country and reputation lists for `managed_by: geo` and `reputation` ([guide](ip-lists.md)) |
-| `SWITCHYARD_CROWDSEC_URL`, `_CROWDSEC_API_KEY`, `_CROWDSEC_ORIGINS` | CrowdSec local API and bouncer key; adds the reputation feed `crowdsec` ([guide](crowdsec.md)) |
+| `SWITCHYARD_CROWDSEC_URL`, `_CROWDSEC_API_KEY`, `_CROWDSEC_ORIGINS`, `_CROWDSEC_LOGS_ADDRESS` | CrowdSec local API, bouncer key, decision origins and the UDP address for access logs; the fallback while Admin > Integrations holds nothing ([guide](crowdsec.md)) |
 | `SWITCHYARD_PVE_URL`, `_PVE_TOKEN_ID`, `_PVE_CA` | Proxmox API (token secret at reference `kv/proxmox/token`); also turns on pool discovery by tag ([guide](pool-discovery.md)) |
 | `SWITCHYARD_CLOUDFLARE_TOKEN` | DNS-01, Origin CA and IP-range sync |
 | `SWITCHYARD_ACME_DIRECTORY`, `_EMAIL`, `_ACCOUNT_KEY_FILE` | The ACME provider of earlier versions; on first use it becomes the provider `default`. Manage providers in the UI instead (`docs/acme.md`) |

@@ -311,6 +311,19 @@ def test_a_scan_seen_in_the_logs_becomes_a_ban_the_engines_enforce(
     assert status(wait_for(lab, OTHER, "block", "200"), "block") == "200"
 
 
+def test_known_bans_stay_enforced_when_the_crowdsec_api_is_down(
+    stack: tuple[Lab, tuple[Any, Any]],
+) -> None:
+    lab, (lapi, _) = stack
+    exec_in(lapi, f"cscli decisions add --ip {BANNED} --duration 1h --reason e2e")
+    assert status(wait_for(lab, BANNED, "block", "403"), "block") == "403"
+    lapi.stop()
+    time.sleep(25)  # more than two update cycles of the bouncer against a dead API
+    down = get(lab, BANNED)
+    assert status(down, "block") == "403"
+    assert status(get(lab, OTHER), "block") == "200"
+
+
 def test_when_the_bouncer_is_gone_open_services_serve_and_closed_ones_refuse(
     stack: tuple[Lab, tuple[Any, Any]],
 ) -> None:

@@ -61,7 +61,7 @@ view and are longer than the counts because they split grouped rows.
 | Packet capture job | 01 phase 3; 08 D5 | |
 | Tenant self-service portal | 01 phase 3; 08 D8 | **Built afterwards** (same day): "Usage and requests" page and quota requests, ADR 0199 |
 | Multi-site and remote engines | ADR 0180 (Proposed) | |
-| CrowdSec / bouncer | 01 mapping; 08 C11 | Reputation feeds are supported through `SWITCHYARD_REPUTATION_FEEDS`; CrowdSec decisions as feed `crowdsec` (ADR 0213) |
+| CrowdSec / bouncer | 01 mapping; 08 C11 | Reputation feeds are supported through `SWITCHYARD_REPUTATION_FEEDS`; CrowdSec decisions as feed `crowdsec` (ADR 0213); engine bouncer, access log feed and sharing guide (ADR 0215) |
 | Lua actions | 01 DataScripts; 08 D6 | Out of scope on purpose (ADR 0130) |
 | `external-check` health scripts | 01 mapping | Refused on purpose (ADR 0066) |
 | IPVS direct-return / tunnel modes | 08 D7 | Only NAT is rendered (`render/routing.py:18`, `:179`) |

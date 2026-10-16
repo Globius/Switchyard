@@ -34,6 +34,9 @@ lists from plain-text feeds and said the CrowdSec bouncer API was not read direc
 6. **Tenants see the source.** `/me` lists the feeds a tenant may name (`features.ip_list_feeds`, including `crowdsec` once set up);
    the policy form offers "CrowdSec bans" for a new allow list, and the service form has a deny list picker.
 
+7. **Superseded in part by [0215](0215-crowdsec-engine-bouncer-and-signals.md):** the engine bouncer, per-service policy and log feed build
+   on this settings screen. List sync leaves out the community blocklist (origin `CAPI`) unless an administrator names it in the origins.
+
 ## Consequences
 
 - Freshness is the sync interval (six hours), not seconds: this is list-based blocking, not live remediation. Faster remediation

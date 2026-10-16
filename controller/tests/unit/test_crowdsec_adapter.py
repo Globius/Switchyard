@@ -16,7 +16,7 @@ from switchyard.adapters.crowdsec import (
     check_url,
     parse_decisions,
 )
-from switchyard.services.crowdsec import normalize_origins
+from switchyard.db.crowdsec_config import normalize_origins
 
 STREAM = {
     "new": [

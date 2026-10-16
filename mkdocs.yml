@@ -80,6 +80,7 @@ nav:
       - Policy sets and request stages: features/policies.md
       - Rate and concurrency limits: features/rate-limits.md
       - Country and reputation lists: features/ip-lists.md
+      - CrowdSec: features/crowdsec.md
       - WAF: features/waf.md
       - Bot and DDoS protection: features/bot-protection.md
       - Login in front of a service: features/access-login.md
@@ -113,6 +114,7 @@ nav:
       - Replace a service engine: runbooks/replace-se.md
       - Restore the database (pgBackRest + Patroni): runbooks/restore-database.md
       - Roll an SE group to a new template, or scale it out: runbooks/rolling-upgrade.md
+      - Run the CrowdSec engine, connect it and choose what to share: runbooks/crowdsec.md
       - GitHub as the front door (mirror, pull request bridge): runbooks/github-front-door.md
       - Nightly builds and releases: runbooks/release.md
       - Signing keys: keys.md
