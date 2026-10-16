@@ -8315,6 +8315,12 @@ export interface components {
              */
             origins?: string[];
             /**
+             * Per Engine Keys
+             * @description Each engine uses its own bouncer key, read from `kv/system/crowdsec/bouncer-keys/<engine>`, instead of the shared one. Register a key per engine with `deploy/crowdsec/register-engine.sh`.
+             * @default false
+             */
+            per_engine_keys: boolean;
+            /**
              * Url
              * @description Base URL of the CrowdSec local API (http or https, no credentials).
              * @default
@@ -8570,6 +8576,8 @@ export interface components {
             ok?: boolean | null;
             /** Origins */
             origins: string[];
+            /** Per Engine Keys */
+            per_engine_keys: boolean;
             /**
              * Source
              * @description Where the settings come from; the environment is the fallback.
@@ -23735,6 +23743,7 @@ export interface operations {
                      *         "crowdsec",
                      *         "CAPI"
                      *       ],
+                     *       "per_engine_keys": true,
                      *       "source": "database",
                      *       "synced_at": "2026-10-16T06:00:00+00:00",
                      *       "url": "https://crowdsec.example.test:8080"
@@ -23824,6 +23833,7 @@ export interface operations {
                      *         "crowdsec",
                      *         "CAPI"
                      *       ],
+                     *       "per_engine_keys": true,
                      *       "source": "database",
                      *       "synced_at": "2026-10-16T06:00:00+00:00",
                      *       "url": "https://crowdsec.example.test:8080"

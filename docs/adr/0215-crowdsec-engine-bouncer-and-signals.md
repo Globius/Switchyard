@@ -30,12 +30,16 @@ and a way for the platform to feed CrowdSec with what its engines see.
    `fallback_remediation: allow` for them. The bouncer's captcha and AppSec features are not used; they need provider keys per
    host and the AppSec component, and the Coraza WAF (ADR 0140) is the WAF here. Bot challenges stay with the existing JavaScript and
    CAPTCHA gates ([bot and DDoS protection](../features/bot-protection.md)).
-4. **The key travels in the bundle only.** The bouncer key is read from the secrets backend when the engine's bundle is built and is
-   written only into the signed, mTLS-delivered bundle file (`0640`, `root:crowdsec-spoa`), like other sidecar secrets. It never
-   enters `haproxy.cfg`, the revisions, the Git mirror, PostgreSQL or logs. One key is shared by all engines (CrowdSec's docs show
-   `cscli bouncers add` per bouncer and say nothing about sharing; per-engine keys would need a controller that can create
-   bouncers, which the local API does not offer to a bouncer key). The runbook covers rotation. A policy in use without CrowdSec
-   configured, or with an unreadable key, fails the apply with a clear message.
+4. **The key travels in the bundle only, one per engine.** A bouncer key is read from the secrets backend when an engine's bundle is built and
+   written only into the signed, mTLS-delivered bundle file (`0640`, `root:crowdsec-spoa`), like other sidecar secrets. It never enters
+   `haproxy.cfg`, the revisions, the Git mirror, PostgreSQL or logs. With **One key per engine** on, each engine reads its own key from
+   `kv/system/crowdsec/bouncer-keys/<engine>`; otherwise all engines share the key in Admin > Integrations. CrowdSec's local API cannot
+   register a bouncer for a caller (a bouncer key cannot create bouncers; `cscli` or TLS client authentication does), so an operator
+   registers an engine's key with `deploy/crowdsec/register-engine.sh add <engine>` when the engine joins and with `revoke` when it
+   is retired or the key leaks. Rotating or revoking one engine's key touches only that engine (verified in the end-to-end test: a revoked
+   engine stops receiving new bans, and recovers when its key is restored). An engine without its key fails its apply with the command
+   to run. Automatic registration would need TLS client-certificate authentication between bouncers and the local API (CrowdSec documents
+   it; the engines already have a PKI): a later step. A policy in use without CrowdSec configured fails the apply with a clear message.
 5. **Settings in the database, UI and API (ADR 0213).** The local API address, the key (write-only, stored in OpenBao), the origins
    and, new here, `logs_address` live in `system_setting` (no table). System administrators only.
 6. **Feeding CrowdSec: the access log feed.** A policy with `share_logs: true` makes the controller add a Vector drop-in
@@ -53,10 +57,17 @@ and a way for the platform to feed CrowdSec with what its engines see.
    the CrowdSec web app. Switchyard does not run commands on other hosts (no remote shell, security rules in `CLAUDE.md`), so enrolling
    is a documented step on the engine, with the key kept in OpenBao and passed through the environment file at deploy time, not a
    button in Switchyard. The runbook states, from CrowdSec's own documentation, what is sent and what is not.
-9. **The community blocklist stays out of copied lists.** List sync (ADR 0147/0213) copies addresses into policy sets, the database and the
-   Git mirror. Whether the community blocklist's terms allow that is not something this project could read, so list sync leaves out
-   decisions of origin `CAPI` unless an administrator names `CAPI` in the origins. The engines' bouncers read the same decisions live
-   in memory only, which is how the blocklist is meant to be consumed.
+9. **The community blocklist stays out of copied lists (decided by the project owner after reading the EULA).** List sync (ADR 0147/0213)
+   copies addresses into policy sets, the database and the Git mirror (which is public). CrowdSec's EULA for the console and community
+   data (v2.0.1, 29 Feb 2024; see below) says, in §6.2, that the user may not "distribute or market" the IP addresses made accessible by the
+   service, nor use the Assets to provide services for third parties "in any form", SaaS included. Whether that reaches a plain Security Engine,
+   or this platform's tenants, is not for this project to decide, so list sync leaves out decisions of origin `CAPI` unless an administrator names
+   `CAPI` in the origins. The engines' bouncers read the same decisions live and keep them in memory only, which is how the blocklist is meant to
+   be consumed, so tenants still benefit. §13.1.2 also says the user will not "systematically block" connections from addresses in the Assets
+   and will adapt its security processes instead: another reason a CrowdSec policy starts in detect mode. This records the reasoning; it is not
+   legal advice.
+10. **Enrollment is not in the UI.** CrowdSec has no API for console enrollment and the local API does not show an engine's enrollment to a
+    bouncer key. The Integrations screen therefore shows a copy-ready setup snippet and the runbook has the steps.
 
 ## What CrowdSec's documentation says, and what was not found
 
@@ -73,15 +84,21 @@ Read on 2026-10-16 from docs.crowdsec.net, the hub, the bouncer's repository and
   they are and then degrades them, and names AWS, GCP, Firebase, Slack and Clickup as recipients.
 - Licences: the Security Engine and remediation components are MIT; the hub repository is MIT.
 
-**Not found, and therefore not claimed:** the text of CrowdSec's Terms (crowdsec.net/terms) and EULA, whether the community blocklist may be
-redistributed or used commercially, any rate limit on the Central API, one-key-per-bouncer guidance and a key rotation procedure,
-the default of `context` before enrolling, and a description of simulation mode's effect on decisions. The operator must read the Terms
-and EULA before enrolling; this project does not decide that for them.
+**EULA (read 2026-10-16 from booking.crowdsec.net/hubfs/EULA Crowdsec v2 .pdf, v2.0.1):** it governs the CrowdSec Console as a service and says it does
+not change the rights to open-source software. Provisions that matter here: §6 (use for the End User's "exclusive internal needs"); §6.2 (no
+using the Solution or the Assets to provide services on behalf of third parties, no distributing or marketing the Assets, "in particular" IP
+addresses or attack scenarios made accessible by the service); §8 (what an enrolled user transmits is licensed to CrowdSec irrevocably, non-exclusively,
+royalty-free, sub-licensably, including commercial use); §13.1 (joint controllers for the IP addresses; do not systematically block); §10 (Community-tier
+liability capped at 100 euros, indemnity for third-party claims; French law, Paris courts); §15 (Assets are confidential, shareable in the community).
+
+**Not found, and therefore not claimed:** a Terms of Service page (crowdsec.net/terms answers 404), whether a Security Engine used without the Console is
+bound by the EULA, the Community Blocklist's own usage conditions, any rate limit on the Central API, one-key-per-bouncer guidance and a rotation
+procedure, the default of `context` before enrolling, and simulation mode's effect on decisions. The operator must read the EULA before enrolling.
 
 ## Consequences
 
 - A request pays one SPOE round trip to a local process (the 500 ms processing timeout is an upper bound; `timeout_ms` is the policy's own limit).
-- Rotating the key needs the engines' bundles rebuilt (any apply), and the status poller reports the difference as drift until then.
+- With the shared key, rotating it needs every protected group re-applied; with one key per engine only that engine's group, and the status poller reports a changed bundle as drift until then.
 - An engine without the bouncer binary (an old template) will not start it; the apply succeeds and the unit stays down. Rolling the template
   (`docs/runbooks/rolling-upgrade.md`) fixes that. The agent does not yet report the bouncer's state.
 - Request bodies are not inspected by CrowdSec here. The AppSec component is a possible later step.

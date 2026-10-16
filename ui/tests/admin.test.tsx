@@ -13,7 +13,7 @@ import { createQueryClient } from "@/auth/session";
 import { quotaLine } from "@/features/admin/Tenants";
 import { exportUrl } from "@/features/admin/AuditLog";
 import { mappingSummary } from "@/features/admin/IdentityProviders";
-import { crowdSecStatus, parseOrigins } from "@/features/admin/Integrations";
+import { crowdSecStatus, parseOrigins, setupSnippet } from "@/features/admin/Integrations";
 import { accessText } from "@/features/admin/Users";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "@/routeTree.gen";
@@ -777,6 +777,7 @@ describe("Integrations: CrowdSec", () => {
     key_ref: "",
     origins: [] as string[],
     logs_address: "",
+    per_engine_keys: false,
     source: "none",
     configured: false,
     synced_at: null,
@@ -823,11 +824,41 @@ describe("Integrations: CrowdSec", () => {
         key_ref: "",
         origins: ["crowdsec", "CAPI"],
         logs_address: "",
+        per_engine_keys: false,
         api_key: "s3cr3t",
       }),
     );
     expect(await screen.findByText("stored in OpenBao")).toBeInTheDocument();
     expect(screen.queryByDisplayValue("s3cr3t")).toBeNull();
+  });
+
+  it("turns on one key per engine and shows the setup commands", async () => {
+    let put: Record<string, unknown> | null = null;
+    const state = {
+      ...BASE,
+      url: "https://crowdsec.example.test:8080",
+      key_ref: "kv/system/crowdsec/bouncer-key",
+      configured: true,
+      source: "database",
+    };
+    server.use(
+      http.get("*/api/v1/system/crowdsec", () => HttpResponse.json(state)),
+      http.put("*/api/v1/system/crowdsec", async ({ request }) => {
+        put = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ ...state, per_engine_keys: true });
+      }),
+    );
+    renderAt("/admin/integrations");
+    const sw = await screen.findByRole("switch", { name: "One key per engine" });
+    expect(sw).not.toBeChecked();
+    await userEvent.click(sw);
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(put).toMatchObject({ per_engine_keys: true }));
+    expect(setupSnippet({ ...state, per_engine_keys: true } as never)).toContain(
+      "register-engine.sh add <engine-name>",
+    );
+    expect(setupSnippet(state as never)).not.toContain("register-engine.sh");
+    expect(setupSnippet(state as never)).toContain("CROWDSEC_DISABLE_ONLINE_API=true");
   });
 
   it("tests the connection, queues a sync and shows the status", async () => {

@@ -40,6 +40,14 @@ class CrowdSecIn(ApiModel):
             "services that opted in with `share_logs`. Empty turns the feed off."
         ),
     )
+    per_engine_keys: bool = Field(
+        default=False,
+        description=(
+            "Each engine uses its own bouncer key, read from "
+            "`kv/system/crowdsec/bouncer-keys/<engine>`, instead of the shared one. "
+            "Register a key per engine with `deploy/crowdsec/register-engine.sh`."
+        ),
+    )
 
 
 class CrowdSecRead(ApiModel):
@@ -49,6 +57,7 @@ class CrowdSecRead(ApiModel):
     key_ref: str = Field(description="Where the bouncer key is stored; the key is never shown.")
     origins: list[str]
     logs_address: str
+    per_engine_keys: bool
     source: Literal["database", "environment", "none"] = Field(
         description="Where the settings come from; the environment is the fallback."
     )

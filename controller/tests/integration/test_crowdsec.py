@@ -254,3 +254,17 @@ async def test_the_log_address_is_validated_and_stored(rig: Rig) -> None:
             f"{V1}/system/crowdsec", json=settings(logs_address=bad), headers=root
         )
         assert res.status_code == 422, bad
+
+
+async def test_one_key_per_engine_is_a_stored_setting(rig: Rig) -> None:
+    root = await rig.token(Role.SYSTEM_ADMIN)
+    on = await rig.client.put(
+        f"{V1}/system/crowdsec", json=settings(per_engine_keys=True), headers=root
+    )
+    assert on.status_code == 200 and on.json()["per_engine_keys"] is True
+    bad = await rig.client.put(
+        f"{V1}/system/crowdsec", json=settings(per_engine_keys="maybe"), headers=root
+    )
+    assert bad.status_code == 422
+    off = await rig.client.put(f"{V1}/system/crowdsec", json=settings(), headers=root)
+    assert off.json()["per_engine_keys"] is False

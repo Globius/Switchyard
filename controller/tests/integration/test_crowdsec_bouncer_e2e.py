@@ -15,6 +15,7 @@ The bouncer binary is the release the SE image pins (``se-image/versions.env``),
 checked against the pinned SHA-256.
 """
 
+import asyncio
 import hashlib
 import io
 import secrets
@@ -30,16 +31,22 @@ from uuid import UUID
 import docker
 import pytest
 
+from switchyard.adapters.secrets import MemorySecrets
+from switchyard.db.crowdsec_config import StoredBouncer
 from switchyard.domain.loader import snapshot_from_mapping, symbolic_uuid
-from switchyard.render.crowdsec import BOUNCER_PATH, BouncerSettings, render_bouncer_files
+from switchyard.pipeline.bundles import engine_files
+from switchyard.render.crowdsec import BOUNCER_PATH
 from switchyard.render.haproxy import render_haproxy
+from switchyard.render.routing import EngineSlot
 from tests.haproxy_check import HAPROXY_IMAGE
 from tests.lab import SUBNET, Lab
 
 CROWDSEC_IMAGE = "crowdsecurity/crowdsec:v1.7.0"
 EDGE, LAPI, BACKEND = "192.0.2.20", "192.0.2.30", "192.0.2.51"
 BANNED, OTHER = "192.0.2.98", "192.0.2.99"
+ENGINE = "edge-1"
 KEY = secrets.token_hex(16)  # a fresh bouncer key per run, never a literal
+ENGINE_KEY = secrets.token_hex(16)
 VERSIONS = Path(__file__).parents[3] / "se-image" / "versions.env"
 
 
@@ -207,8 +214,18 @@ def stack(lab_network: Lab) -> Iterator[tuple[Any, Any]]:
         snapshot = snapshot_from_mapping(data())
         group = UUID(symbolic_uuid("g"))
         rendered = render_haproxy(snapshot, group)
-        settings = BouncerSettings(f"http://{LAPI}:8080", KEY, ())
-        bundle = render_bouncer_files(snapshot, group, settings)
+        # the engine has its own bouncer key (one key per engine), registered in CrowdSec like an operator would
+        exec_in(lapi, f"cscli bouncers add {ENGINE} -k {ENGINE_KEY}")
+        store = MemorySecrets({f"kv/system/crowdsec/bouncer-keys/{ENGINE}": ENGINE_KEY})
+
+        async def stored() -> StoredBouncer:
+            return StoredBouncer(f"http://{LAPI}:8080", "", "", (), "", per_engine_keys=True)
+
+        bundle = asyncio.run(
+            engine_files(
+                snapshot, snapshot.se_groups[0], EngineSlot(ENGINE, 0, EDGE), store, stored
+            )
+        )
         rendered_files = dict(rendered.files)
         cfg = rendered_files["haproxy/haproxy.cfg"]
         assert "log /dev/log local0" in cfg
@@ -310,6 +327,26 @@ def test_a_scan_seen_in_the_logs_becomes_a_ban_the_engines_enforce(
     )
     exec_in(lapi, f"cscli decisions delete --ip {OTHER}")
     assert status(wait_for(lab, OTHER, "block", "200"), "block") == "200"
+
+
+def test_revoking_one_engines_key_stops_its_updates_and_nothing_else(
+    stack: tuple[Lab, tuple[Any, Any]],
+) -> None:
+    """Deleting the engine's bouncer in CrowdSec cuts that engine off from new decisions."""
+    lab, (lapi, _) = stack
+    exec_in(lapi, f"cscli bouncers delete {ENGINE}")
+    time.sleep(15)  # a refresh round against the revoked key
+    exec_in(lapi, f"cscli decisions add --ip {BANNED} --duration 1h --reason revoked")
+    time.sleep(25)
+    after = get(lab, BANNED)
+    exec_in(lapi, f"cscli decisions delete --ip {BANNED}")
+    assert status(after, "block") == "200", after  # the new ban never reached the engine
+    # restoring the same key (rotation done) brings the engine back without touching its configuration
+    exec_in(lapi, f"cscli bouncers add {ENGINE} -k {ENGINE_KEY}")
+    exec_in(lapi, f"cscli decisions add --ip {BANNED} --duration 1h --reason restored")
+    assert status(wait_for(lab, BANNED, "block", "403", 90), "block") == "403"
+    exec_in(lapi, f"cscli decisions delete --ip {BANNED}")
+    assert status(wait_for(lab, BANNED, "block", "200"), "block") == "200"
 
 
 def test_known_bans_stay_enforced_when_the_crowdsec_api_is_down(

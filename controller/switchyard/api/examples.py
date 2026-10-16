@@ -1527,6 +1527,7 @@ CROWDSEC = {
     "key_ref": "kv/system/crowdsec/bouncer-key",
     "origins": ["crowdsec", "CAPI"],
     "logs_address": "crowdsec.example.test:514",
+    "per_engine_keys": True,
     "source": "database",
     "configured": True,
     "synced_at": "2026-10-16T06:00:00+00:00",

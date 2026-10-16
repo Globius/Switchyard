@@ -15,6 +15,7 @@ import { StatusPill } from "@/components/sy/StatusPill";
 import { ErrorState, TableSkeleton } from "@/components/sy/states";
 import { WriteOnlySecret } from "@/components/sy/WriteOnlySecret";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { shortWhen } from "@/lib/format";
 import { t } from "@/lib/i18n";
 
@@ -42,6 +43,20 @@ export function crowdSecStatus(c: CrowdSec): {
   return { tone: "neutral", text: t("Not synced yet") };
 }
 
+/** What an administrator runs or sets on the CrowdSec engine; shown so it can be copied (nothing here is a secret). */
+export function setupSnippet(c: CrowdSec): string {
+  const lines = [
+    "# deploy/crowdsec/crowdsec.env on the CrowdSec host",
+    "CROWDSEC_BIND=<a private address of the host>",
+    "CROWDSEC_BOUNCER_KEY=<the shared bouncer key, from OpenBao>",
+    "CROWDSEC_DISABLE_ONLINE_API=true   # sharing with CrowdSec stays off until you decide",
+    "",
+    "# in deploy/crowdsec: docker compose --env-file crowdsec.env up -d",
+  ];
+  if (c.per_engine_keys) lines.push("# for each engine: ./register-engine.sh add <engine-name>");
+  if (c.url) lines.push("", `# Switchyard talks to ${c.url}`);
+  return lines.join("\n");
+}
 function CrowdSecCard() {
   const qc = useQueryClient();
   const q = useQuery({
@@ -51,6 +66,7 @@ function CrowdSecCard() {
   const [url, setUrl] = useState<string | null>(null);
   const [origins, setOrigins] = useState<string | null>(null);
   const [logs, setLogs] = useState<string | null>(null);
+  const [perEngine, setPerEngine] = useState<boolean | null>(null);
   const [key, setKey] = useState("");
   const refresh = () => void qc.invalidateQueries({ queryKey: ["admin", "crowdsec"] });
   const save = useMutation({
@@ -61,6 +77,7 @@ function CrowdSecCard() {
             url: url ?? c.url,
             origins: parseOrigins(origins ?? c.origins.join(", ")),
             logs_address: logs ?? c.logs_address,
+            per_engine_keys: perEngine ?? c.per_engine_keys,
             key_ref: c.key_ref,
             ...(key ? { api_key: key } : {}),
           },
@@ -70,6 +87,7 @@ function CrowdSecCard() {
       setUrl(null);
       setOrigins(null);
       setLogs(null);
+      setPerEngine(null);
       setKey("");
       refresh();
     },
@@ -85,7 +103,8 @@ function CrowdSecCard() {
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   const c = q.data;
   const status = crowdSecStatus(c);
-  const dirty = url !== null || origins !== null || logs !== null || key !== "";
+  const dirty =
+    url !== null || origins !== null || logs !== null || perEngine !== null || key !== "";
   return (
     <section className="overflow-hidden rounded-lg border bg-card">
       <header className="flex items-center gap-3 border-b px-4 py-3">
@@ -177,6 +196,21 @@ function CrowdSecCard() {
             )}
           </span>
         </label>
+        <label className="flex items-start gap-3">
+          <Switch
+            aria-label={t("One key per engine")}
+            checked={perEngine ?? c.per_engine_keys}
+            onCheckedChange={setPerEngine}
+          />
+          <span>
+            <span className="font-medium">{t("One key per engine")}</span>
+            <span className="block text-xs text-muted-foreground">
+              {t(
+                "Each engine uses its own bouncer key, so one engine can be rotated or revoked without touching the others. CrowdSec cannot create bouncers remotely: register each engine with deploy/crowdsec/register-engine.sh (below). An engine without its key fails its apply.",
+              )}
+            </span>
+          </span>
+        </label>
         <div className="flex items-center gap-2">
           <Button disabled={!dirty || save.isPending} onClick={() => save.mutate(c)}>
             {save.isPending ? t("Saving…") : t("Save")}
@@ -196,6 +230,22 @@ function CrowdSecCard() {
             {t("Sync queued. The lists change through a change set from system:iplists.")}
           </p>
         )}
+        <details className="rounded-md border p-3">
+          <summary className="cursor-pointer font-medium">
+            {t("Set up the CrowdSec engine")}
+          </summary>
+          <pre
+            aria-label={t("Setup commands")}
+            className="mt-2 overflow-x-auto rounded bg-muted p-3 font-mono text-xs"
+          >
+            {setupSnippet(c)}
+          </pre>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {t(
+              "Enrolling the engine in the CrowdSec console and sharing signals is done on the engine, not here: CrowdSec offers no way to do it remotely, and the controller cannot see the engine's enrollment. Read the runbook and CrowdSec's terms first; sharing is off in the reference setup.",
+            )}
+          </p>
+        </details>
         <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 border-t pt-3">
           <dt className="text-muted-foreground">{t("Last sync")}</dt>
           <dd>{c.synced_at ? shortWhen(c.synced_at) : t("never")}</dd>

@@ -322,3 +322,66 @@ async def test_the_bundle_carries_the_feed_next_to_the_bouncer_file() -> None:
         load,
     )
     assert BOUNCER_PATH in files and LOG_FEED_PATH in files
+
+
+# -- one key per engine ------------------------------------------------------------------------------
+
+
+async def per_engine_loader() -> StoredBouncer:
+    return StoredBouncer(
+        "https://crowdsec.example.test:8080",
+        "kv/system/crowdsec/bouncer-key",
+        "",
+        (),
+        "",
+        per_engine_keys=True,
+    )
+
+
+async def test_each_engine_gets_its_own_key_and_the_shared_key_is_not_used() -> None:
+    snap = snapshot_from_mapping(with_policies(crowdsec()))
+    store = MemorySecrets(
+        {
+            "kv/system/crowdsec/bouncer-key": "shared-key-value",
+            "kv/system/crowdsec/bouncer-keys/edge-1": "key-for-edge-1",
+            "kv/system/crowdsec/bouncer-keys/edge-2": "key-for-edge-2",
+            **CERT,
+        }
+    )
+    got = {}
+    for index, name in enumerate(("edge-1", "edge-2")):
+        files = await engine_files(
+            snap,
+            snap.se_groups[0],
+            EngineSlot(name, index, "192.0.2.5"),
+            store,
+            per_engine_loader,
+        )
+        got[name] = files[BOUNCER_PATH]
+    assert 'api_key: "key-for-edge-1"' in got["edge-1"]
+    assert 'api_key: "key-for-edge-2"' in got["edge-2"]
+    assert "shared-key-value" not in got["edge-1"] + got["edge-2"]
+
+
+async def test_an_engine_without_its_own_key_stops_the_bundle_with_the_fix_in_the_message() -> None:
+    snap = snapshot_from_mapping(with_policies(crowdsec()))
+    store = MemorySecrets({"kv/system/crowdsec/bouncer-key": "shared-key-value", **CERT})
+    with pytest.raises(
+        BundleError, match=r"bouncer-keys/edge-9 was not found.*register-engine.sh edge-9"
+    ):
+        await engine_files(
+            snap, snap.se_groups[0], EngineSlot("edge-9", 0, "192.0.2.5"), store, per_engine_loader
+        )
+
+
+async def test_one_key_per_engine_is_off_unless_asked_for() -> None:
+    snap = snapshot_from_mapping(with_policies(crowdsec()))
+    store = MemorySecrets({"kv/system/crowdsec/bouncer-key": "shared-key-value", **CERT})
+    files = await engine_files(
+        snap,
+        snap.se_groups[0],
+        EngineSlot("edge-1", 0, "192.0.2.5"),
+        store,
+        await loader_with("kv/system/crowdsec/bouncer-key"),
+    )
+    assert 'api_key: "shared-key-value"' in files[BOUNCER_PATH]

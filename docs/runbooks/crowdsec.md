@@ -14,7 +14,7 @@ $EDITOR crowdsec.env                     # CROWDSEC_BIND (a private address) and
 docker compose --env-file crowdsec.env up -d
 ```
 
-Generate the key with `openssl rand -hex 32`, keep it in OpenBao (`bao kv put kv/system/crowdsec/bouncer-key key=...`) and give the same value to
+Generate the key with `openssl rand -hex 32`, keep it in OpenBao (`bao kv put kv/system/crowdsec/bouncer-key value=...`; the secret is the field `value`) and give the same value to
 Switchyard in **Admin > Integrations**. The Compose file installs the `crowdsecurity/haproxy` collection, listens for syslog on UDP 514 and registers the
 bouncer `switchyard`. Publish both ports on a private address only. Back up the `config` and `data` volumes (the engine's credentials and database).
 
@@ -37,23 +37,32 @@ use a certificate the engines trust.
    10 seconds the engine logs show `{ban}` for requests from that address. `cscli decisions delete --ip 192.0.2.50` removes it.
 4. When the logs look right, switch the policy to **block**.
 
-## 4. Rotate the bouncer key
+## 4. Bouncer keys: shared or one per engine
 
-CrowdSec cannot update a bouncer's key in place:
+Admin > Integrations > **One key per engine** decides. Off: every engine uses the shared key from step 1. On: every engine uses its own key at
+`kv/system/crowdsec/bouncer-keys/<engine>`, so you can rotate or revoke one engine without touching the others. CrowdSec cannot create a
+bouncer for a caller, so you register each engine yourself (from `deploy/crowdsec/`, with `BAO_ADDR` and a token that may write `kv/system/crowdsec/`):
 
-1. `docker compose exec crowdsec cscli bouncers delete switchyard`
-2. Put a new key in `crowdsec.env` (`CROWDSEC_BOUNCER_KEY`) and in OpenBao; `docker compose up -d --force-recreate`.
-3. In Switchyard paste the new key (**Replace**) and save. Then re-apply every SE group that has a CrowdSec policy (any change set that touches
-   a protected service). Until an engine gets the new bundle its bouncer cannot refresh decisions (it keeps enforcing the ones it has) and the
-   status poller reports the bundle as drifted.
+```bash
+./register-engine.sh add edge-1       # registers the bouncer "edge-1" in CrowdSec, stores its key in OpenBao, prints no key
+./register-engine.sh revoke edge-1    # deletes the bouncer and the stored key (engine retired, or a key leaked)
+```
+
+An engine whose key is missing fails its apply with the exact command to run. To **rotate** one engine: `revoke`, `add`, then re-apply that engine's SE group
+(any change set that touches a protected service). Until it gets the new bundle that engine keeps enforcing the bans it has but cannot refresh them, and the
+status poller reports its bundle as drifted; the other engines are not affected.
+
+With the shared key, CrowdSec cannot update an existing bouncer in place: `docker compose exec crowdsec cscli bouncers delete switchyard`, put the new key in
+`crowdsec.env` and OpenBao, recreate the container, paste the new key in Switchyard (**Replace**), and re-apply every protected SE group.
 
 ## 5. Sharing signals with CrowdSec (off by default)
 
 The reference Compose file sets `DISABLE_ONLINE_API=true`: the engine sends **nothing** to CrowdSec and receives no community blocklist.
 `docker compose exec crowdsec cscli capi status` then answers that no Central API is configured.
 
-Before you turn it on, read CrowdSec's Terms (crowdsec.net/terms) and EULA, and its privacy policy. This project could not read the Terms and EULA
-and does not make claims about them (ADR 0215).
+Before you turn it on, read CrowdSec's EULA (booking.crowdsec.net/crowdsec-eula, v2.0.1) and privacy policy. A plain-fact summary of the EULA is in
+[CrowdSec](../crowdsec.md#crowdsecs-terms-plain-facts); it is not legal advice. Enrollment and sharing are done on the CrowdSec engine, not in Switchyard: CrowdSec
+has no way to do them remotely, and the Integrations screen shows the commands to copy.
 
 What CrowdSec's documentation says an engine with the online API on sends: signal meta-data (scenario name, hash and version, time, the
 engine's machine id, the offending IP with geolocation) and its list of enabled scenarios, plus the names and versions of its engines and

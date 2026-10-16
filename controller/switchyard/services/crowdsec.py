@@ -62,7 +62,9 @@ class CrowdSecState:
     error: str | None = None
 
 
-def _check(body: dict[str, Any], writable: bool) -> tuple[str, str, list[str], str | None, str]:
+def _check(
+    body: dict[str, Any], writable: bool
+) -> tuple[str, str, list[str], str | None, str, bool]:
     errors = FieldErrors()
     url = str(body.get("url") or "")
     if url:
@@ -91,8 +93,12 @@ def _check(body: dict[str, Any], writable: bool) -> tuple[str, str, list[str], s
             logs_address = check_address(logs_address)
         except ValueError as exc:
             errors.add("logs_address", "invalid", str(exc))
+    per_engine = body.get("per_engine_keys", False)
+    if not isinstance(per_engine, bool):
+        errors.add("per_engine_keys", "invalid", "must be true or false")
+        per_engine = False
     errors.raise_if_any()
-    return url, key_ref, origins, api_key or None, logs_address
+    return url, key_ref, origins, api_key or None, logs_address, per_engine
 
 
 class CrowdSecIntegration:
@@ -147,7 +153,9 @@ class CrowdSecIntegration:
         """
         require(principal, "manage", "controller")
         writer: Any = self._secrets if hasattr(self._secrets, "put") else None
-        url, key_ref, origins, api_key, logs_address = _check(body, writable=writer is not None)
+        url, key_ref, origins, api_key, logs_address, per_engine = _check(
+            body, writable=writer is not None
+        )
         previous = await self._get(CONFIG_KEY) or {}
         if api_key:
             await writer.put(DEFAULT_KEY_REF, api_key)
@@ -159,6 +167,7 @@ class CrowdSecIntegration:
             "key_ref": key_ref if url else "",
             "origins": origins,
             "logs_address": logs_address if url else "",
+            "per_engine_keys": per_engine if url else False,
         }
         async with admin_session(self._db.admin) as session:
             await self._put(session, CONFIG_KEY, stored, principal.actor)
@@ -172,6 +181,7 @@ class CrowdSecIntegration:
                     "url": url,
                     "origins": origins,
                     "logs_address": logs_address,
+                    "per_engine_keys": per_engine,
                     "key_changed": bool(api_key) or None,
                 },
                 request_id=request_id,

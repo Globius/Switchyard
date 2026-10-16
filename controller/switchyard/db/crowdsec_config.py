@@ -24,6 +24,8 @@ from switchyard.db.auth_models import SystemSettingRow
 from switchyard.db.tenancy import admin_session
 
 CONFIG_KEY = "crowdsec"
+#: Where an engine's own bouncer key lives when ``per_engine_keys`` is on (``{engine}``: its name).
+ENGINE_KEY_REF = "kv/system/crowdsec/bouncer-keys/{engine}"
 
 
 def normalize_origins(value: str | list[str] | None) -> list[str]:
@@ -48,6 +50,8 @@ class CrowdSecConfig:
         origins: Keep only decisions from these origins; empty keeps all.
         logs_address: ``host:port`` (UDP) of the CrowdSec syslog datasource that receives the
             access logs of services that opt in; empty turns the feed off.
+        per_engine_keys: Each engine uses its own bouncer key (:data:`ENGINE_KEY_REF`) instead of
+            the shared one.
         source: ``database``, ``environment`` or ``none``.
     """
 
@@ -56,6 +60,7 @@ class CrowdSecConfig:
     origins: list[str] = field(default_factory=list)
     source: str = "none"
     logs_address: str = ""
+    per_engine_keys: bool = False
 
     @property
     def configured(self) -> bool:
@@ -82,6 +87,7 @@ async def load_config(engine: AsyncEngine) -> CrowdSecConfig:
             list(raw.get("origins", [])),
             "database",
             raw.get("logs_address", ""),
+            bool(raw.get("per_engine_keys", False)),
         )
     env_url = os.environ.get("SWITCHYARD_CROWDSEC_URL") or ""
     if env_url:
@@ -105,6 +111,7 @@ class StoredBouncer:
         env_key: The bouncer key from the environment when there is no reference.
         origins: Decision origins to keep; empty keeps all.
         logs_address: ``host:port`` (UDP) for the access log feed, or empty.
+        per_engine_keys: Each engine reads its own key from :data:`ENGINE_KEY_REF`.
     """
 
     url: str
@@ -112,6 +119,7 @@ class StoredBouncer:
     env_key: str
     origins: tuple[str, ...]
     logs_address: str
+    per_engine_keys: bool = False
 
 
 async def bouncer_settings(engine: AsyncEngine) -> StoredBouncer | None:
@@ -123,4 +131,6 @@ async def bouncer_settings(engine: AsyncEngine) -> StoredBouncer | None:
     if not cfg.configured:
         return None
     env_key = "" if cfg.key_ref else os.environ.get("SWITCHYARD_CROWDSEC_API_KEY", "")
-    return StoredBouncer(cfg.url, cfg.key_ref, env_key, tuple(cfg.origins), cfg.logs_address)
+    return StoredBouncer(
+        cfg.url, cfg.key_ref, env_key, tuple(cfg.origins), cfg.logs_address, cfg.per_engine_keys
+    )
