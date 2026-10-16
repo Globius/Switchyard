@@ -91,6 +91,7 @@ Biggest gaps, in the order I would close them:
 | Standard states: skeleton, empty, error, read-only tooltip, 412, 422 summary | matches | | `states.tsx`, `Findings.tsx`. |
 | 422 summary with several findings linking each field | matches | | `components/sy/Findings.tsx`. |
 | Accessibility (axe in CI, 4.5:1 contrast, keyboard flows) | missing | not built | No axe dependency or test. 03 requires it. |
+| Left nav scrolling | differs | design question | Handoff does not specify nav overflow. Built: top bar is sticky; at md and up the nav is sticky under it, full viewport height, and scrolls on its own (`overflow-y-auto`); after any navigation (and on first load) the active item is scrolled into view (`block: "nearest"`) and highlighted. Same for the admin nav. Below md the drawer already scrolled. | requested | Confirm with Design. |
 | Narrow screens (nav stacks) | differs | design question | Responsive classes exist on several pages; the shell nav behaviour at <1024 not verified. README says phone widths were not checked by Design. |
 | Overlays: tenant switcher | matches | | Search, approval badge. |
 | Overlays: command palette (Ctrl/Cmd K) | differs | design question | Built: object search grouped by type, "New virtual service", "Review my draft". Artboard lists more actions (verify list against `Overlays`). |
