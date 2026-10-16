@@ -106,7 +106,11 @@ def test_external_actions_are_pinned_to_immutable_commits() -> None:
         for job, step in steps(load(path.name)):
             uses = step.get("uses", "")
             if uses:
-                assert re.fullmatch(r"[\w.-]+/[\w.-]+(/[\w.-]+)*@[0-9a-f]{40}", uses), (path.name, job, uses)
+                assert re.fullmatch(r"[\w.-]+/[\w.-]+(/[\w.-]+)*@[0-9a-f]{40}", uses), (
+                    path.name,
+                    job,
+                    uses,
+                )
 
 
 def test_pull_request_docs_build_cannot_publish_or_mint_identity_tokens() -> None:
