@@ -219,7 +219,7 @@ describe("app shell", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    renderAt("/t/acme");
+    const router = renderAt("/t/acme");
     await userEvent.click(await screen.findByRole("button", { name: "User menu" }));
     expect(await screen.findByText("via sy-acme-view")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Refresh access" }));
@@ -229,6 +229,8 @@ describe("app shell", () => {
     expect(localStorage.getItem("sy-theme")).toBe("dark");
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(out).toBe(true));
+    // Regression: sign-out used to leave the page up with the cached identity; it must land on /login.
+    await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
     applyTheme("light");
   });
 
