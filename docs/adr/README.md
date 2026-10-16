@@ -154,3 +154,4 @@ Date: YYYY-MM-DD
 | [0211](0211-public-repository-security-boundaries.md) | Public repository and runtime security boundaries | Accepted |
 | [0212](0212-reviewed-commits-and-verified-archive-bytes.md) | Reviewed commits and verified archive bytes | Accepted |
 | [0214](0214-pilot-deployment-fixes.md) | Pilot deployment fixes | Accepted |
+| [0217](0217-se-image-download-retries.md) | Retry the GitHub downloads in the SE image build | Accepted |
