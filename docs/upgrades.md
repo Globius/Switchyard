@@ -207,7 +207,8 @@ Lab runs, with screenshots and the problems found: [upgrades, backups, restore a
 
 Admin > Upgrades (system administrators) shows the controller, database and engine versions, a one-line verdict ("Up to date", "Version X is available.
 Upgrading is recommended.", or "Something needs fixing before an upgrade"), every finding with what to do about it, the release notes and install order when
-the feed found a newer release, the recent backups with **Back up now**, and the feed settings with **Check now**. It advises and never blocks.
+the feed found a newer release, the backup targets (**Add target**, **Test**, **Delete**; credentials are `secret_ref`s, never values, and the
+"no backup" finding links straight to them), the recent backups with **Back up now**, and the feed settings with **Check now**. It advises and never blocks.
 Engine rolls have their own page in each tenant (Infrastructure > Engine rolls): start one with a template, a window and a soak time, and pause, resume or abort it.
 
 ## Planned (ADR 0205)
