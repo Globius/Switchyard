@@ -32,7 +32,7 @@ from switchyard.services.changesets import REAPPLY_JOB
 from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.infra import DEPLOY_SE_GROUP_JOB, DeployRequest, InfraService
 from tests.integration.test_infra import infra_data
-from tests.pipeline_env import GROUP, TENANT, World, world
+from tests.pipeline_env import GROUP, TENANT, World, principal, world
 
 pytestmark = pytest.mark.usefixtures("owner_engine")
 
@@ -327,3 +327,11 @@ async def test_a_disabled_policy_does_nothing(rig: Rig) -> None:
     await rig.tick()
     assert (await rig.state()).decision == "off"
     assert await rig.jobs(DEPLOY_SE_GROUP_JOB) == []
+
+
+async def test_a_group_with_a_stored_json_null_is_skipped(rig: Rig) -> None:
+    """Older releases stored JSON null, not SQL NULL, for "no settings"; that must not fail."""
+    async with admin_session(rig.w.db.admin) as s:
+        await s.execute(text("UPDATE se_group SET autoscale = 'null'::jsonb"))
+    assert (await rig.tick())["groups"] == 0
+    assert await rig.scaler.list_states(principal(), TENANT) == []

@@ -8,6 +8,10 @@
 # controller address, the one-time token, the controller CA and the Data Plane credentials, then starts enrollment.
 #   sh enroll-engine.sh --kind lxc|qemu --node NODE --vmid ID --token TOKEN [--vector-env FILE]
 #   sh enroll-engine.sh --kind lxc|qemu --node NODE --vmid ID --vector-env FILE        (log shipping only, no token)
+# --controller-ca FILE|system chooses the CA the agent trusts for the controller's HTTPS certificate. Default: the
+# quickstart's own CA, secrets/ca.pem (it signs both the HTTPS certificate and the agents, so one file does both). That
+# is the wrong file when `publicUrl` has a publicly trusted certificate (Let's Encrypt, a corporate CA): pass `system`
+# to use the engine's own system CA bundle, or FILE with the CA that signed that certificate. Not the agent CA.
 # --vector-env FILE is the engine's /etc/switchyard/vector.env (LOKI_URL, TENANT_ID, TENANT_NAME, SE_GROUP, ENGINE): the
 # cloud-init path writes it, and without it Vector does not run, so no access logs reach Loki (runbooks/telemetry.md).
 # Runs `pct`/`qm` on the Proxmox node through ssh; set NODE_SSH to override (default "ssh root@NODE", an IPv6 node
@@ -17,9 +21,9 @@
 # VMs: the template has qemu-guest-agent); nothing is kept on the node. The VM path has not run on real hardware yet.
 set -eu
 cd "$(dirname "$0")"
-KIND=""; NODE=""; VMID=""; TOKEN=""; VECTOR_ENV=""
+KIND=""; NODE=""; VMID=""; TOKEN=""; VECTOR_ENV=""; CONTROLLER_CA=""
 while [ $# -gt 0 ]; do case "$1" in
-  --kind) KIND=$2; shift 2 ;; --node) NODE=$2; shift 2 ;; --vmid) VMID=$2; shift 2 ;; --token) TOKEN=$2; shift 2 ;; --vector-env) VECTOR_ENV=$2; shift 2 ;;
+  --kind) KIND=$2; shift 2 ;; --node) NODE=$2; shift 2 ;; --vmid) VMID=$2; shift 2 ;; --token) TOKEN=$2; shift 2 ;; --vector-env) VECTOR_ENV=$2; shift 2 ;; --controller-ca) CONTROLLER_CA=$2; shift 2 ;;
   *) echo "see the header of this script" >&2; exit 2 ;; esac; done
 [ -n "$KIND" ] && [ -n "$NODE" ] && [ -n "$VMID" ] && { [ -n "$TOKEN" ] || [ -n "$VECTOR_ENV" ]; } || { echo "--kind, --node, --vmid and --token (or --vector-env) are required" >&2; exit 2; }
 SECRETS_DIR=${SECRETS_DIR:-secrets}
@@ -50,6 +54,14 @@ fi
 printf 'CONTROLLER_URL=https://%s:%s\nCONTROLLER_CN=switchyard-controller\nDP_USER=switchyard\nDP_PASSWORD=%s\n' \
   "$HOST" "$PORT" "$(cat "$SECRETS_DIR/dp_password")" | put $DEST/enroll.env 600
 printf '%s\n' "$TOKEN" | put $DEST/enroll.token 600
-put $DEST/controller-ca.crt 644 < "$SECRETS_DIR/ca.pem"
+case "$CONTROLLER_CA" in
+  system)
+    case "$KIND" in
+      lxc) $NODE_SSH pct exec "$VMID" -- cp /etc/ssl/certs/ca-certificates.crt $DEST/controller-ca.crt ;;
+      qemu) $NODE_SSH qm guest exec "$VMID" -- cp /etc/ssl/certs/ca-certificates.crt $DEST/controller-ca.crt >/dev/null ;;
+    esac ;;
+  "") put $DEST/controller-ca.crt 644 < "$SECRETS_DIR/ca.pem" ;;
+  *) put $DEST/controller-ca.crt 644 < "$CONTROLLER_CA" ;;
+esac
 svc start sy-agent-enroll.service
 echo "enrollment started on $KIND $VMID"

@@ -14,10 +14,12 @@ Two implementations share :class:`Proxmox`:
 """
 
 import asyncio
+import contextlib
 import ipaddress
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
+from urllib.parse import quote
 
 import httpx
 
@@ -447,10 +449,13 @@ class HttpProxmox:
         lxc = spec.kind == "lxc"
         kind = "lxc" if lxc else "qemu"
         vmid = int(await self._call("GET", "/cluster/nextid"))
-        config_path = f"/nodes/{spec.node}/{kind}/{spec.template_vmid}/config"
+        # A VMID is cluster-unique and the template lives on one node; Proxmox clones it to any
+        # node (``target``) when its disk is on shared storage, so ask the template's own node.
+        source = await self._template_node(spec.template_vmid, kind) or spec.node
+        config_path = f"/nodes/{source}/{kind}/{spec.template_vmid}/config"
         template = await self._call("GET", config_path, ok_missing=True)
         if template is None:
-            raise ProxmoxError(f"template {spec.template_vmid} does not exist on {spec.node}")
+            raise ProxmoxError(f"template {spec.template_vmid} does not exist in the cluster")
         if str(template.get("template", 0)) != "1":
             # Cloning any other guest would copy another engine's disk, keys and enrollment.
             raise ProxmoxError(f"guest {spec.template_vmid} is not a Proxmox template")
@@ -458,8 +463,27 @@ class HttpProxmox:
         clone["hostname" if lxc else "name"] = spec.name
         if spec.pool:
             clone["pool"] = spec.pool
-        path = f"/nodes/{spec.node}/{kind}/{spec.template_vmid}/clone"
-        await self._task(spec.node, await self._call("POST", path, clone))
+        try:
+            path = f"/nodes/{source}/{kind}/{spec.template_vmid}/clone"
+            await self._task(source, await self._call("POST", path, clone))
+            await self._configure_clone(spec, vmid, kind)
+        except BaseException:
+            # Do not leave a half-configured clone behind (it would hold the name and the disk).
+            with contextlib.suppress(ProxmoxError):
+                await self.destroy_vm(spec.node, vmid)
+            raise
+        return VmInfo(vmid, spec.node, spec.name, "stopped")
+
+    async def _template_node(self, vmid: int, kind: str) -> str | None:
+        """The node that holds guest ``vmid``, from ``GET /cluster/resources?type=vm``."""
+        for row in await self._call("GET", "/cluster/resources?type=vm") or []:
+            if row.get("vmid") == vmid and row.get("type") == kind and row.get("node"):
+                return str(row["node"])
+        return None
+
+    async def _configure_clone(self, spec: VmSpec, vmid: int, kind: str) -> None:
+        """Apply the engine's CPU, memory, network and cloud-init settings to the new clone."""
+        lxc = kind == "lxc"
         mgmt = _ip_option(spec.mgmt_ip_cidr, spec.gateway)
         config: dict[str, Any] = {"cores": spec.cores, "memory": spec.memory_mb}
         if lxc:
@@ -486,11 +510,11 @@ class HttpProxmox:
                 if address := _nic_address(spec, index):
                     config[f"ipconfig{index}"] = _ip_option(address)
             if spec.ssh_public_keys:
-                config["sshkeys"] = spec.ssh_public_keys
+                # Proxmox wants this one option percent-encoded (newlines included).
+                config["sshkeys"] = quote(spec.ssh_public_keys, safe="")
             if spec.user_data_snippet:
                 config["cicustom"] = f"user={spec.user_data_snippet}"
         await self._call("PUT", f"/nodes/{spec.node}/{kind}/{vmid}/config", config)
-        return VmInfo(vmid, spec.node, spec.name, "stopped")
 
     async def _kind(self, node: str, vmid: int) -> str | None:
         """``lxc`` or ``qemu`` for an existing guest, ``None`` if neither exists."""

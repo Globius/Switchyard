@@ -154,3 +154,4 @@ Date: YYYY-MM-DD
 | [0211](0211-public-repository-security-boundaries.md) | Public repository and runtime security boundaries | Accepted |
 | [0212](0212-reviewed-commits-and-verified-archive-bytes.md) | Reviewed commits and verified archive bytes | Accepted |
 | [0213](0213-crowdsec-bouncer-source.md) | CrowdSec as a reputation source | Accepted |
+| [0214](0214-pilot-deployment-fixes.md) | Pilot deployment fixes | Accepted |

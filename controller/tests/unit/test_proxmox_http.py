@@ -20,6 +20,8 @@ class Api:
         self.task_polls = 0
         self.task_exit = "OK"
         self.existing: set[str] = set()
+        self.template_node = "pve1"
+        self.fail_config = False
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path.removeprefix("/api2/json")
@@ -28,6 +30,13 @@ class Api:
         assert request.headers["authorization"] == "PVEAPIToken=sy@pve!ctl=secret"
         if request.method == "GET" and path in self.existing:
             return httpx.Response(200, json={"data": {}})
+        if request.method == "GET" and path == "/cluster/resources":
+            rows = [{"vmid": v, "type": "qemu", "node": self.template_node} for v in (9000, 9001)]
+            rows.append({"vmid": 9901, "type": "lxc", "node": self.template_node})
+            rows.append({"vmid": 7777, "type": "qemu", "node": "pve1"})
+            return httpx.Response(200, json={"data": rows})
+        if request.method == "PUT" and path.endswith("/config") and self.fail_config:
+            return httpx.Response(400, text="invalid format")
         if request.method == "GET" and path == "/cluster/sdn/vnets":
             return httpx.Response(
                 200, json={"data": [{"vnet": "v1", "zone": "z1"}, {"vnet": "v2", "zone": "z2"}]}
@@ -312,3 +321,29 @@ def test_the_runtime_reads_the_token_from_openbao_when_the_environment_has_none(
     monkeypatch.setenv("SWITCHYARD_OPENBAO_ROLE_ID", "r")
     monkeypatch.setenv("SWITCHYARD_OPENBAO_SECRET_ID", "s")
     assert runtime.proxmox_client() is not None
+
+
+async def test_clone_comes_from_the_template_node_to_the_target_node() -> None:
+    api = Api()
+    api.template_node = "pve1"
+    await client(api).create_vm(VmSpec("x", "pve2", 9000, "10.0.0.2/24"))
+    clone = next((p, b) for m, p, b in api.requests if p.endswith("/clone"))
+    assert clone[0] == "/nodes/pve1/qemu/9000/clone" and clone[1]["target"] == ["pve2"]
+    assert ("PUT", "/nodes/pve2/qemu/101/config") in [(m, p) for m, p, _ in api.requests]
+
+
+async def test_ssh_keys_are_percent_encoded_for_qemu() -> None:
+    api = Api()
+    keys = "ssh-ed25519 AAAA user@host" + chr(10)
+    await client(api).create_vm(VmSpec("x", "pve1", 9000, "10.0.0.2/24", ssh_public_keys=keys))
+    config = next(b for m, p, b in api.requests if m == "PUT" and p.endswith("/config"))
+    assert config["sshkeys"] == ["ssh-ed25519%20AAAA%20user%40host%0A"]
+
+
+async def test_failed_configuration_destroys_the_clone() -> None:
+    api = Api()
+    api.fail_config = True
+    api.existing.add("/nodes/pve1/qemu/101/status/current")
+    with pytest.raises(ProxmoxError):
+        await client(api).create_vm(VmSpec("x", "pve1", 9000, "10.0.0.2/24"))
+    assert any(m == "DELETE" and "/nodes/pve1/qemu/101" in p for m, p, _ in api.requests)
