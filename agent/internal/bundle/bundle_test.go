@@ -373,6 +373,47 @@ func TestCorazaIsOnDemandAndReloaded(t *testing.T) {
 	}
 }
 
+func TestCrowdSecBouncerIsOnDemandAndRestarted(t *testing.T) {
+	a, priv, r := setup(t)
+	r.fail["systemctl is-active --quiet crowdsec-spoa-bouncer"] = true // not running yet
+	resp := a.Apply(context.Background(), request(t, priv, "b1", map[string]string{"crowdsec/spoa-bouncer.yaml": "api_url: x\n"}))
+	if !resp.Ok || !contains(r.calls, "systemctl start crowdsec-spoa-bouncer") {
+		t.Fatalf("a stopped bouncer is started: %v %v", resp, r.calls)
+	}
+	r.calls, r.fail["systemctl is-active --quiet crowdsec-spoa-bouncer"] = nil, false
+	a.Apply(context.Background(), request(t, priv, "b2", map[string]string{"crowdsec/spoa-bouncer.yaml": "api_url: y\n"}))
+	if !contains(r.calls, "systemctl restart crowdsec-spoa-bouncer") {
+		t.Fatalf("a running bouncer is restarted (it reads its configuration once): %v", r.calls)
+	}
+	if err := ValidatePath("crowdsec/other.txt"); err == nil {
+		t.Fatal("only .yaml files are the agent's in crowdsec/")
+	}
+	r.calls = nil
+	a.Apply(context.Background(), request(t, priv, "b3", map[string]string{"frr/frr.conf": "x\n"}))
+	if !contains(r.calls, "systemctl stop crowdsec-spoa-bouncer") {
+		t.Fatalf("removing the last crowdsec file stops the bouncer: %v", r.calls)
+	}
+}
+
+func TestVectorDropInsAreReloadedAndNotOnDemand(t *testing.T) {
+	a, priv, r := setup(t)
+	resp := a.Apply(context.Background(), request(t, priv, "b1", map[string]string{"vector/crowdsec.yaml": "sinks: {}\n"}))
+	if !resp.Ok || !contains(r.calls, "systemctl reload vector") {
+		t.Fatalf("a new drop-in reloads the log shipper: %v %v", resp, r.calls)
+	}
+	if contains(r.calls, "systemctl start vector") || contains(r.calls, "systemctl stop vector") {
+		t.Fatalf("the log shipper always runs: %v", r.calls)
+	}
+	if err := ValidatePath("vector/other.toml"); err == nil {
+		t.Fatal("only .yaml files are the agent's in vector/")
+	}
+	r.calls = nil
+	a.Apply(context.Background(), request(t, priv, "b2", map[string]string{"frr/frr.conf": "x\n"}))
+	if !contains(r.calls, "systemctl reload vector") {
+		t.Fatalf("removing the last drop-in reloads the shipper so it forgets the feed: %v", r.calls)
+	}
+}
+
 func contains(list []string, want string) bool {
 	for _, s := range list {
 		if s == want {

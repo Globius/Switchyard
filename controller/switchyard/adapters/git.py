@@ -174,6 +174,17 @@ class GitLabMirror:
             )
         return str(response.json()["id"])
 
+    async def head(self) -> str:
+        """The sha of the mirror branch's head; also what the settings page's Test reads.
+
+        Raises:
+            GitMirrorError: The project or branch cannot be read with this token.
+        """
+        try:
+            return await self._head()
+        except httpx.HTTPError as exc:
+            raise GitMirrorError(f"{type(exc).__name__}: {exc}") from exc
+
     async def _head(self) -> str:
         response = await self._http.get(
             f"/projects/{self._project}/repository/branches/{self._branch}",

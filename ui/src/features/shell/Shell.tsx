@@ -4,7 +4,7 @@
 
 import { Link, Outlet } from "@tanstack/react-router";
 import { Activity, Menu, Moon, Search, Signpost, Sun, WifiOff } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
@@ -15,6 +15,7 @@ import { CommandPalette } from "./CommandPalette";
 import { useDraft } from "./draft";
 import { useTenantStream, type Stream, type StreamState } from "./stream";
 import { TenantSwitcher } from "./TenantSwitcher";
+import { useKeepActiveInView } from "./useNavScroll";
 import { UserMenu } from "./UserMenu";
 
 /** Nav sections from the design handoff. `to` is the path segment under /t/:tenant. */
@@ -121,6 +122,8 @@ function StreamBanner({ stream }: { stream: Stream }) {
 export function Shell({ tenant, isSystem }: { tenant: string; isSystem: boolean }) {
   const [palette, setPalette] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
+  useKeepActiveInView(navRef);
   const stream = useTenantStream(tenant);
   const { draft } = useDraft(tenant);
   const sections = isSystem
@@ -128,7 +131,7 @@ export function Shell({ tenant, isSystem }: { tenant: string; isSystem: boolean 
     : NAV;
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex h-14 items-center gap-2 border-b bg-card px-3 sm:gap-3 sm:px-4">
+      <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b bg-card px-3 sm:gap-3 sm:px-4">
         <Button
           variant="ghost"
           size="icon"
@@ -174,13 +177,14 @@ export function Shell({ tenant, isSystem }: { tenant: string; isSystem: boolean 
           />
         )}
         <nav
+          ref={navRef}
           aria-label={t("Sections")}
           onClick={(e) => (e.target as HTMLElement).closest("a") && setNavOpen(false)}
           className={cn(
             "w-56 shrink-0 border-r bg-sidebar p-3 text-sm",
             navOpen
               ? "fixed inset-y-0 top-14 left-0 z-40 overflow-y-auto shadow-xl md:static md:shadow-none"
-              : "hidden md:block",
+              : "hidden md:sticky md:top-14 md:block md:h-[calc(100dvh-3.5rem)] md:self-start md:overflow-y-auto",
           )}
         >
           {sections.map((s) => (

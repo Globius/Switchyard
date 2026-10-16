@@ -26,12 +26,13 @@ import { cidrProblem } from "@/lib/ip";
 import { cn } from "@/lib/utils";
 import { cleanMatch, emptyMatch, MatchEditor, type Match } from "./MatchEditor";
 
-export type SecurityKind = "access" | "jwt" | "client_cert" | "waf" | "protection";
+export type SecurityKind = "access" | "jwt" | "client_cert" | "waf" | "crowdsec" | "protection";
 export type SecurityPolicy =
   | components["schemas"]["AccessPolicySetRead"]
   | components["schemas"]["JwtPolicySetRead"]
   | components["schemas"]["ClientCertPolicySetRead"]
   | components["schemas"]["WafPolicySetRead"]
+  | components["schemas"]["CrowdSecPolicySetRead"]
   | components["schemas"]["ProtectionPolicySetRead"];
 
 export const SECURITY_LABEL: Record<SecurityKind, string> = {
@@ -39,6 +40,7 @@ export const SECURITY_LABEL: Record<SecurityKind, string> = {
   jwt: "JWT tokens",
   client_cert: "Client certificate",
   waf: "WAF",
+  crowdsec: "CrowdSec",
   protection: "Bot and DDoS protection",
 };
 
@@ -150,6 +152,15 @@ export function defaults(kind: SecurityKind): Obj {
         disabled_rule_ids: [],
         excluded_paths: [],
         crs_version: "4.8.0",
+      };
+    case "crowdsec":
+      return {
+        mode: "detect",
+        fail_mode: "open",
+        timeout_ms: 100,
+        allow_cidrs: [],
+        excluded_paths: [],
+        share_logs: false,
       };
     case "protection":
       return {
@@ -1674,6 +1685,127 @@ export function SecurityPolicySheet({
                   validate: (x) => (x.trim().startsWith("/") ? null : t("A path starts with /.")),
                 }}
                 placeholder="/health"
+                disabled={dis}
+              />
+            </div>
+          </div>
+        )}
+
+        {kind === "crowdsec" && (
+          <div className="space-y-4">
+            <p className="rounded-md bg-muted p-3 text-xs">
+              {t(
+                "Checks every request against the addresses your CrowdSec engine has banned. New policies start in Detect: the verdict is logged and nothing is blocked, so you can read the logs before turning blocking on. A service can carry one CrowdSec policy. A system administrator sets up the connection under Admin > Integrations.",
+              )}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <fieldset className="space-y-1.5 sm:col-span-3">
+                <legend className="text-sm font-medium">{t("Mode")}</legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(
+                    [
+                      [
+                        "detect",
+                        "Detect",
+                        "Log who would be blocked; traffic is not touched. Start here.",
+                      ],
+                      ["block", "Block", "Answer banned clients with 403."],
+                    ] as const
+                  ).map(([k, label, help]) => (
+                    <label
+                      key={k}
+                      className={cn(
+                        "flex cursor-pointer items-start gap-2 rounded-lg border bg-card p-2.5 text-sm",
+                        cfg.mode === k && "border-primary bg-primary/10",
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="crowdsec-mode"
+                        aria-label={t(label)}
+                        className="mt-1"
+                        disabled={dis}
+                        checked={cfg.mode === k}
+                        onChange={() => set({ mode: k })}
+                      />
+                      <span>
+                        <span className="font-medium">{t(label)}</span>
+                        <span className="block text-xs text-muted-foreground">{t(help)}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <Field
+                label={t("If CrowdSec does not answer")}
+                help={t(
+                  "Open lets traffic through; closed answers 503. Banned clients stay blocked while the engine's bouncer runs, even if the CrowdSec API is down.",
+                )}
+              >
+                <select
+                  aria-label={t("Fail mode")}
+                  className={INPUT}
+                  disabled={dis}
+                  value={cfg.fail_mode}
+                  onChange={(e) => set({ fail_mode: e.target.value })}
+                >
+                  <option value="open">{t("Fail open")}</option>
+                  <option value="closed">{t("Fail closed")}</option>
+                </select>
+              </Field>
+              <Field label={t("Time limit (ms)")}>
+                <Nums
+                  label={t("CrowdSec time limit")}
+                  v={cfg.timeout_ms}
+                  set={(n) => set({ timeout_ms: n ?? 100 })}
+                  min={10}
+                  max={2000}
+                />
+              </Field>
+            </div>
+            <div className="space-y-1.5">
+              <div className="text-sm font-medium">{t("Never check these networks")}</div>
+              <ChipInput
+                label={t("Never check these networks")}
+                value={cfg.allow_cidrs}
+                onChange={(v) => set({ allow_cidrs: v })}
+                freeText={{
+                  validate: (x) =>
+                    cidrProblem(x.trim()) ? t("Not a valid address or network") : null,
+                }}
+                placeholder="198.51.100.0/24"
+                disabled={dis}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t("Office, monitoring or partner networks that must never be refused.")}
+              </p>
+            </div>
+            <label className="flex items-start gap-3 text-sm">
+              <Switch
+                aria-label={t("Send access logs to CrowdSec")}
+                checked={cfg.share_logs}
+                disabled={dis}
+                onCheckedChange={(on) => set({ share_logs: on })}
+              />
+              <span>
+                <span className="font-medium">{t("Send access logs to CrowdSec")}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {t(
+                    "Lets your CrowdSec engine read this service's request logs (client addresses and request lines) to detect attacks and add them to the bans every engine enforces. Off by default. The administrator chooses where the logs go and whether CrowdSec shares anything onward.",
+                  )}
+                </span>
+              </span>
+            </label>
+            <div className="space-y-1.5">
+              <div className="text-sm font-medium">{t("Paths not checked")}</div>
+              <ChipInput
+                label={t("Paths not checked")}
+                value={cfg.excluded_paths}
+                onChange={(v) => set({ excluded_paths: v })}
+                freeText={{
+                  validate: (x) => (x.trim().startsWith("/") ? null : t("A path starts with /.")),
+                }}
+                placeholder="/healthz"
                 disabled={dis}
               />
             </div>

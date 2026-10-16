@@ -7003,6 +7003,613 @@
         "title": "ControllerStateRead",
         "type": "object"
       },
+      "CrowdSecIn": {
+        "additionalProperties": false,
+        "description": "The CrowdSec integration settings. An empty `url` removes the stored settings.",
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A bouncer key to store. It is written to the secrets backend and never returned or kept in the database. Leave out to keep the current reference.",
+            "title": "Api Key"
+          },
+          "key_ref": {
+            "default": "",
+            "description": "Reference (OpenBao path) of a bouncer key stored there already.",
+            "title": "Key Ref",
+            "type": "string"
+          },
+          "logs_address": {
+            "default": "",
+            "description": "`host:port` (UDP) of the CrowdSec syslog datasource that receives the access logs of services that opted in with `share_logs`. Empty turns the feed off.",
+            "title": "Logs Address",
+            "type": "string"
+          },
+          "origins": {
+            "description": "Keep only decisions from these origins: `crowdsec`, `CAPI`, `cscli`, `lists`.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Origins",
+            "type": "array"
+          },
+          "per_engine_keys": {
+            "default": false,
+            "description": "Each engine uses its own bouncer key, read from `kv/system/crowdsec/bouncer-keys/<engine>`, instead of the shared one. Register a key per engine with `deploy/crowdsec/register-engine.sh`.",
+            "title": "Per Engine Keys",
+            "type": "boolean"
+          },
+          "url": {
+            "default": "",
+            "description": "Base URL of the CrowdSec local API (http or https, no credentials).",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "title": "CrowdSecIn",
+        "type": "object"
+      },
+      "CrowdSecPolicySet": {
+        "additionalProperties": false,
+        "description": "Block clients that a CrowdSec security engine has banned, on the engine itself (ADR 0215).\n\nThe CrowdSec SPOA bouncer runs on every engine, pulls the decision stream from the operator's\nCrowdSec local API (Admin > Integrations) and answers HAProxy per request. New policies start in\n``detect`` mode: the verdict is logged (``{ban}`` before the request line) and nothing is\nblocked, so a tenant can read the logs before turning blocking on. A service can carry one\nCrowdSec policy. Captcha decisions are not enforced; they are let through.\n\nAttributes:\n    mode: ``detect`` logs only; ``block`` refuses banned clients with 403.\n    fail_mode: What to do when the bouncer does not answer in ``timeout_ms``: ``open`` lets the\n        request through, ``closed`` refuses it with 503. Banned clients stay blocked while the\n        bouncer runs even if the CrowdSec API is down (it keeps its decisions in memory).\n    timeout_ms: How long HAProxy waits for the bouncer's verdict.\n    allow_cidrs: Client networks that are never checked (office, monitoring, partners).\n    excluded_paths: Paths that skip the check (``path_beg`` match), such as health endpoints.\n    share_logs: Send this service's HTTP access logs (client addresses and request lines)\n        to the CrowdSec engine the administrator configured, so it can detect attacks on this\n        service and add them to the decisions every engine enforces. Off by default; whether\n        the engine then shares signals with CrowdSec is the administrator's separate choice\n        (ADR 0215).\n\nExample:\n    >>> CrowdSecPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"c\"}\n    ... ).mode\n    'detect'",
+        "properties": {
+          "allow_cidrs": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 64,
+            "title": "Allow Cidrs",
+            "type": "array"
+          },
+          "excluded_paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Excluded Paths",
+            "type": "array"
+          },
+          "fail_mode": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Fail Mode",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "crowdsec",
+            "default": "crowdsec",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "default": "detect",
+            "enum": [
+              "detect",
+              "block"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "share_logs": {
+            "default": false,
+            "title": "Share Logs",
+            "type": "boolean"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "timeout_ms": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 10.0,
+            "title": "Timeout Ms",
+            "type": "integer"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name"
+        ],
+        "title": "CrowdSecPolicySet",
+        "type": "object"
+      },
+      "CrowdSecPolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_cidrs": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 64,
+            "title": "Allow Cidrs",
+            "type": "array"
+          },
+          "excluded_paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Excluded Paths",
+            "type": "array"
+          },
+          "fail_mode": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Fail Mode",
+            "type": "string"
+          },
+          "kind": {
+            "const": "crowdsec",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "default": "detect",
+            "enum": [
+              "detect",
+              "block"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "share_logs": {
+            "default": false,
+            "title": "Share Logs",
+            "type": "boolean"
+          },
+          "timeout_ms": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 10.0,
+            "title": "Timeout Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "CrowdSecPolicySetCreate",
+        "type": "object"
+      },
+      "CrowdSecPolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_cidrs": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "format": "ipv4network",
+                      "type": "string"
+                    },
+                    {
+                      "format": "ipv6network",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Cidrs"
+          },
+          "excluded_paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded Paths"
+          },
+          "fail_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "open",
+                  "closed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fail Mode"
+          },
+          "kind": {
+            "const": "crowdsec",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "detect",
+                  "block"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "share_logs": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Logs"
+          },
+          "timeout_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Ms"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "CrowdSecPolicySetPatch",
+        "type": "object"
+      },
+      "CrowdSecPolicySetRead": {
+        "additionalProperties": false,
+        "description": "CrowdSecPolicySet as returned by the API.",
+        "properties": {
+          "allow_cidrs": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 64,
+            "title": "Allow Cidrs",
+            "type": "array"
+          },
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "excluded_paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Excluded Paths",
+            "type": "array"
+          },
+          "fail_mode": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Fail Mode",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "crowdsec",
+            "default": "crowdsec",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "default": "detect",
+            "enum": [
+              "detect",
+              "block"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "share_logs": {
+            "default": false,
+            "title": "Share Logs",
+            "type": "boolean"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "timeout_ms": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 10.0,
+            "title": "Timeout Ms",
+            "type": "integer"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "CrowdSecPolicySetRead",
+        "type": "object"
+      },
+      "CrowdSecRead": {
+        "additionalProperties": false,
+        "description": "The settings in effect and how the last read of the decision stream went.",
+        "properties": {
+          "bans": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Networks banned at the last good read.",
+            "title": "Bans"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the last read failed, if it did.",
+            "title": "Error"
+          },
+          "key_ref": {
+            "description": "Where the bouncer key is stored; the key is never shown.",
+            "title": "Key Ref",
+            "type": "string"
+          },
+          "logs_address": {
+            "title": "Logs Address",
+            "type": "string"
+          },
+          "ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the last read worked.",
+            "title": "Ok"
+          },
+          "origins": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Origins",
+            "type": "array"
+          },
+          "per_engine_keys": {
+            "title": "Per Engine Keys",
+            "type": "boolean"
+          },
+          "source": {
+            "description": "Where the settings come from; the environment is the fallback.",
+            "enum": [
+              "database",
+              "environment",
+              "none"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "synced_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the stream was last read.",
+            "title": "Synced At"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "key_ref",
+          "origins",
+          "logs_address",
+          "per_engine_keys",
+          "source",
+          "configured"
+        ],
+        "title": "CrowdSecRead",
+        "type": "object"
+      },
+      "CrowdSecSyncRead": {
+        "additionalProperties": false,
+        "description": "The job queued by Sync now.",
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "CrowdSecSyncRead",
+        "type": "object"
+      },
+      "CrowdSecTestRead": {
+        "additionalProperties": false,
+        "description": "The outcome of one test read.",
+        "properties": {
+          "bans": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bans"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "CrowdSecTestRead",
+        "type": "object"
+      },
       "CrsCatalogueRead": {
         "additionalProperties": false,
         "description": "The rule catalogue of the CRS release a WAF policy uses.",
@@ -10063,6 +10670,167 @@
           "password_ref"
         ],
         "title": "FtpTarget",
+        "type": "object"
+      },
+      "GitMirrorIn": {
+        "additionalProperties": false,
+        "description": "Where committed revisions are mirrored as YAML. Off until `enabled` is true.",
+        "properties": {
+          "branch": {
+            "default": "main",
+            "description": "The branch that receives the commits.",
+            "title": "Branch",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "project": {
+            "default": "",
+            "description": "Numeric project id or path (`group/project`).",
+            "title": "Project",
+            "type": "string"
+          },
+          "token_ref": {
+            "default": "",
+            "description": "Secret reference of a project access token with write access to that repository only (for example `kv/git/mirror-token`). Never the token itself.",
+            "title": "Token Ref",
+            "type": "string"
+          },
+          "url": {
+            "default": "",
+            "description": "The GitLab address, `https://` and no credentials in it.",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "title": "GitMirrorIn",
+        "type": "object"
+      },
+      "GitMirrorRead": {
+        "additionalProperties": false,
+        "description": "The mirror settings, where they come from, and how the last write went.",
+        "properties": {
+          "branch": {
+            "default": "main",
+            "description": "The branch that receives the commits.",
+            "title": "Branch",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the last write failed, if it did.",
+            "title": "Last Error"
+          },
+          "last_ok_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When a revision last reached Git.",
+            "title": "Last Ok At"
+          },
+          "last_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The commit of that write.",
+            "title": "Last Sha"
+          },
+          "project": {
+            "default": "",
+            "description": "Numeric project id or path (`group/project`).",
+            "title": "Project",
+            "type": "string"
+          },
+          "source": {
+            "description": "`settings`: saved here. `environment`: from SWITCHYARD_GITLAB_* on the controller (saving settings replaces it). `none`: not configured.",
+            "enum": [
+              "settings",
+              "environment",
+              "none"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "token_ref": {
+            "default": "",
+            "description": "Secret reference of a project access token with write access to that repository only (for example `kv/git/mirror-token`). Never the token itself.",
+            "title": "Token Ref",
+            "type": "string"
+          },
+          "url": {
+            "default": "",
+            "description": "The GitLab address, `https://` and no credentials in it.",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "GitMirrorRead",
+        "type": "object"
+      },
+      "GitMirrorTestRead": {
+        "additionalProperties": false,
+        "description": "The outcome of reading the mirror branch.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "head": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The branch's head commit.",
+            "title": "Head"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "GitMirrorTestRead",
         "type": "object"
       },
       "GrafanaLaunchIn": {
@@ -13303,6 +14071,20 @@
         "additionalProperties": false,
         "description": "Optional features, so the UI can show or hide controls.",
         "properties": {
+          "ip_list_feeds": {
+            "description": "Reputation feeds an allow-list policy set may name (`feed`): the operator's `SWITCHYARD_REPUTATION_FEEDS` and `crowdsec` once the integration is set up.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Ip List Feeds",
+            "type": "array"
+          },
+          "ip_list_geo": {
+            "default": false,
+            "description": "Country lists are available (`SWITCHYARD_GEO_URL` is set).",
+            "title": "Ip List Geo",
+            "type": "boolean"
+          },
           "lxc_guests": {
             "default": false,
             "description": "Container (LXC) guests may be deployed (`allow_lxc_guests`).",
@@ -14888,7 +15670,7 @@
         "title": "OsMinimum",
         "type": "object"
       },
-      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
+      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__CrowdSecPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
         "additionalProperties": false,
         "properties": {
           "items": {
@@ -14898,6 +15680,7 @@
                   "access": "#/components/schemas/AccessPolicySetRead",
                   "allow_list": "#/components/schemas/AllowListPolicySetRead",
                   "client_cert": "#/components/schemas/ClientCertPolicySetRead",
+                  "crowdsec": "#/components/schemas/CrowdSecPolicySetRead",
                   "directory": "#/components/schemas/DirectoryPolicySetRead",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
                   "jwt": "#/components/schemas/JwtPolicySetRead",
@@ -14932,6 +15715,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/WafPolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/CrowdSecPolicySetRead"
                 },
                 {
                   "$ref": "#/components/schemas/ProtectionPolicySetRead"
@@ -14972,7 +15758,7 @@
         "required": [
           "items"
         ],
-        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead, DirectoryPolicySetRead, PosturePolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
+        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, CrowdSecPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead, DirectoryPolicySetRead, PosturePolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
         "type": "object"
       },
       "Page_Annotated_Union_VrrpProfileRead__BgpProfileRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
@@ -22323,6 +23109,7 @@
                   "access": "#/components/schemas/AccessPolicySet",
                   "allow_list": "#/components/schemas/AllowListPolicySet",
                   "client_cert": "#/components/schemas/ClientCertPolicySet",
+                  "crowdsec": "#/components/schemas/CrowdSecPolicySet",
                   "directory": "#/components/schemas/DirectoryPolicySet",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySet",
                   "jwt": "#/components/schemas/JwtPolicySet",
@@ -22357,6 +23144,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/WafPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/CrowdSecPolicySet"
                 },
                 {
                   "$ref": "#/components/schemas/ProtectionPolicySet"
@@ -34899,6 +35689,672 @@
           }
         },
         "summary": "Revert the pending controller change now",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/crowdsec": {
+      "get": {
+        "description": "The settings in effect and how the last read of the decision stream went.\n\nThe bouncer key is never shown, only where it is stored. `synced_at`, `bans` and `error`\nsay when the stream was last read, how many networks it banned and why a read failed.\nRequires a system administrator.\n\n**Access:** `system-admin` only.",
+        "operationId": "get_crowdsec_api_v1_system_crowdsec_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "bans": 4210,
+                  "configured": true,
+                  "key_ref": "kv/system/crowdsec/bouncer-key",
+                  "logs_address": "crowdsec.example.test:514",
+                  "ok": true,
+                  "origins": [
+                    "crowdsec",
+                    "CAPI"
+                  ],
+                  "per_engine_keys": true,
+                  "source": "database",
+                  "synced_at": "2026-10-16T06:00:00+00:00",
+                  "url": "https://crowdsec.example.test:8080"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CrowdSecRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "The CrowdSec integration settings and status",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      },
+      "put": {
+        "description": "Point the controller at a CrowdSec local API.\n\nSend `api_key` to have the controller store the bouncer key in the secrets backend, or\n`key_ref` for a key stored there already. The key is never kept in the database or\nreturned. Audited as `crowdsec.configured`. Requires a system administrator.\n\n**Access:** `system-admin` only.",
+        "operationId": "put_crowdsec_api_v1_system_crowdsec_put",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "key_ref": "kv/system/crowdsec/bouncer-key",
+                "origins": [
+                  "crowdsec",
+                  "CAPI"
+                ],
+                "url": "https://crowdsec.example.test:8080"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CrowdSecIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "bans": 4210,
+                  "configured": true,
+                  "key_ref": "kv/system/crowdsec/bouncer-key",
+                  "logs_address": "crowdsec.example.test:514",
+                  "ok": true,
+                  "origins": [
+                    "crowdsec",
+                    "CAPI"
+                  ],
+                  "per_engine_keys": true,
+                  "source": "database",
+                  "synced_at": "2026-10-16T06:00:00+00:00",
+                  "url": "https://crowdsec.example.test:8080"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CrowdSecRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Set the CrowdSec integration",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/crowdsec/sync": {
+      "post": {
+        "description": "Queue the IP list sync now instead of waiting for the next run.\n\nRequires a system administrator.\n\n**Access:** `system-admin` only.",
+        "operationId": "sync_crowdsec_api_v1_system_crowdsec_sync_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "job_id": "0190a5f2-0000-7000-8000-000000000030"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CrowdSecSyncRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync the CrowdSec lists now",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/crowdsec/test": {
+      "post": {
+        "description": "Read the decision stream once with the stored settings.\n\nChanges nothing. A failure is reported in `error`, not as an HTTP error. Requires a\nsystem administrator.\n\n**Access:** `system-admin` only.",
+        "operationId": "test_crowdsec_api_v1_system_crowdsec_test_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "bans": 4210,
+                  "ok": true
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CrowdSecTestRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test the connection to CrowdSec",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/git-mirror": {
+      "get": {
+        "description": "Every applied revision can be written as YAML to a GitLab repository.\n\nRequires a system administrator.\n\n**Access:** `system-admin` only.",
+        "operationId": "get_git_mirror_api_v1_system_git_mirror_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "branch": "main",
+                  "enabled": true,
+                  "last_ok_at": "2026-10-13T04:00:00+00:00",
+                  "last_sha": "0123456789abcdef0123456789abcdef01234567",
+                  "project": "ops/switchyard-mirror",
+                  "source": "settings",
+                  "token_ref": "kv/git/mirror-token",
+                  "url": "https://git.example.test"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/GitMirrorRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "The Git mirror settings and how the last write went",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      },
+      "put": {
+        "description": "Save the settings. The token is a `secret_ref`; a token value is rejected.\n\nApplying a change never waits for the mirror: a failed write is retried and shown here.\n\n**Access:** `system-admin` only.",
+        "operationId": "put_git_mirror_api_v1_system_git_mirror_put",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "branch": "main",
+                "enabled": true,
+                "project": "ops/switchyard-mirror",
+                "token_ref": "kv/git/mirror-token",
+                "url": "https://git.example.test"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/GitMirrorIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "branch": "main",
+                  "enabled": true,
+                  "last_ok_at": "2026-10-13T04:00:00+00:00",
+                  "last_sha": "0123456789abcdef0123456789abcdef01234567",
+                  "project": "ops/switchyard-mirror",
+                  "source": "settings",
+                  "token_ref": "kv/git/mirror-token",
+                  "url": "https://git.example.test"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/GitMirrorRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Set where revisions are mirrored",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/git-mirror/test": {
+      "post": {
+        "description": "Reads the mirror branch with the stored credentials. Writes nothing.\n\n**Access:** `system-admin` only.",
+        "operationId": "test_git_mirror_api_v1_system_git_mirror_test_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "head": "0123456789abcdef0123456789abcdef01234567",
+                  "ok": true
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/GitMirrorTestRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check that the mirror can be reached",
         "tags": [
           "system"
         ],
@@ -51367,7 +52823,7 @@
                   ]
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
+                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__CrowdSecPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
                 }
               }
             },
@@ -51535,6 +52991,7 @@
                     "access": "#/components/schemas/AccessPolicySetCreate",
                     "allow_list": "#/components/schemas/AllowListPolicySetCreate",
                     "client_cert": "#/components/schemas/ClientCertPolicySetCreate",
+                    "crowdsec": "#/components/schemas/CrowdSecPolicySetCreate",
                     "directory": "#/components/schemas/DirectoryPolicySetCreate",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetCreate",
                     "jwt": "#/components/schemas/JwtPolicySetCreate",
@@ -51569,6 +53026,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/WafPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CrowdSecPolicySetCreate"
                   },
                   {
                     "$ref": "#/components/schemas/ProtectionPolicySetCreate"
@@ -51943,6 +53403,7 @@
                       "access": "#/components/schemas/AccessPolicySetRead",
                       "allow_list": "#/components/schemas/AllowListPolicySetRead",
                       "client_cert": "#/components/schemas/ClientCertPolicySetRead",
+                      "crowdsec": "#/components/schemas/CrowdSecPolicySetRead",
                       "directory": "#/components/schemas/DirectoryPolicySetRead",
                       "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
                       "jwt": "#/components/schemas/JwtPolicySetRead",
@@ -51977,6 +53438,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/WafPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CrowdSecPolicySetRead"
                     },
                     {
                       "$ref": "#/components/schemas/ProtectionPolicySetRead"
@@ -52162,6 +53626,7 @@
                     "access": "#/components/schemas/AccessPolicySetPatch",
                     "allow_list": "#/components/schemas/AllowListPolicySetPatch",
                     "client_cert": "#/components/schemas/ClientCertPolicySetPatch",
+                    "crowdsec": "#/components/schemas/CrowdSecPolicySetPatch",
                     "directory": "#/components/schemas/DirectoryPolicySetPatch",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetPatch",
                     "jwt": "#/components/schemas/JwtPolicySetPatch",
@@ -52196,6 +53661,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/WafPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CrowdSecPolicySetPatch"
                   },
                   {
                     "$ref": "#/components/schemas/ProtectionPolicySetPatch"

@@ -94,6 +94,13 @@ The matrix is `controller/switchyard/domain/permissions.py`; tests compare it wi
 - A change of **group membership at the provider** is seen only at the next sign-in, at most four hours
   away. To cut access sooner, `POST /users/{id}/revoke-sessions` or `POST /users/{id}/disable`.
 
+## Signing out
+
+`POST /auth/logout` revokes the session and clears the `sy_session` cookie. It is the same for every
+login mode (OIDC, SAML, break-glass). The web UI then drops its cached identity and CSRF token and
+navigates to `/login`; it does this even if the request fails. The identity provider's own session is
+not ended, so the next sign-in may complete without a password prompt.
+
 ## When sign-in fails
 
 The browser is redirected to `/login?error=<code>`:

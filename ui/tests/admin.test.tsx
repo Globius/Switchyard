@@ -12,7 +12,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createQueryClient } from "@/auth/session";
 import { quotaLine } from "@/features/admin/Tenants";
 import { exportUrl } from "@/features/admin/AuditLog";
+import { mirrorProblem } from "@/features/admin/GitMirror";
 import { mappingSummary } from "@/features/admin/IdentityProviders";
+import { crowdSecStatus, parseOrigins, setupSnippet } from "@/features/admin/Integrations";
 import { accessText } from "@/features/admin/Users";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "@/routeTree.gen";
@@ -74,6 +76,19 @@ const USERS = [
 let isSystem = true;
 const calls: Record<string, unknown> = {};
 const server = setupServer(
+  http.get("*/api/v1/system/git-mirror", () =>
+    HttpResponse.json({
+      enabled: false,
+      url: "",
+      project: "",
+      branch: "main",
+      token_ref: "",
+      source: "none",
+      last_ok_at: null,
+      last_sha: null,
+      last_error: null,
+    }),
+  ),
   http.get("*/api/v1/me", () =>
     HttpResponse.json({
       auth: "session",
@@ -767,5 +782,203 @@ describe("admin area", () => {
       await screen.findByRole("switch", { name: "Allow container (LXC) guests" }),
     ).toBeDisabled();
     expect(screen.getByText(/forces containers on/)).toBeInTheDocument();
+  });
+  it("saves the Git mirror with a token reference and turns it on", async () => {
+    let put: unknown = null;
+    server.use(
+      http.get("*/api/v1/system/settings", () =>
+        HttpResponse.json({ allow_lxc_guests: false, allow_lxc_guests_forced: false }),
+      ),
+      http.put("*/api/v1/system/git-mirror", async ({ request }) => {
+        put = await request.json();
+        return HttpResponse.json({ ...(put as object), source: "settings" });
+      }),
+    );
+    renderAt("/admin/settings");
+    await userEvent.type(
+      await screen.findByLabelText("GitLab address"),
+      "https://git.example.test",
+    );
+    await userEvent.type(screen.getByLabelText("Project"), "ops/mirror");
+    expect(screen.getByText(/never the token itself/)).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Token reference"), "glpat xyz!");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/not a token/);
+    expect(put).toBeNull();
+    await userEvent.clear(screen.getByLabelText("Token reference"));
+    await userEvent.type(screen.getByLabelText("Token reference"), "kv/git/mirror-token");
+    await userEvent.click(screen.getByRole("switch", { name: "Mirror revisions to Git" }));
+    await waitFor(() =>
+      expect(put).toEqual({
+        enabled: true,
+        url: "https://git.example.test",
+        project: "ops/mirror",
+        branch: "main",
+        token_ref: "kv/git/mirror-token",
+      }),
+    );
+  });
+
+  it("tests the Git mirror and shows the last error", async () => {
+    server.use(
+      http.get("*/api/v1/system/git-mirror", () =>
+        HttpResponse.json({
+          enabled: true,
+          url: "https://git.example.test",
+          project: "ops/mirror",
+          branch: "main",
+          token_ref: "kv/git/mirror-token",
+          source: "settings",
+          last_ok_at: null,
+          last_sha: null,
+          last_error: "commit failed: HTTP 500",
+        }),
+      ),
+      http.post("*/api/v1/system/git-mirror/test", () =>
+        HttpResponse.json({ ok: true, head: "0123456789abcdef", error: null }),
+      ),
+    );
+    renderAt("/admin/settings");
+    expect(await screen.findByText("commit failed: HTTP 500")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Test" }));
+    expect(await screen.findByText("Reachable. Branch head 01234567.")).toBeInTheDocument();
+  });
+
+  it("validates the Git mirror form", () => {
+    const d = { url: "", project: "", branch: "main", token_ref: "" };
+    expect(mirrorProblem(d, false)).toBeNull();
+    expect(mirrorProblem(d, true)).toMatch(/needed to turn the mirror on/);
+    expect(mirrorProblem({ ...d, url: "http://x" }, false)).toMatch(/https:\/\//);
+    expect(mirrorProblem({ ...d, url: "https://u:p@x" }, false)).toMatch(/credentials/);
+    expect(
+      mirrorProblem(
+        { url: "https://git.example.test", project: "a/b", branch: "main", token_ref: "kv/t" },
+        true,
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("Integrations: CrowdSec", () => {
+  const BASE = {
+    url: "",
+    key_ref: "",
+    origins: [] as string[],
+    logs_address: "",
+    per_engine_keys: false,
+    source: "none",
+    configured: false,
+    synced_at: null,
+    ok: null,
+    bans: null,
+    error: null,
+  };
+
+  it("splits origins and summarises the status", () => {
+    expect(parseOrigins(" crowdsec, CAPI ,,")).toEqual(["crowdsec", "CAPI"]);
+    expect(crowdSecStatus(BASE as never).text).toBe("Not set up");
+    expect(crowdSecStatus({ ...BASE, configured: true } as never).text).toBe("Not synced yet");
+    expect(crowdSecStatus({ ...BASE, configured: true, ok: false } as never).tone).toBe("down");
+    expect(crowdSecStatus({ ...BASE, configured: true, ok: true } as never).text).toBe("Working");
+  });
+
+  it("saves the address and a pasted key, and never shows the key", async () => {
+    let put: Record<string, unknown> | null = null;
+    let state: Record<string, unknown> = { ...BASE };
+    server.use(
+      http.get("*/api/v1/system/crowdsec", () => HttpResponse.json(state)),
+      http.put("*/api/v1/system/crowdsec", async ({ request }) => {
+        put = (await request.json()) as Record<string, unknown>;
+        state = {
+          ...BASE,
+          url: put.url,
+          key_ref: "kv/system/crowdsec/bouncer-key",
+          origins: put.origins,
+          configured: true,
+          source: "database",
+        };
+        return HttpResponse.json(state);
+      }),
+    );
+    renderAt("/admin/integrations");
+    const url = await screen.findByLabelText("Local API address");
+    await userEvent.type(url, "https://crowdsec.example.test:8080");
+    await userEvent.type(screen.getByLabelText("Bouncer key"), "s3cr3t");
+    await userEvent.type(screen.getByLabelText(/^Origins to use/), "crowdsec, CAPI");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(put).toEqual({
+        url: "https://crowdsec.example.test:8080",
+        key_ref: "",
+        origins: ["crowdsec", "CAPI"],
+        logs_address: "",
+        per_engine_keys: false,
+        api_key: "s3cr3t",
+      }),
+    );
+    expect(await screen.findByText("stored in OpenBao")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("s3cr3t")).toBeNull();
+  });
+
+  it("turns on one key per engine and shows the setup commands", async () => {
+    let put: Record<string, unknown> | null = null;
+    const state = {
+      ...BASE,
+      url: "https://crowdsec.example.test:8080",
+      key_ref: "kv/system/crowdsec/bouncer-key",
+      configured: true,
+      source: "database",
+    };
+    server.use(
+      http.get("*/api/v1/system/crowdsec", () => HttpResponse.json(state)),
+      http.put("*/api/v1/system/crowdsec", async ({ request }) => {
+        put = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ ...state, per_engine_keys: true });
+      }),
+    );
+    renderAt("/admin/integrations");
+    const sw = await screen.findByRole("switch", { name: "One key per engine" });
+    expect(sw).not.toBeChecked();
+    await userEvent.click(sw);
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(put).toMatchObject({ per_engine_keys: true }));
+    expect(setupSnippet({ ...state, per_engine_keys: true } as never)).toContain(
+      "register-engine.sh add <engine-name>",
+    );
+    expect(setupSnippet(state as never)).not.toContain("register-engine.sh");
+    expect(setupSnippet(state as never)).toContain("CROWDSEC_DISABLE_ONLINE_API=true");
+  });
+
+  it("tests the connection, queues a sync and shows the status", async () => {
+    let synced = false;
+    server.use(
+      http.get("*/api/v1/system/crowdsec", () =>
+        HttpResponse.json({
+          ...BASE,
+          url: "https://crowdsec.example.test:8080",
+          key_ref: "kv/system/crowdsec/bouncer-key",
+          configured: true,
+          source: "database",
+          ok: false,
+          bans: 12,
+          error: "the CrowdSec API answered HTTP 403",
+          synced_at: "2026-10-16T06:00:00Z",
+        }),
+      ),
+      http.post("*/api/v1/system/crowdsec/test", () =>
+        HttpResponse.json({ ok: true, bans: 12, error: null }),
+      ),
+      http.post("*/api/v1/system/crowdsec/sync", () => {
+        synced = true;
+        return HttpResponse.json({ job_id: "j" }, { status: 202 });
+      }),
+    );
+    renderAt("/admin/integrations");
+    expect(await screen.findByText("Last sync failed")).toBeInTheDocument();
+    expect(screen.getByText("the CrowdSec API answered HTTP 403")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Test connection" }));
+    expect(await screen.findByText(/12 networks are banned/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Sync now" }));
+    await waitFor(() => expect(synced).toBe(true));
   });
 });

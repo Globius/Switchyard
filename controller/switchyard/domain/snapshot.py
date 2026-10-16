@@ -33,6 +33,7 @@ from switchyard.domain.models import (
     BgpProfile,
     Certificate,
     ClientCertPolicySet,
+    CrowdSecPolicySet,
     DirectoryPolicySet,
     Entity,
     ErrorPagesPolicySet,
@@ -439,6 +440,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         _check_routes(s, base, problems)
         _check_rate_limits(s, policies, base, problems)
         _check_waf(s, policies, base, problems)
+        _check_crowdsec(s, policies, base, problems)
         _check_protection(s, policies, base, problems)
         _check_access(s, policies, base, problems)
         _check_certificate_coverage(s, certs, base, problems)
@@ -1087,6 +1089,29 @@ def _check_waf(
                 f"{base}.policy_set_ids",
                 "too_many_waf_policies",
                 "a service can carry only one WAF policy",
+            )
+        )
+
+
+def _check_crowdsec(
+    s: VirtualService, policies: Mapping[UUID, Any], base: str, problems: list[Problem]
+) -> None:
+    """A service carries at most one CrowdSec policy, and only an HTTP service can (ADR 0215)."""
+    found = [pid for pid in s.policy_set_ids if isinstance(policies.get(pid), CrowdSecPolicySet)]
+    if len(found) > 1:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "too_many_crowdsec_policies",
+                "a service can carry only one CrowdSec policy",
+            )
+        )
+    if found and s.protocol is not Protocol.HTTP:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "crowdsec_needs_http",
+                "a CrowdSec policy applies to HTTP services only",
             )
         )
 

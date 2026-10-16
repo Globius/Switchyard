@@ -29,6 +29,7 @@ from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Respons
 from fastapi.responses import FileResponse, StreamingResponse
 
 from switchyard.adapters.agent import AgentError, CaptureSpec
+from switchyard.adapters.crowdsec import HttpCrowdSec
 from switchyard.adapters.pki import PkiError
 from switchyard.adapters.proxmox import Proxmox
 from switchyard.adapters.secrets import SecretsReader, SecretsWriter
@@ -53,6 +54,12 @@ from switchyard.api.controller_member_models import (
     ControllerMemberPatch,
     ControllerMemberRead,
     ControllerMembersRead,
+)
+from switchyard.api.crowdsec_models import (
+    CrowdSecIn,
+    CrowdSecRead,
+    CrowdSecSyncRead,
+    CrowdSecTestRead,
 )
 from switchyard.api.dns_record_models import DnsRecordRead, DnsRecordSyncResult
 from switchyard.api.grafana_proxy import PROXY_COOKIE, GrafanaProxy
@@ -207,6 +214,9 @@ from switchyard.api.upgrade_models import (
     BackupVerifyRead,
     BundleFetchIn,
     BundlePlanRead,
+    GitMirrorIn,
+    GitMirrorRead,
+    GitMirrorTestRead,
     ReleaseFeedIn,
     ReleaseFeedRead,
     RollActionIn,
@@ -257,6 +267,7 @@ from switchyard.services.changesets import (
 from switchyard.services.context import Databases, Principal
 from switchyard.services.controller_members import ControllerMembers
 from switchyard.services.controller_settings import ControllerSettings
+from switchyard.services.crowdsec import CROWDSEC_FEED, CrowdSecIntegration
 from switchyard.services.devices import (
     DeviceAuthError,
     DeviceRequestError,
@@ -266,6 +277,7 @@ from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.dns_records import DnsRecordSync
 from switchyard.services.engines import EngineDetail, EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
+from switchyard.services.git_mirror import GitMirrorSettings
 from switchyard.services.grafana import GrafanaLaunchError, GrafanaService
 from switchyard.services.gslb import GslbService
 from switchyard.services.hosts import HostService
@@ -275,6 +287,7 @@ from switchyard.services.identity_providers import (
 )
 from switchyard.services.importers import AviImportService
 from switchyard.services.infra import DeployRequest, InfraJobs
+from switchyard.services.iplists import configured_feeds
 from switchyard.services.jobs import JobService
 from switchyard.services.kubernetes import KubernetesClusters
 from switchyard.services.members import MemberService
@@ -346,6 +359,8 @@ class ApiServices:
     controller_members: ControllerMembers = None  # type: ignore[assignment]
     upgrade: UpgradeService = None  # type: ignore[assignment]
     release_feed: ReleaseFeedService = None  # type: ignore[assignment]
+    crowdsec: CrowdSecIntegration = None  # type: ignore[assignment]
+    git_mirror: GitMirrorSettings = None  # type: ignore[assignment]
     rolls: RollService = None  # type: ignore[assignment]
     bundles: BundleStaging = None  # type: ignore[assignment]
     backup: BackupService = None  # type: ignore[assignment]
@@ -369,6 +384,7 @@ def build_services(
     grafana: GrafanaService | None = None,
     alerts: AlertService | None = None,
     email_configured: bool = False,
+    crowdsec: CrowdSecIntegration | None = None,
     gslb: GslbService | None = None,
     devices: DeviceService | None = None,
     autoscaler: Autoscaler | None = None,
@@ -396,6 +412,7 @@ def build_services(
     engines = EngineService(db)
     dns_providers = DnsProviders(db, secrets) if writer is not None else None
     release_feed = ReleaseFeedService(db)
+    crowdsec = crowdsec or CrowdSecIntegration(db, HttpCrowdSec(), secrets)
     backup = BackupService(
         db, secrets, Path(os.environ.get("SWITCHYARD_BACKUP_DIR", "/var/lib/switchyard/backups"))
     )
@@ -441,6 +458,8 @@ def build_services(
         controller_members=ControllerMembers(db),
         upgrade=UpgradeService(db, backup=backup, feed=release_feed),
         release_feed=release_feed,
+        crowdsec=crowdsec,
+        git_mirror=GitMirrorSettings(db, secrets),
         rolls=RollService(db),
         bundles=BundleStaging(
             db,
@@ -1843,7 +1862,16 @@ def create_app(
                 for t in tenants
             ],
             "links": {"grafana": grafana_url, "grafana_embedded": svc.grafana is not None},
-            "features": {"lxc_guests": await svc.settings.lxc_allowed()},
+            "features": {
+                "lxc_guests": await svc.settings.lxc_allowed(),
+                "ip_list_feeds": sorted(
+                    {
+                        *configured_feeds(),
+                        *([CROWDSEC_FEED] if (await svc.crowdsec.config()).configured else []),
+                    }
+                ),
+                "ip_list_geo": bool(os.environ.get("SWITCHYARD_GEO_URL")),
+            },
         }
 
     @router.post(
@@ -4708,6 +4736,109 @@ def create_app(
         return await _release_feed_json(svc, who)
 
     @router.get(
+        "/system/crowdsec",
+        tags=["system"],
+        summary="The CrowdSec integration settings and status",
+        response_model=CrowdSecRead,
+        responses=_ok(ex.CROWDSEC),
+    )
+    async def get_crowdsec(who: Who, svc: Services) -> dict[str, Any]:
+        """The settings in effect and how the last read of the decision stream went.
+
+        The bouncer key is never shown, only where it is stored. `synced_at`, `bans` and `error`
+        say when the stream was last read, how many networks it banned and why a read failed.
+        Requires a system administrator.
+        """
+        return await _crowdsec_json(svc, who)
+
+    @router.put(
+        "/system/crowdsec",
+        tags=["system"],
+        summary="Set the CrowdSec integration",
+        response_model=CrowdSecRead,
+        responses=_ok(ex.CROWDSEC) | VALIDATION_RESPONSE,
+    )
+    async def put_crowdsec(body: CrowdSecIn, who: Who, svc: Services) -> dict[str, Any]:
+        """Point the controller at a CrowdSec local API.
+
+        Send `api_key` to have the controller store the bouncer key in the secrets backend, or
+        `key_ref` for a key stored there already. The key is never kept in the database or
+        returned. Audited as `crowdsec.configured`. Requires a system administrator.
+        """
+        await svc.crowdsec.set_config(who, body.model_dump(), request_id=_rid())
+        return await _crowdsec_json(svc, who)
+
+    @router.post(
+        "/system/crowdsec/test",
+        tags=["system"],
+        summary="Test the connection to CrowdSec",
+        response_model=CrowdSecTestRead,
+        responses=_ok(ex.CROWDSEC_TEST),
+    )
+    async def test_crowdsec(who: Who, svc: Services) -> dict[str, Any]:
+        """Read the decision stream once with the stored settings.
+
+        Changes nothing. A failure is reported in `error`, not as an HTTP error. Requires a
+        system administrator.
+        """
+        return await svc.crowdsec.test(who)
+
+    @router.post(
+        "/system/crowdsec/sync",
+        status_code=202,
+        tags=["system"],
+        summary="Sync the CrowdSec lists now",
+        response_model=CrowdSecSyncRead,
+        responses=_ok(ex.CROWDSEC_SYNC, 202),
+    )
+    async def sync_crowdsec(who: Who, svc: Services) -> dict[str, Any]:
+        """Queue the IP list sync now instead of waiting for the next run.
+
+        Requires a system administrator.
+        """
+        return {"job_id": await svc.crowdsec.sync_now(who, request_id=_rid())}
+
+    @router.get(
+        "/system/git-mirror",
+        tags=["system"],
+        summary="The Git mirror settings and how the last write went",
+        response_model=GitMirrorRead,
+        responses=_ok(ex.GIT_MIRROR),
+    )
+    async def get_git_mirror(who: Who, svc: Services) -> dict[str, Any]:
+        """Every applied revision can be written as YAML to a GitLab repository.
+
+        Requires a system administrator.
+        """
+        return _git_mirror_json(await svc.git_mirror.view(who))
+
+    @router.put(
+        "/system/git-mirror",
+        tags=["system"],
+        summary="Set where revisions are mirrored",
+        response_model=GitMirrorRead,
+        responses=_ok(ex.GIT_MIRROR) | VALIDATION_RESPONSE,
+    )
+    async def put_git_mirror(body: GitMirrorIn, who: Who, svc: Services) -> dict[str, Any]:
+        """Save the settings. The token is a `secret_ref`; a token value is rejected.
+
+        Applying a change never waits for the mirror: a failed write is retried and shown here.
+        """
+        view = await svc.git_mirror.set_config(who, body.model_dump(), request_id=_rid())
+        return _git_mirror_json(view)
+
+    @router.post(
+        "/system/git-mirror/test",
+        tags=["system"],
+        summary="Check that the mirror can be reached",
+        response_model=GitMirrorTestRead,
+        responses=_ok(ex.GIT_MIRROR_TEST),
+    )
+    async def test_git_mirror(who: Who, svc: Services) -> dict[str, Any]:
+        """Reads the mirror branch with the stored credentials. Writes nothing."""
+        return await svc.git_mirror.test(who)
+
+    @router.get(
         "/system/bundles",
         tags=["system"],
         summary="Upgrade bundles kept on the controller",
@@ -6409,6 +6540,15 @@ def _backup_json(r: Any) -> dict[str, Any]:
     out = asdict(r)
     out["id"], out["created_at"] = str(r.id), r.created_at.isoformat()
     return out
+
+
+async def _crowdsec_json(svc: ApiServices, who: Any) -> dict[str, Any]:
+    cfg, state = await svc.crowdsec.config(who), await svc.crowdsec.state()
+    return {**asdict(cfg), "configured": cfg.configured, **asdict(state)}
+
+
+def _git_mirror_json(view: Any) -> dict[str, Any]:
+    return {**asdict(view.config), **asdict(view.state), "source": view.source}
 
 
 async def _release_feed_json(svc: ApiServices, who: Any) -> dict[str, Any]:

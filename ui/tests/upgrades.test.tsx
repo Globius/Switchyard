@@ -10,6 +10,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createQueryClient } from "@/auth/session";
+import { buildTarget } from "@/features/admin/BackupTargets";
 import { formatKeys, headline, parseKeys, type Check } from "@/features/admin/Upgrades";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "@/routeTree.gen";
@@ -102,6 +103,18 @@ const server = setupServer(
       },
     ]),
   ),
+  http.post("*/api/v1/system/backup-targets", async ({ request }) => {
+    calls.targetAdded = await request.json();
+    return HttpResponse.json(calls.targetAdded as Record<string, unknown>, { status: 201 });
+  }),
+  http.post("*/api/v1/system/backup-targets/:name/test", ({ params }) => {
+    calls.targetTested = params.name;
+    return HttpResponse.json({ archives: ["a.syb", "b.syb"] });
+  }),
+  http.delete("*/api/v1/system/backup-targets/:name", ({ params }) => {
+    calls.targetDeleted = params.name;
+    return new HttpResponse(null, { status: 204 });
+  }),
   http.get("*/api/v1/system/backups", () =>
     HttpResponse.json([
       {
@@ -234,6 +247,78 @@ describe("upgrades page", () => {
     expect(await screen.findByRole("link", { name: "Upgrades" })).toHaveAttribute(
       "href",
       "/admin/upgrades",
+    );
+  });
+});
+
+describe("backup targets", () => {
+  it("builds the body per kind and rejects bad input", () => {
+    expect(
+      buildTarget("n", "secret/p", "7", "s3", {
+        endpoint: "https://s3.example.test",
+        bucket: "bk",
+        access_key_ref: "secret/a",
+        secret_key_ref: "secret/s",
+      }),
+    ).toEqual({
+      body: {
+        name: "n",
+        passphrase_ref: "secret/p",
+        keep: 7,
+        target: {
+          kind: "s3",
+          endpoint: "https://s3.example.test",
+          bucket: "bk",
+          access_key_ref: "secret/a",
+          secret_key_ref: "secret/s",
+        },
+      },
+    });
+    expect(buildTarget("n", "p", "0", "local", {})).toHaveProperty("error");
+    expect(buildTarget("n", "p", "5", "ftp", { host: "h" })).toHaveProperty("error");
+    const ftp = buildTarget("n", "p", "5", "ftp", {
+      host: "h",
+      username: "u",
+      password_ref: "r",
+      port: "2121",
+    });
+    expect(ftp).toHaveProperty("body.target.port", 2121);
+    expect(ftp).toHaveProperty("body.target.tls", true);
+  });
+
+  it("adds a target, with help text about references", async () => {
+    renderAt("/admin/upgrades");
+    await userEvent.click(await screen.findByRole("button", { name: "Add target" }));
+    expect(screen.getByRole("note")).toHaveTextContent(/never the secret values/);
+    await userEvent.type(screen.getByLabelText("Name"), "offsite");
+    await userEvent.type(screen.getByLabelText("Passphrase reference"), "secret/backup/pass");
+    await userEvent.click(screen.getAllByRole("button", { name: "Add target" }).at(-1)!);
+    await waitFor(() =>
+      expect(calls.targetAdded).toEqual({
+        name: "offsite",
+        passphrase_ref: "secret/backup/pass",
+        keep: 14,
+        target: { kind: "local" },
+      }),
+    );
+  });
+
+  it("tests and deletes a target after confirmation", async () => {
+    renderAt("/admin/upgrades");
+    await userEvent.click(await screen.findByRole("button", { name: "Test nightly" }));
+    expect(await screen.findByText("Works. 2 archives found.")).toBeInTheDocument();
+    expect(calls.targetTested).toBe("nightly");
+    await userEvent.click(screen.getByRole("button", { name: "Delete nightly" }));
+    expect(calls.targetDeleted).toBeUndefined();
+    await userEvent.click(screen.getByRole("button", { name: "Confirm delete nightly" }));
+    await waitFor(() => expect(calls.targetDeleted).toBe("nightly"));
+  });
+
+  it("links the missing-backup finding to the section", async () => {
+    renderAt("/admin/upgrades");
+    expect(await screen.findByRole("link", { name: "Go to backup targets" })).toHaveAttribute(
+      "href",
+      "#backup-targets",
     );
   });
 });

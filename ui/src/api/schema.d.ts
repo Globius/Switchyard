@@ -1403,6 +1403,145 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/crowdsec": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The CrowdSec integration settings and status
+         * @description The settings in effect and how the last read of the decision stream went.
+         *
+         *     The bouncer key is never shown, only where it is stored. `synced_at`, `bans` and `error`
+         *     say when the stream was last read, how many networks it banned and why a read failed.
+         *     Requires a system administrator.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["get_crowdsec_api_v1_system_crowdsec_get"];
+        /**
+         * Set the CrowdSec integration
+         * @description Point the controller at a CrowdSec local API.
+         *
+         *     Send `api_key` to have the controller store the bouncer key in the secrets backend, or
+         *     `key_ref` for a key stored there already. The key is never kept in the database or
+         *     returned. Audited as `crowdsec.configured`. Requires a system administrator.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        put: operations["put_crowdsec_api_v1_system_crowdsec_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/crowdsec/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync the CrowdSec lists now
+         * @description Queue the IP list sync now instead of waiting for the next run.
+         *
+         *     Requires a system administrator.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["sync_crowdsec_api_v1_system_crowdsec_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/crowdsec/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test the connection to CrowdSec
+         * @description Read the decision stream once with the stored settings.
+         *
+         *     Changes nothing. A failure is reported in `error`, not as an HTTP error. Requires a
+         *     system administrator.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["test_crowdsec_api_v1_system_crowdsec_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/git-mirror": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The Git mirror settings and how the last write went
+         * @description Every applied revision can be written as YAML to a GitLab repository.
+         *
+         *     Requires a system administrator.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["get_git_mirror_api_v1_system_git_mirror_get"];
+        /**
+         * Set where revisions are mirrored
+         * @description Save the settings. The token is a `secret_ref`; a token value is rejected.
+         *
+         *     Applying a change never waits for the mirror: a failed write is retried and shown here.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        put: operations["put_git_mirror_api_v1_system_git_mirror_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/git-mirror/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check that the mirror can be reached
+         * @description Reads the mirror branch with the stored credentials. Writes nothing.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["test_git_mirror_api_v1_system_git_mirror_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/releases": {
         parameters: {
             query?: never;
@@ -8203,6 +8342,331 @@ export interface components {
             vip?: string | null;
         };
         /**
+         * CrowdSecIn
+         * @description The CrowdSec integration settings. An empty `url` removes the stored settings.
+         */
+        CrowdSecIn: {
+            /**
+             * Api Key
+             * @description A bouncer key to store. It is written to the secrets backend and never returned or kept in the database. Leave out to keep the current reference.
+             */
+            api_key?: string | null;
+            /**
+             * Key Ref
+             * @description Reference (OpenBao path) of a bouncer key stored there already.
+             * @default
+             */
+            key_ref: string;
+            /**
+             * Logs Address
+             * @description `host:port` (UDP) of the CrowdSec syslog datasource that receives the access logs of services that opted in with `share_logs`. Empty turns the feed off.
+             * @default
+             */
+            logs_address: string;
+            /**
+             * Origins
+             * @description Keep only decisions from these origins: `crowdsec`, `CAPI`, `cscli`, `lists`.
+             */
+            origins?: string[];
+            /**
+             * Per Engine Keys
+             * @description Each engine uses its own bouncer key, read from `kv/system/crowdsec/bouncer-keys/<engine>`, instead of the shared one. Register a key per engine with `deploy/crowdsec/register-engine.sh`.
+             * @default false
+             */
+            per_engine_keys: boolean;
+            /**
+             * Url
+             * @description Base URL of the CrowdSec local API (http or https, no credentials).
+             * @default
+             */
+            url: string;
+        };
+        /**
+         * CrowdSecPolicySet
+         * @description Block clients that a CrowdSec security engine has banned, on the engine itself (ADR 0215).
+         *
+         *     The CrowdSec SPOA bouncer runs on every engine, pulls the decision stream from the operator's
+         *     CrowdSec local API (Admin > Integrations) and answers HAProxy per request. New policies start in
+         *     ``detect`` mode: the verdict is logged (``{ban}`` before the request line) and nothing is
+         *     blocked, so a tenant can read the logs before turning blocking on. A service can carry one
+         *     CrowdSec policy. Captcha decisions are not enforced; they are let through.
+         *
+         *     Attributes:
+         *         mode: ``detect`` logs only; ``block`` refuses banned clients with 403.
+         *         fail_mode: What to do when the bouncer does not answer in ``timeout_ms``: ``open`` lets the
+         *             request through, ``closed`` refuses it with 503. Banned clients stay blocked while the
+         *             bouncer runs even if the CrowdSec API is down (it keeps its decisions in memory).
+         *         timeout_ms: How long HAProxy waits for the bouncer's verdict.
+         *         allow_cidrs: Client networks that are never checked (office, monitoring, partners).
+         *         excluded_paths: Paths that skip the check (``path_beg`` match), such as health endpoints.
+         *         share_logs: Send this service's HTTP access logs (client addresses and request lines)
+         *             to the CrowdSec engine the administrator configured, so it can detect attacks on this
+         *             service and add them to the decisions every engine enforces. Off by default; whether
+         *             the engine then shares signals with CrowdSec is the administrator's separate choice
+         *             (ADR 0215).
+         *
+         *     Example:
+         *         >>> CrowdSecPolicySet.model_validate(
+         *         ...     {"id": "00000000-0000-0000-0000-000000000001",
+         *         ...      "tenant_id": "00000000-0000-0000-0000-000000000002", "name": "c"}
+         *         ... ).mode
+         *         'detect'
+         */
+        CrowdSecPolicySet: {
+            /**
+             * Allow Cidrs
+             * @default []
+             */
+            allow_cidrs: (string)[];
+            /**
+             * Excluded Paths
+             * @default []
+             */
+            excluded_paths: string[];
+            /**
+             * Fail Mode
+             * @default open
+             * @enum {string}
+             */
+            fail_mode: "open" | "closed";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "crowdsec";
+            /**
+             * Mode
+             * @default detect
+             * @enum {string}
+             */
+            mode: "detect" | "block";
+            /** Name */
+            name: string;
+            /**
+             * Share Logs
+             * @default false
+             */
+            share_logs: boolean;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Timeout Ms
+             * @default 100
+             */
+            timeout_ms: number;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** CrowdSecPolicySetCreate */
+        CrowdSecPolicySetCreate: {
+            /**
+             * Allow Cidrs
+             * @default []
+             */
+            allow_cidrs: (string)[];
+            /**
+             * Excluded Paths
+             * @default []
+             */
+            excluded_paths: string[];
+            /**
+             * Fail Mode
+             * @default open
+             * @enum {string}
+             */
+            fail_mode: "open" | "closed";
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "crowdsec";
+            /**
+             * Mode
+             * @default detect
+             * @enum {string}
+             */
+            mode: "detect" | "block";
+            /** Name */
+            name: string;
+            /**
+             * Share Logs
+             * @default false
+             */
+            share_logs: boolean;
+            /**
+             * Timeout Ms
+             * @default 100
+             */
+            timeout_ms: number;
+        };
+        /** CrowdSecPolicySetPatch */
+        CrowdSecPolicySetPatch: {
+            /** Allow Cidrs */
+            allow_cidrs?: (string)[] | null;
+            /** Excluded Paths */
+            excluded_paths?: string[] | null;
+            /** Fail Mode */
+            fail_mode?: ("open" | "closed") | null;
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "crowdsec";
+            /** Mode */
+            mode?: ("detect" | "block") | null;
+            /** Name */
+            name?: string | null;
+            /** Share Logs */
+            share_logs?: boolean | null;
+            /** Timeout Ms */
+            timeout_ms?: number | null;
+        };
+        /**
+         * CrowdSecPolicySetRead
+         * @description CrowdSecPolicySet as returned by the API.
+         */
+        CrowdSecPolicySetRead: {
+            /**
+             * Allow Cidrs
+             * @default []
+             */
+            allow_cidrs: (string)[];
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Excluded Paths
+             * @default []
+             */
+            excluded_paths: string[];
+            /**
+             * Fail Mode
+             * @default open
+             * @enum {string}
+             */
+            fail_mode: "open" | "closed";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "crowdsec";
+            /**
+             * Mode
+             * @default detect
+             * @enum {string}
+             */
+            mode: "detect" | "block";
+            /** Name */
+            name: string;
+            /**
+             * Share Logs
+             * @default false
+             */
+            share_logs: boolean;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Timeout Ms
+             * @default 100
+             */
+            timeout_ms: number;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * CrowdSecRead
+         * @description The settings in effect and how the last read of the decision stream went.
+         */
+        CrowdSecRead: {
+            /**
+             * Bans
+             * @description Networks banned at the last good read.
+             */
+            bans?: number | null;
+            /** Configured */
+            configured: boolean;
+            /**
+             * Error
+             * @description Why the last read failed, if it did.
+             */
+            error?: string | null;
+            /**
+             * Key Ref
+             * @description Where the bouncer key is stored; the key is never shown.
+             */
+            key_ref: string;
+            /** Logs Address */
+            logs_address: string;
+            /**
+             * Ok
+             * @description Whether the last read worked.
+             */
+            ok?: boolean | null;
+            /** Origins */
+            origins: string[];
+            /** Per Engine Keys */
+            per_engine_keys: boolean;
+            /**
+             * Source
+             * @description Where the settings come from; the environment is the fallback.
+             * @enum {string}
+             */
+            source: "database" | "environment" | "none";
+            /**
+             * Synced At
+             * @description When the stream was last read.
+             */
+            synced_at?: string | null;
+            /** Url */
+            url: string;
+        };
+        /**
+         * CrowdSecSyncRead
+         * @description The job queued by Sync now.
+         */
+        CrowdSecSyncRead: {
+            /** Job Id */
+            job_id: string;
+        };
+        /**
+         * CrowdSecTestRead
+         * @description The outcome of one test read.
+         */
+        CrowdSecTestRead: {
+            /** Bans */
+            bans?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
+        };
+        /**
          * CrsCatalogueRead
          * @description The rule catalogue of the CRS release a WAF policy uses.
          */
@@ -9686,6 +10150,112 @@ export interface components {
             tls: boolean;
             /** Username */
             username: string;
+        };
+        /**
+         * GitMirrorIn
+         * @description Where committed revisions are mirrored as YAML. Off until `enabled` is true.
+         */
+        GitMirrorIn: {
+            /**
+             * Branch
+             * @description The branch that receives the commits.
+             * @default main
+             */
+            branch: string;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Project
+             * @description Numeric project id or path (`group/project`).
+             * @default
+             */
+            project: string;
+            /**
+             * Token Ref
+             * @description Secret reference of a project access token with write access to that repository only (for example `kv/git/mirror-token`). Never the token itself.
+             * @default
+             */
+            token_ref: string;
+            /**
+             * Url
+             * @description The GitLab address, `https://` and no credentials in it.
+             * @default
+             */
+            url: string;
+        };
+        /**
+         * GitMirrorRead
+         * @description The mirror settings, where they come from, and how the last write went.
+         */
+        GitMirrorRead: {
+            /**
+             * Branch
+             * @description The branch that receives the commits.
+             * @default main
+             */
+            branch: string;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Last Error
+             * @description Why the last write failed, if it did.
+             */
+            last_error?: string | null;
+            /**
+             * Last Ok At
+             * @description When a revision last reached Git.
+             */
+            last_ok_at?: string | null;
+            /**
+             * Last Sha
+             * @description The commit of that write.
+             */
+            last_sha?: string | null;
+            /**
+             * Project
+             * @description Numeric project id or path (`group/project`).
+             * @default
+             */
+            project: string;
+            /**
+             * Source
+             * @description `settings`: saved here. `environment`: from SWITCHYARD_GITLAB_* on the controller (saving settings replaces it). `none`: not configured.
+             * @enum {string}
+             */
+            source: "settings" | "environment" | "none";
+            /**
+             * Token Ref
+             * @description Secret reference of a project access token with write access to that repository only (for example `kv/git/mirror-token`). Never the token itself.
+             * @default
+             */
+            token_ref: string;
+            /**
+             * Url
+             * @description The GitLab address, `https://` and no credentials in it.
+             * @default
+             */
+            url: string;
+        };
+        /**
+         * GitMirrorTestRead
+         * @description The outcome of reading the mirror branch.
+         */
+        GitMirrorTestRead: {
+            /** Error */
+            error?: string | null;
+            /**
+             * Head
+             * @description The branch's head commit.
+             */
+            head?: string | null;
+            /** Ok */
+            ok: boolean;
         };
         /**
          * GrafanaLaunchIn
@@ -11203,6 +11773,17 @@ export interface components {
          */
         MeFeatures: {
             /**
+             * Ip List Feeds
+             * @description Reputation feeds an allow-list policy set may name (`feed`): the operator's `SWITCHYARD_REPUTATION_FEEDS` and `crowdsec` once the integration is set up.
+             */
+            ip_list_feeds?: string[];
+            /**
+             * Ip List Geo
+             * @description Country lists are available (`SWITCHYARD_GEO_URL` is set).
+             * @default false
+             */
+            ip_list_geo: boolean;
+            /**
              * Lxc Guests
              * @description Container (LXC) guests may be deployed (`allow_lxc_guests`).
              * @default false
@@ -11898,10 +12479,10 @@ export interface components {
             /** Version */
             version: string;
         };
-        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead, DirectoryPolicySetRead, PosturePolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
-        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
+        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, CrowdSecPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead, DirectoryPolicySetRead, PosturePolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
+        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__CrowdSecPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
             /** Items */
-            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"] | components["schemas"]["DirectoryPolicySetRead"] | components["schemas"]["PosturePolicySetRead"])[];
+            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["CrowdSecPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"] | components["schemas"]["DirectoryPolicySetRead"] | components["schemas"]["PosturePolicySetRead"])[];
             /**
              * Next Cursor
              * @description Opaque cursor of the next page, or null on the last page.
@@ -15328,7 +15909,7 @@ export interface components {
              * Policy Sets
              * @default []
              */
-            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"] | components["schemas"]["WafPolicySet"] | components["schemas"]["ProtectionPolicySet"] | components["schemas"]["AccessPolicySet"] | components["schemas"]["JwtPolicySet"] | components["schemas"]["ClientCertPolicySet"] | components["schemas"]["DirectoryPolicySet"] | components["schemas"]["PosturePolicySet"])[];
+            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"] | components["schemas"]["WafPolicySet"] | components["schemas"]["CrowdSecPolicySet"] | components["schemas"]["ProtectionPolicySet"] | components["schemas"]["AccessPolicySet"] | components["schemas"]["JwtPolicySet"] | components["schemas"]["ClientCertPolicySet"] | components["schemas"]["DirectoryPolicySet"] | components["schemas"]["PosturePolicySet"])[];
             /**
              * Pools
              * @default []
@@ -23283,6 +23864,521 @@ export interface operations {
                 };
             };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_crowdsec_api_v1_system_crowdsec_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "bans": 4210,
+                     *       "configured": true,
+                     *       "key_ref": "kv/system/crowdsec/bouncer-key",
+                     *       "logs_address": "crowdsec.example.test:514",
+                     *       "ok": true,
+                     *       "origins": [
+                     *         "crowdsec",
+                     *         "CAPI"
+                     *       ],
+                     *       "per_engine_keys": true,
+                     *       "source": "database",
+                     *       "synced_at": "2026-10-16T06:00:00+00:00",
+                     *       "url": "https://crowdsec.example.test:8080"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CrowdSecRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    put_crowdsec_api_v1_system_crowdsec_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "key_ref": "kv/system/crowdsec/bouncer-key",
+                 *       "origins": [
+                 *         "crowdsec",
+                 *         "CAPI"
+                 *       ],
+                 *       "url": "https://crowdsec.example.test:8080"
+                 *     }
+                 */
+                "application/json": components["schemas"]["CrowdSecIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "bans": 4210,
+                     *       "configured": true,
+                     *       "key_ref": "kv/system/crowdsec/bouncer-key",
+                     *       "logs_address": "crowdsec.example.test:514",
+                     *       "ok": true,
+                     *       "origins": [
+                     *         "crowdsec",
+                     *         "CAPI"
+                     *       ],
+                     *       "per_engine_keys": true,
+                     *       "source": "database",
+                     *       "synced_at": "2026-10-16T06:00:00+00:00",
+                     *       "url": "https://crowdsec.example.test:8080"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CrowdSecRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    sync_crowdsec_api_v1_system_crowdsec_sync_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "job_id": "0190a5f2-0000-7000-8000-000000000030"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CrowdSecSyncRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    test_crowdsec_api_v1_system_crowdsec_test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "bans": 4210,
+                     *       "ok": true
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CrowdSecTestRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_git_mirror_api_v1_system_git_mirror_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "branch": "main",
+                     *       "enabled": true,
+                     *       "last_ok_at": "2026-10-13T04:00:00+00:00",
+                     *       "last_sha": "0123456789abcdef0123456789abcdef01234567",
+                     *       "project": "ops/switchyard-mirror",
+                     *       "source": "settings",
+                     *       "token_ref": "kv/git/mirror-token",
+                     *       "url": "https://git.example.test"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GitMirrorRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    put_git_mirror_api_v1_system_git_mirror_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "branch": "main",
+                 *       "enabled": true,
+                 *       "project": "ops/switchyard-mirror",
+                 *       "token_ref": "kv/git/mirror-token",
+                 *       "url": "https://git.example.test"
+                 *     }
+                 */
+                "application/json": components["schemas"]["GitMirrorIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "branch": "main",
+                     *       "enabled": true,
+                     *       "last_ok_at": "2026-10-13T04:00:00+00:00",
+                     *       "last_sha": "0123456789abcdef0123456789abcdef01234567",
+                     *       "project": "ops/switchyard-mirror",
+                     *       "source": "settings",
+                     *       "token_ref": "kv/git/mirror-token",
+                     *       "url": "https://git.example.test"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GitMirrorRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    test_git_mirror_api_v1_system_git_mirror_test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "head": "0123456789abcdef0123456789abcdef01234567",
+                     *       "ok": true
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GitMirrorTestRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -34150,7 +35246,7 @@ export interface operations {
                      *       ]
                      *     }
                      */
-                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
+                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__CrowdSecPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
                 };
             };
             /** @description `cursor` is not a value this endpoint returned. */
@@ -34241,7 +35337,7 @@ export interface operations {
                  *       ]
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"] | components["schemas"]["WafPolicySetCreate"] | components["schemas"]["ProtectionPolicySetCreate"] | components["schemas"]["AccessPolicySetCreate"] | components["schemas"]["JwtPolicySetCreate"] | components["schemas"]["ClientCertPolicySetCreate"] | components["schemas"]["DirectoryPolicySetCreate"] | components["schemas"]["PosturePolicySetCreate"];
+                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"] | components["schemas"]["WafPolicySetCreate"] | components["schemas"]["CrowdSecPolicySetCreate"] | components["schemas"]["ProtectionPolicySetCreate"] | components["schemas"]["AccessPolicySetCreate"] | components["schemas"]["JwtPolicySetCreate"] | components["schemas"]["ClientCertPolicySetCreate"] | components["schemas"]["DirectoryPolicySetCreate"] | components["schemas"]["PosturePolicySetCreate"];
             };
         };
         responses: {
@@ -34358,7 +35454,7 @@ export interface operations {
                      *       "version": 3
                      *     }
                      */
-                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"] | components["schemas"]["DirectoryPolicySetRead"] | components["schemas"]["PosturePolicySetRead"];
+                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["CrowdSecPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"] | components["schemas"]["DirectoryPolicySetRead"] | components["schemas"]["PosturePolicySetRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -34536,7 +35632,7 @@ export interface operations {
                  *       "kind": "allow_list"
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"] | components["schemas"]["WafPolicySetPatch"] | components["schemas"]["ProtectionPolicySetPatch"] | components["schemas"]["AccessPolicySetPatch"] | components["schemas"]["JwtPolicySetPatch"] | components["schemas"]["ClientCertPolicySetPatch"] | components["schemas"]["DirectoryPolicySetPatch"] | components["schemas"]["PosturePolicySetPatch"];
+                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"] | components["schemas"]["WafPolicySetPatch"] | components["schemas"]["CrowdSecPolicySetPatch"] | components["schemas"]["ProtectionPolicySetPatch"] | components["schemas"]["AccessPolicySetPatch"] | components["schemas"]["JwtPolicySetPatch"] | components["schemas"]["ClientCertPolicySetPatch"] | components["schemas"]["DirectoryPolicySetPatch"] | components["schemas"]["PosturePolicySetPatch"];
             };
         };
         responses: {

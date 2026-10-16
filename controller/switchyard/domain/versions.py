@@ -100,6 +100,11 @@ class Finding:
     action: str = ""
 
 
+#: ``dev`` (an unstamped build) or a bare git commit hash (7 to 40 hex digits): a build made from a
+#: source checkout rather than a release. Release stamping is ``MAJOR.MINOR.PATCH+<sha>``.
+_DEV_BUILD = re.compile(r"^(dev|[0-9a-f]{7,40})$")
+
+
 def check_agent(
     agent_version: str, latest: str, compat: Compat, subject: str = ""
 ) -> list[Finding]:
@@ -112,6 +117,18 @@ def check_agent(
         subject: Engine name, for the finding.
     """
     have = version_key(agent_version)
+    if have is None and _DEV_BUILD.match(agent_version.strip().lower()):
+        # A development build cannot be ordered against releases, but it is not a fault: say so
+        # at info level instead of telling the operator to replace a working engine.
+        return [
+            Finding(
+                "agent_dev_build",
+                "info",
+                subject,
+                f"Agent {agent_version!r} is a development build; its release cannot be compared.",
+                "Build the engine template with SY_VERSION=<release> to report a release version.",
+            )
+        ]
     if have is None:
         return [
             Finding(

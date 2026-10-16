@@ -567,6 +567,18 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "soak_seconds": 600,
     },
     "POST /tenants/{t}/rolls/{roll}": {"action": "pause"},
+    "PUT /system/crowdsec": {
+        "url": "https://crowdsec.example.test:8080",
+        "key_ref": "kv/system/crowdsec/bouncer-key",
+        "origins": ["crowdsec", "CAPI"],
+    },
+    "PUT /system/git-mirror": {
+        "enabled": True,
+        "url": "https://git.example.test",
+        "project": "ops/switchyard-mirror",
+        "branch": "main",
+        "token_ref": "kv/git/mirror-token",
+    },
     "PUT /system/releases": {
         "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json",
         "channel": "stable",

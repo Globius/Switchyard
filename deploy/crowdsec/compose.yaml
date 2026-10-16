@@ -1,0 +1,35 @@
+# A CrowdSec Security Engine for Switchyard (ADR 0213, 0215): the local API that every engine's bouncer and the controller
+# read, plus the syslog datasource that receives the access logs of services whose CrowdSec policy has "Send access logs" on,
+# parsed by the official crowdsecurity/haproxy collection.
+#   cp crowdsec.env.example crowdsec.env ; edit it ; docker compose --env-file crowdsec.env up -d
+# Then: Admin > Integrations > CrowdSec in Switchyard (local API address, bouncer key, access log address).
+#
+# Sharing with CrowdSec is OFF: CROWDSEC_DISABLE_ONLINE_API defaults to true, so the engine neither sends signals to the Central
+# API nor receives the community blocklist. Read docs/runbooks/crowdsec.md ("Sharing signals") before changing it.
+# Publish only on a private address (CROWDSEC_BIND): the local API has no login for bouncers other than the key, and the syslog
+# datasource accepts any UDP datagram.
+name: switchyard-crowdsec
+services:
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.7.0
+    restart: unless-stopped
+    environment:
+      COLLECTIONS: "crowdsecurity/haproxy"
+      # Registers a bouncer named "switchyard" with this key. It cannot update an existing bouncer: to rotate the key run
+      # `docker compose exec crowdsec cscli bouncers delete switchyard`, change the key here and in Switchyard, and recreate.
+      BOUNCER_KEY_switchyard: ${CROWDSEC_BOUNCER_KEY:?set CROWDSEC_BOUNCER_KEY in crowdsec.env}
+      DISABLE_ONLINE_API: ${CROWDSEC_DISABLE_ONLINE_API:-true}
+      # Only with the online API on: enroll this engine in the CrowdSec console (key from app.crowdsec.net, a credential).
+      ENROLL_KEY: ${CROWDSEC_ENROLL_KEY:-}
+      ENROLL_INSTANCE_NAME: ${CROWDSEC_INSTANCE_NAME:-switchyard}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - config:/etc/crowdsec
+      - data:/var/lib/crowdsec/data
+      - ./acquis.d/syslog.yaml:/etc/crowdsec/acquis.d/syslog.yaml:ro
+    ports:
+      - "${CROWDSEC_BIND:?set CROWDSEC_BIND to a private address}:${CROWDSEC_API_PORT:-8080}:8080"
+      - "${CROWDSEC_BIND}:${CROWDSEC_SYSLOG_PORT:-514}:514/udp"
+volumes:
+  config:
+  data:

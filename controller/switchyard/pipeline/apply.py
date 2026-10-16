@@ -34,6 +34,7 @@ from collections.abc import Sequence
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import partial
 from typing import Any
 from uuid import UUID
 
@@ -47,6 +48,7 @@ from switchyard.adapters.secrets import SecretsReader
 from switchyard.config import broker_url
 from switchyard.db import audit_log
 from switchyard.db import changesets as store
+from switchyard.db.crowdsec_config import bouncer_settings
 from switchyard.db.repository import load_snapshot
 from switchyard.db.store import ConcurrentModificationError, apply_delta
 from switchyard.db.tenancy import tenant_session
@@ -236,6 +238,7 @@ class ApplyPipeline:
         self._sandbox = sandbox
         self._probe = probe or NoRoutingProbe()
         self._secrets = secrets
+        self._crowdsec_loader = partial(bouncer_settings, db.admin)
         self._locks = PgGroupLocks(db.admin, timeout_s=lock_timeout_s)
         self._poll = canary_poll_s
         self._sleep = sleep
@@ -521,7 +524,7 @@ class ApplyPipeline:
                 continue  # no agent: routing and certificates are provisioned out of band
             slot = EngineSlot(record.name, index, record.mgmt_ip or "0.0.0.0")  # noqa: S104
             try:
-                files = await engine_files(after, group, slot, self._secrets)
+                files = await engine_files(after, group, slot, self._secrets, self._crowdsec_loader)
             except BundleError as exc:
                 raise _PlanError(str(exc)) from exc
             if not files:
@@ -530,7 +533,7 @@ class ApplyPipeline:
             if existed:
                 with contextlib.suppress(BundleError):
                     plan.previous_bundles[record.name] = await engine_files(
-                        base, group, slot, self._secrets
+                        base, group, slot, self._secrets, self._crowdsec_loader
                     )
 
     # -- execution -------------------------------------------------------------------------------

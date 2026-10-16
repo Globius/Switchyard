@@ -84,6 +84,10 @@ frontend sy_prometheus
 
 {{ waf_backend | join("\n") }}
 {% endif %}
+{% if crowdsec_backend %}
+
+{{ crowdsec_backend | join("\n") }}
+{% endif %}
 {% for b in backends %}
 
 {% include "backend.j2" %}

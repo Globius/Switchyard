@@ -8,7 +8,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createQueryClient } from "@/auth/session";
 import { pickOwnDraft, type ChangeSetSummary } from "@/features/shell/draft";
 import { initials } from "@/features/shell/UserMenu";
@@ -125,6 +125,27 @@ describe("shell helpers", () => {
   });
 });
 
+describe("nav scrolling", () => {
+  it("scrolls the nav on its own and keeps the active item in view and highlighted", async () => {
+    const spy = vi.fn();
+    Element.prototype.scrollIntoView = spy;
+    const router = renderAt("/t/acme/pools");
+    const link = await screen.findByRole("link", { name: "Pools" });
+    expect(link).toHaveAttribute("aria-current", "page");
+    expect(link.className).toContain("bg-sidebar-accent");
+    const nav = screen.getByRole("navigation", { name: "Sections" });
+    expect(nav.className).toContain("overflow-y-auto");
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ block: "nearest" }));
+    expect(spy.mock.contexts.at(-1)).toBe(link);
+    spy.mockClear();
+    await router.navigate({ to: "/t/$tenant/$", params: { tenant: "acme", _splat: "logs" } });
+    const logs = await screen.findByRole("link", { name: "Request logs" });
+    await waitFor(() => expect(logs).toHaveAttribute("aria-current", "page"));
+    await waitFor(() => expect(spy.mock.contexts.at(-1)).toBe(logs));
+    expect(screen.getByRole("link", { name: "Pools" })).not.toHaveAttribute("aria-current");
+  });
+});
+
 describe("app shell", () => {
   it("shows tenant, nav and the change-set bar with a disabled Discard for a viewer", async () => {
     renderAt("/t/acme");
@@ -219,7 +240,7 @@ describe("app shell", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    renderAt("/t/acme");
+    const router = renderAt("/t/acme");
     await userEvent.click(await screen.findByRole("button", { name: "User menu" }));
     expect(await screen.findByText("via sy-acme-view")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Refresh access" }));
@@ -229,6 +250,8 @@ describe("app shell", () => {
     expect(localStorage.getItem("sy-theme")).toBe("dark");
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(out).toBe(true));
+    // Regression: sign-out used to leave the page up with the cached identity; it must land on /login.
+    await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
     applyTheme("light");
   });
 

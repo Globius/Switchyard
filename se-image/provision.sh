@@ -10,6 +10,7 @@
 #   AGENT_BIN       path to a built sy-agent binary (required)
 #   DATAPLANE_BIN   path to the dataplaneapi binary (v3, from haproxytech releases)
 #   AUTH_PROXY_BIN  path to the oauth2-proxy binary (the auth sidecar slot, ADR 0083); optional
+#   CROWDSEC_SPOA_BIN path to the crowdsec-spoa-bouncer binary (the CrowdSec slot, ADR 0215); optional
 #   CORAZA_SPOA_BIN path to the coraza-spoa binary (the WAF slot); CRS_TARBALL the Core Rule Set tarball; both optional
 #   (a <file>.sha256 next to a binary, which fetch-binaries.sh writes, must match it)
 # Versions come from versions.env next to this script.
@@ -40,12 +41,18 @@ verified() { # path: succeeds when there is no checksum file or it matches
 }
 id sy-auth >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin sy-auth
 id coraza >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin coraza
+id crowdsec-spoa >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin crowdsec-spoa
 install -d -m 0750 -g sy-auth /etc/switchyard/auth
 install -d -m 0750 -g coraza /etc/switchyard/coraza
+install -d -m 0750 -g crowdsec-spoa /etc/switchyard/crowdsec
 install -m 0755 "$SRC"/files/sy-auth-run /usr/local/sbin/sy-auth-run
 if [ -n "${AUTH_PROXY_BIN:-}" ]; then
   verified "$AUTH_PROXY_BIN" || { echo "oauth2-proxy does not match its recorded checksum" >&2; exit 1; }
   install -m 0755 "$AUTH_PROXY_BIN" /usr/local/bin/oauth2-proxy
+fi
+if [ -n "${CROWDSEC_SPOA_BIN:-}" ]; then
+  verified "$CROWDSEC_SPOA_BIN" || { echo "crowdsec-spoa-bouncer does not match its recorded checksum" >&2; exit 1; }
+  install -m 0755 "$CROWDSEC_SPOA_BIN" /usr/local/bin/crowdsec-spoa-bouncer
 fi
 if [ -n "${CORAZA_SPOA_BIN:-}" ]; then
   verified "$CORAZA_SPOA_BIN" || { echo "coraza-spoa does not match its recorded checksum" >&2; exit 1; }
@@ -59,7 +66,7 @@ if [ -n "${CRS_TARBALL:-}" ]; then   # the OWASP Core Rule Set, version from ver
   tar -xzf "$CRS_TARBALL" -C "/usr/share/coreruleset/$CRS_VERSION" --strip-components=1
   ln -sfn "/usr/share/coreruleset/$CRS_VERSION" /usr/share/coreruleset/current
 fi
-install -m 0644 "$SRC"/files/sy-auth.service "$SRC"/files/coraza-spoa.service /etc/systemd/system/
+install -m 0644 "$SRC"/files/sy-auth.service "$SRC"/files/coraza-spoa.service "$SRC"/files/crowdsec-spoa-bouncer.service /etc/systemd/system/
 install -d -m 0755 /etc/switchyard /etc/switchyard/agent /etc/switchyard/haproxy /etc/switchyard/frr \
   /etc/switchyard/keepalived /run/switchyard
 install -m 0644 "$SRC"/files/sy-agent.service "$SRC"/files/sy-agent-renew.service \
@@ -86,6 +93,7 @@ ln -sf /etc/switchyard/frr/frr.conf /etc/frr/frr.conf
 sed -i 's/^bgpd=no/bgpd=yes/' /etc/frr/daemons
 sed -i 's/^bfdd=no/bfdd=yes/' /etc/frr/daemons
 install -m 0644 "$SRC"/files/vector.yaml /etc/switchyard/vector.yaml
+install -d -m 0755 /etc/switchyard/vector
 install -d /etc/systemd/system/vector.service.d
 install -m 0644 "$SRC"/files/vector-dropin.conf /etc/systemd/system/vector.service.d/switchyard.conf
 # node_exporter on 9100 (SD default); HAProxy's own exporter (8405) is a rendered listener.
@@ -95,7 +103,7 @@ sed -i 's#^ARGS=.*#ARGS="--web.listen-address=:9100"#' /etc/default/prometheus-n
 # HAProxy runs the bootstrap config until the first apply (the Data Plane API reloads it). Keepalived and FRR are
 # enabled too, but each skips itself until the controller's config file exists (drop-ins), so an SE that reboots
 # comes back with its VIP and BGP sessions without the controller (SEs must survive a controller outage).
-systemctl enable haproxy frr keepalived nftables sy-auth coraza-spoa 2>/dev/null || true
+systemctl enable haproxy frr keepalived nftables sy-auth coraza-spoa crowdsec-spoa-bouncer 2>/dev/null || true
 systemctl enable vector dataplaneapi.service sy-agent-enroll.service sy-agent.service sy-agent-renew.timer prometheus-node-exporter \
   qemu-guest-agent chrony 2>/dev/null || true
 # Generalize so clones get fresh identities.

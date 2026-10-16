@@ -31,7 +31,8 @@ from urllib.parse import urlparse
 
 from switchyard.adapters.agent import BundleSigner
 from switchyard.adapters.cloudflare import Cloudflare, HttpCloudflare
-from switchyard.adapters.git import GitLabMirror, GitMirror
+from switchyard.adapters.crowdsec import HttpCrowdSec
+from switchyard.adapters.git import GitMirror
 from switchyard.adapters.grafana import HttpGrafana
 from switchyard.adapters.iplists import HttpIpLists
 from switchyard.adapters.notify import HttpNotifier, SmtpSettings
@@ -61,12 +62,14 @@ from switchyard.services.certificates import (
 from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases
 from switchyard.services.controller_settings import CONTROLLER_TICK_JOB, ControllerSettings
+from switchyard.services.crowdsec import CrowdSecIntegration
 from switchyard.services.devices import DeviceService
 from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.dns_records import SYNC_DNS_RECORDS_JOB, DnsRecordSync
 from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.gc import GC_JOB, GarbageCollector
+from switchyard.services.git_mirror import GitMirrorSettings
 from switchyard.services.grafana import GrafanaConfig, GrafanaService
 from switchyard.services.gslb import (
     PROBE_GSLB_JOB,
@@ -340,12 +343,14 @@ def gslb_service(db: Databases) -> GslbService | None:
     return GslbService(db, HttpPowerDns(url, key, server_id=server))
 
 
-def git_mirror() -> GitMirror | None:
-    """The GitLab mirror, if configured."""
-    url = os.environ.get("SWITCHYARD_GITLAB_URL")
-    project = os.environ.get("SWITCHYARD_GITLAB_PROJECT")
-    token = os.environ.get("SWITCHYARD_GITLAB_TOKEN")
-    return GitLabMirror(url, project, token) if url and project and token else None
+def git_mirror(db: Databases, secrets: SecretsReader) -> GitMirror:
+    """The Git mirror the worker writes with.
+
+    Reads the settings saved on the Git mirror page each time, so a change applies without a
+    restart. Without saved settings, ``SWITCHYARD_GITLAB_URL``, ``SWITCHYARD_GITLAB_PROJECT`` and
+    ``SWITCHYARD_GITLAB_TOKEN`` still work. When neither is set, mirror jobs do nothing.
+    """
+    return GitMirrorSettings(db, secrets)
 
 
 def infra_service(db: Databases, secrets: SecretsReader) -> InfraService | None:
@@ -491,11 +496,12 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     certs = certificates(db, secrets)
     discovery = discovery_service(db)
     lists = ip_list_source()
-    iplists = IpListSync(db, lists, ChangeSetService(db)) if lists else None
+    crowdsec = CrowdSecIntegration(db, HttpCrowdSec(), secrets)
+    iplists = IpListSync(db, lists, ChangeSetService(db), crowdsec)
     handlers = build_handlers(
         db,
         pipeline,
-        git_mirror(),
+        git_mirror(db, secrets),
         status,
         infra_service(db, secrets),
         certs,
@@ -535,8 +541,7 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         schedule[PROBE_GSLB_JOB] = timedelta(minutes=1)
     if discovery is not None:
         schedule[DISCOVER_POOLS_JOB] = timedelta(minutes=1)
-    if iplists is not None:
-        schedule[SYNC_IP_LISTS_JOB] = timedelta(hours=6)
+    schedule[SYNC_IP_LISTS_JOB] = timedelta(hours=6)
     if certs is not None:
         schedule[RENEW_CERTS_JOB] = timedelta(days=1)
         if os.environ.get("SWITCHYARD_CLOUDFLARE_TOKEN"):

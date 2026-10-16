@@ -55,6 +55,16 @@ fi
 if [ -e /usr/share/coreruleset/current ]; then
   [ -f /usr/share/coreruleset/current/crs-setup.conf.example ] && [ -d /usr/share/coreruleset/current/rules ] || fail "Core Rule Set"
 fi
+# The CrowdSec slot (ADR 0215): user, unit, config directory, and the binary when supplied.
+id crowdsec-spoa >/dev/null 2>&1 || fail "user crowdsec-spoa"
+[ -d /etc/switchyard/crowdsec ] || fail "/etc/switchyard/crowdsec"
+grep -q 'ConditionPathExists=/etc/switchyard/crowdsec/spoa-bouncer.yaml' /etc/systemd/system/crowdsec-spoa-bouncer.service || fail "crowdsec-spoa-bouncer must wait for its config"
+systemd-analyze verify /etc/systemd/system/crowdsec-spoa-bouncer.service 2>&1 | grep -v -E 'not executable|crowdsec-spoa|ConditionPathExists' || true
+# The configuration the controller renders (crowdsec-config.yaml, kept equal to the renderer's output by a unit test) must
+# pass the bouncer's own test mode.
+if [ -x /usr/local/bin/crowdsec-spoa-bouncer ]; then
+  /usr/local/bin/crowdsec-spoa-bouncer -c /opt/se-image/test/crowdsec-config.yaml -t >/tmp/crowdsec.out 2>&1 || { cat /tmp/crowdsec.out >&2; fail "crowdsec-spoa-bouncer refuses the rendered configuration"; }
+fi
 systemd-analyze verify /etc/systemd/system/sy-auth.service 2>&1 | grep -v -E 'not executable|oauth2-proxy|ConditionPathExists' || true
 [ ! -x /usr/local/bin/oauth2-proxy ] || /usr/local/bin/oauth2-proxy --version | grep -q 'oauth2-proxy' || fail "oauth2-proxy does not run"
 [ ! -s /etc/machine-id ] || fail "machine-id not cleared"

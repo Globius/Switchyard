@@ -8,7 +8,7 @@ import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ApiError, api, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
-import { useCan } from "@/auth/session";
+import { useCan, useMe } from "@/auth/session";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
 import { DraftMarker, StatusPill } from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
@@ -35,7 +35,14 @@ type Policy =
   | components["schemas"]["DirectoryPolicySetRead"]
   | components["schemas"]["PosturePolicySetRead"];
 type Kind = "redirect" | "allow_list" | RuleKind | SecurityKind;
-const SECURITY_KINDS: SecurityKind[] = ["access", "jwt", "client_cert", "waf", "protection"];
+const SECURITY_KINDS: SecurityKind[] = [
+  "access",
+  "jwt",
+  "client_cert",
+  "waf",
+  "crowdsec",
+  "protection",
+];
 type Rule = components["schemas"]["RedirectRule"];
 const CODES = [301, 302, 303, 307, 308] as const;
 const CODE_NAMES: Record<(typeof CODES)[number], string> = {
@@ -135,8 +142,25 @@ function PolicySheet({
   const [problem, setProblem] = useState<unknown>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const cidr = useMemo(() => parseCidrs(cidrText), [cidrText]);
+  const features = useMe().data?.features;
+  const feeds = features?.ip_list_feeds ?? [];
+  // Where a new allow list gets its networks: typed here, a reputation feed, or countries.
+  const [source, setSource] = useState("manual");
+  const [countryText, setCountryText] = useState("");
+  const countries = countryText
+    .split(/[\s,]+/)
+    .map((c) => c.toUpperCase())
+    .filter(Boolean);
+  const kept = !policy && kind === "allow_list" && source !== "manual";
 
-  const body = kind === "redirect" ? { kind, name, rules } : { kind, name, cidrs: cidr.cidrs };
+  const body =
+    kind === "redirect"
+      ? { kind, name, rules }
+      : kept && source === "geo"
+        ? { kind, name, managed_by: "geo" as const, countries, cidrs: [] }
+        : kept
+          ? { kind, name, managed_by: "reputation" as const, feed: source.slice(5), cidrs: [] }
+          : { kind, name, cidrs: cidr.cidrs };
   const original = policy
     ? JSON.stringify(
         policy.kind === "redirect"
@@ -151,7 +175,7 @@ function PolicySheet({
   async function submit() {
     setProblem(null);
     setErrors({});
-    if (kind === "allow_list" && cidr.error) {
+    if (kind === "allow_list" && !kept && cidr.error) {
       setErrors({ cidrs: `Line ${cidr.error.line}: ${cidr.error.message}` });
       return;
     }
@@ -245,7 +269,11 @@ function PolicySheet({
             {managed && (
               <p className="text-sm text-muted-foreground">
                 {t(
-                  "This list is kept in sync with Cloudflare's published ranges, so it is read-only here. Attach it to a virtual service to accept traffic only through Cloudflare.",
+                  policy?.kind === "allow_list" && policy.managed_by === "geo"
+                    ? "The controller keeps this list in step with the networks of its countries, so it is read-only here. Attach it to a virtual service as its deny list."
+                    : policy?.kind === "allow_list" && policy.managed_by === "reputation"
+                      ? "The controller keeps this list in step with a reputation feed (for example CrowdSec), so it is read-only here. Attach it to a virtual service as its deny list."
+                      : "This list is kept in sync with Cloudflare's published ranges, so it is read-only here. Attach it to a virtual service to accept traffic only through Cloudflare.",
                 )}
               </p>
             )}
@@ -264,6 +292,42 @@ function PolicySheet({
                     {errors.name}
                   </span>
                 )}
+              </label>
+            )}
+            {!policy && kind === "allow_list" && (feeds.length > 0 || features?.ip_list_geo) && (
+              <label className="block max-w-sm space-y-1.5 text-sm font-medium">
+                {t("Networks come from")}
+                <select
+                  aria-label={t("Networks come from")}
+                  className={INPUT}
+                  value={source}
+                  onChange={(e) => setSource(e.target.value)}
+                >
+                  <option value="manual">{t("This list (typed here)")}</option>
+                  {feeds.map((f) => (
+                    <option key={f} value={`feed:${f}`}>
+                      {f === "crowdsec"
+                        ? t("CrowdSec bans")
+                        : t("Reputation feed {name}", { name: f })}
+                    </option>
+                  ))}
+                  {features?.ip_list_geo && <option value="geo">{t("Countries")}</option>}
+                </select>
+              </label>
+            )}
+            {kept && source === "geo" && (
+              <label className="block max-w-sm space-y-1.5 text-sm font-medium">
+                {t("Countries")}
+                <input
+                  aria-label={t("Countries")}
+                  className={INPUT}
+                  placeholder="XX, YY"
+                  value={countryText}
+                  onChange={(e) => setCountryText(e.target.value)}
+                />
+                <span className="block text-xs font-normal text-muted-foreground">
+                  {t("ISO 3166 two-letter codes, separated by commas.")}
+                </span>
               </label>
             )}
             {kind === "redirect" ? (
@@ -436,6 +500,16 @@ function PolicySheet({
                   );
                 })}
               </section>
+            ) : kept ? (
+              <p className="text-sm text-muted-foreground">
+                {source === "geo"
+                  ? t(
+                      "The list starts empty and fills at the next sync (every six hours, as a change set). Attach it to a virtual service as its deny list.",
+                    )
+                  : t(
+                      "The list starts empty and fills at the next sync (every six hours, as a change set). Attach it to a virtual service as its deny list. An empty deny list denies nothing.",
+                    )}
+              </p>
             ) : (
               <label className="block space-y-1.5 text-sm font-medium">
                 {t("Allowed source ranges")}
@@ -696,6 +770,7 @@ export function Policies({ tenant }: { tenant: string }) {
                                 p.kind === "jwt" ||
                                 p.kind === "client_cert" ||
                                 p.kind === "waf" ||
+                                p.kind === "crowdsec" ||
                                 p.kind === "protection"
                               ? t(SECURITY_LABEL[p.kind])
                               : p.kind === "directory"
