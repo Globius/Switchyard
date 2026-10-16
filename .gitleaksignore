@@ -22,6 +22,7 @@
 269ecf59c7cf652b5360890e4f973da01b9ecc67:ui/src/api/schema.d.ts:private-key:10861
 281bfb2f836c52fd23a760e34afb89e9259bde3f:controller/tests/integration/test_acme_providers.py:private-key:576
 3398cb855e4212fd21b384d4d11e38d70bc32863:controller/tests/pipeline_env.py:private-key:37
+345f05f58d859f2572d5d9bd3d0b671e8044e1f8:controller/tests/integration/test_crowdsec_bouncer_e2e.py:generic-api-key:40
 377a7f000648db2d9842d626587f1cd38faa723f:deploy/telemetry/pve-smoke.sh:curl-auth-user:30
 377a7f000648db2d9842d626587f1cd38faa723f:deploy/telemetry/smoke.sh:curl-auth-user:25
 575c14131e95ed227974d8fd2b10fca2a4c76414:ui/tests/certs-policies.test.tsx:private-key:30
