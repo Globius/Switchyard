@@ -17,6 +17,7 @@ checked against the pinned SHA-256.
 
 import hashlib
 import io
+import secrets
 import tarfile
 import tempfile
 import time
@@ -38,7 +39,7 @@ from tests.lab import SUBNET, Lab
 CROWDSEC_IMAGE = "crowdsecurity/crowdsec:v1.7.0"
 EDGE, LAPI, BACKEND = "192.0.2.20", "192.0.2.30", "192.0.2.51"
 BANNED, OTHER = "192.0.2.98", "192.0.2.99"
-KEY = "e2e-bouncer-key-0123456789abcdef"
+KEY = secrets.token_hex(16)  # a fresh bouncer key per run, never a literal
 VERSIONS = Path(__file__).parents[3] / "se-image" / "versions.env"
 
 
