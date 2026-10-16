@@ -82,6 +82,9 @@ spec:
       {{- with .Values.proxy.tolerations }}
       tolerations: {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.proxy.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
 {{- if .Values.tls.enabled }}
 ---
 apiVersion: v1

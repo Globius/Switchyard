@@ -52,6 +52,10 @@ echo "$out" | grep -q 'runAsUser: 101' || fail "the proxy must use the nginx unp
 echo "$out" | grep -q 'name: proxy-conf' || fail "the read-only proxy needs writable generated configuration"
 echo "$out" | grep -q 'name: tls-tmp' || fail "the TLS sidecar needs its own writable tmp directory"
 echo "$out" | grep -q 'name: TRUSTED_PROXY_CIDRS' || fail "proxy trust must be configured explicitly"
+# 4d. proxy scheduling values reach the Deployment (the VIP needs proxy pods on the announcing nodes).
+out=$(render --set tls.secretName=sy-tls --set proxy.nodeSelector.role=edge   --set proxy.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key=edge)
+echo "$out" | grep -q 'role: edge' || fail "proxy.nodeSelector must be rendered"
+echo "$out" | grep -q 'nodeAffinity:' || fail "proxy.affinity must be rendered"
 # 5. Required values are enforced.
 helm template sy . >/dev/null 2>&1 && fail "rendering without publicUrl must fail"
 echo "helm chart checks passed"

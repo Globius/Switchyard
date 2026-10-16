@@ -13,6 +13,7 @@ Exit codes: 0 success, 1 not found / already exists, 2 invalid state or unrender
 
 import asyncio
 import contextlib
+import json
 import os
 import sys
 from collections.abc import Coroutine
@@ -388,8 +389,15 @@ def controller_revert(url: DatabaseUrl = DEFAULT_DATABASE_URL) -> None:
 def create_system_token(
     name: Annotated[str, typer.Option(help="Token name.")] = "bootstrap",
     url: DatabaseUrl = DEFAULT_DATABASE_URL,
+    as_json: Annotated[bool, typer.Option("--json", help="Print {name, token} as JSON.")] = False,
 ) -> None:
-    """Create a system-admin API token directly in the database (bootstrap and recovery)."""
+    """Create a system-admin API token directly in the database (bootstrap and recovery).
+
+    Prints the token and a newline, nothing else, so `TOKEN=$(syctl token)` captures it. A token
+    is `sy_` followed by URL-safe base64 characters (letters, digits, `-` and `_`); quote it in
+    shells and pass it as `Authorization: Bearer <token>`. With `--json` the output is
+    `{"name": ..., "token": ...}` for automation that parses output.
+    """
     from switchyard import runtime
     from switchyard.domain.workflow import Role
     from switchyard.services.context import Databases, Principal
@@ -410,7 +418,8 @@ def create_system_token(
         finally:
             await db.dispose()
 
-    typer.echo(run(go()))
+    token = run(go())
+    typer.echo(json.dumps({"name": name, "token": token}) if as_json else token)
 
 
 broker_app = typer.Typer(

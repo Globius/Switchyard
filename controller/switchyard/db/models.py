@@ -137,7 +137,8 @@ class SeGroupRow(TenantOwnedMixin, Base):
     maxconn: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("20000"))
     canary_seconds: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("30"))
     peers: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
-    autoscale: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # none_as_null: None must be SQL NULL, not JSON null, or `IS NOT NULL` would match it.
+    autoscale: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
 
 
 class SeGroupNetworkRow(Base):
