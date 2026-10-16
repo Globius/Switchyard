@@ -13,6 +13,7 @@ package ipvs
 
 import (
 	"context"
+	"math"
 	"os"
 	"regexp"
 	"sort"
@@ -168,7 +169,7 @@ func ParseTable(listing, stats []byte) map[key]*Entry {
 	}
 	walk(listing, func(e *Entry, f []string) { // Forward Weight ActiveConn InActConn
 		n := fields(strings.Join(f[min(1, len(f)):], " "))
-		if len(n) == 3 {
+		if len(n) == 3 && n[0] <= math.MaxUint32 { // a weight beyond uint32 is malformed; skip the line
 			e.Weight, e.Active, e.Inactive, e.seenListing = uint32(n[0]), n[1], n[2], true
 		}
 	})
