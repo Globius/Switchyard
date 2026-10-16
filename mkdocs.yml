@@ -58,6 +58,7 @@ nav:
       - Automatic scale-out of an SE group: autoscale.md
       - Packet capture on an engine: packet-capture.md
       - Country and reputation lists: ip-lists.md
+      - CrowdSec: crowdsec.md
       - IPv6 and dual-stack: ipv6.md
       - Kubernetes connector: kubernetes.md
       - Pool discovery by Proxmox tag: pool-discovery.md

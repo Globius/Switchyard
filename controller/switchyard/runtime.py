@@ -362,7 +362,9 @@ def ip_list_source() -> HttpIpLists | None:
     """Country and reputation list sources from the environment, or ``None`` when neither is set.
 
     ``SWITCHYARD_GEO_URL`` is a template with ``{cc}``; ``SWITCHYARD_REPUTATION_FEEDS`` is JSON
-    ``{"name": "url"}`` (ADR 0147).
+    ``{"name": "url"}`` (ADR 0147). ``SWITCHYARD_CROWDSEC_URL`` with ``SWITCHYARD_CROWDSEC_API_KEY``
+    adds the ``crowdsec`` feed; ``SWITCHYARD_CROWDSEC_ORIGINS`` (comma separated) filters it
+    (ADR 0213).
     """
     geo = os.environ.get("SWITCHYARD_GEO_URL") or None
     raw = os.environ.get("SWITCHYARD_REPUTATION_FEEDS") or "{}"
@@ -371,7 +373,17 @@ def ip_list_source() -> HttpIpLists | None:
         isinstance(k, str) and isinstance(v, str) for k, v in feeds.items()
     ):
         raise ValueError('SWITCHYARD_REPUTATION_FEEDS must be a JSON object of {"name": "url"}')
-    return HttpIpLists(geo, feeds) if geo or feeds else None
+    crowdsec = os.environ.get("SWITCHYARD_CROWDSEC_URL") or None
+    origins = os.environ.get("SWITCHYARD_CROWDSEC_ORIGINS", "")
+    if not (geo or feeds or crowdsec):
+        return None
+    return HttpIpLists(
+        geo,
+        feeds,
+        crowdsec_url=crowdsec,
+        crowdsec_key=os.environ.get("SWITCHYARD_CROWDSEC_API_KEY") or None,
+        crowdsec_origins=frozenset(o.strip() for o in origins.split(",") if o.strip()) or None,
+    )
 
 
 def discovery_service(db: Databases) -> DiscoveryService | None:

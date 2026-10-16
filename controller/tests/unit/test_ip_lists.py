@@ -227,3 +227,101 @@ def test_udp_services_cannot_use_a_deny_list() -> None:
     )
     d["virtual_services"][0]["ports"] = [{"port": 5353}]
     assert "udp_field_not_allowed" in codes(d)
+
+
+# -- CrowdSec (ADR 0213) ---------------------------------------------------------------------------
+
+_STREAM = {
+    "new": [
+        {"scope": "Ip", "value": "192.0.2.9", "type": "ban", "origin": "crowdsec"},
+        {"scope": "Range", "value": "198.51.100.0/24", "type": "ban", "origin": "CAPI"},
+        {"scope": "Ip", "value": "203.0.113.5", "type": "captcha", "origin": "crowdsec"},
+        {"scope": "Country", "value": "XX", "type": "ban", "origin": "cscli"},
+        {"scope": "Ip", "value": "2001:db8::7", "type": "ban", "origin": "crowdsec"},
+    ],
+    "deleted": None,
+}
+
+
+def crowdsec_source(**kw: Any) -> tuple[HttpIpLists, list[httpx.Request]]:
+    seen: list[httpx.Request] = []
+
+    def lapi(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.headers.get("x-api-key") != "bouncer-key":
+            return httpx.Response(403)
+        return httpx.Response(200, json=_STREAM)
+
+    return (
+        HttpIpLists(
+            None,
+            kw.get("feeds"),
+            crowdsec_url="https://lapi.invalid:8080/",
+            crowdsec_key=kw.get("key", "bouncer-key"),
+            crowdsec_origins=kw.get("origins"),
+            transport=httpx.MockTransport(lapi),
+        ),
+        seen,
+    )
+
+
+def test_only_ban_decisions_on_addresses_are_read() -> None:
+    import json
+
+    from switchyard.adapters.iplists import parse_crowdsec_decisions
+
+    assert parse_crowdsec_decisions(json.dumps(_STREAM)) == [
+        "192.0.2.9/32",
+        "198.51.100.0/24",
+        "2001:db8::7/128",
+    ]
+
+
+def test_decisions_can_be_limited_by_origin() -> None:
+    import json
+
+    from switchyard.adapters.iplists import parse_crowdsec_decisions
+
+    assert parse_crowdsec_decisions(json.dumps(_STREAM), frozenset({"crowdsec"})) == [
+        "192.0.2.9/32",
+        "2001:db8::7/128",
+    ]
+
+
+@pytest.mark.parametrize("body", ["not json", "[]", '{"new": 3}', '{"new": ["x"]}'])
+def test_a_wrong_answer_is_not_a_decision_stream(body: str) -> None:
+    from switchyard.adapters.iplists import parse_crowdsec_decisions
+
+    with pytest.raises(IpListError):
+        parse_crowdsec_decisions(body)
+
+
+def test_no_new_decisions_is_an_empty_list() -> None:
+    from switchyard.adapters.iplists import parse_crowdsec_decisions
+
+    assert parse_crowdsec_decisions('{"new": null, "deleted": null}') == []
+
+
+async def test_the_crowdsec_feed_is_fetched_with_the_bouncer_key() -> None:
+    s, seen = crowdsec_source()
+    assert "crowdsec" in s.feeds()
+    assert await s.feed("crowdsec") == ["192.0.2.9/32", "198.51.100.0/24", "2001:db8::7/128"]
+    assert str(seen[0].url) == "https://lapi.invalid:8080/v1/decisions/stream?startup=true"
+
+
+async def test_a_refused_key_is_a_list_error() -> None:
+    s, _ = crowdsec_source(key="wrong")
+    with pytest.raises(IpListError, match="HTTP 403"):
+        await s.feed("crowdsec")
+
+
+def test_crowdsec_needs_a_key_and_owns_its_feed_name() -> None:
+    with pytest.raises(ValueError, match="API key"):
+        HttpIpLists(None, None, crowdsec_url="https://lapi.invalid:8080")
+    with pytest.raises(ValueError, match="reserved"):
+        HttpIpLists(
+            None,
+            {"crowdsec": "https://x.invalid/a"},
+            crowdsec_url="https://lapi.invalid:8080",
+            crowdsec_key="k",
+        )

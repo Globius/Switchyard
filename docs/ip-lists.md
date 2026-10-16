@@ -9,7 +9,7 @@ The controller only fetches from addresses you configure, in the worker environm
 | Variable | Meaning |
 | --- | --- |
 | `SWITCHYARD_GEO_URL` | URL template with `{cc}`, the lower-case country code. Example: `https://www.ipdeny.com/ipblocks/data/aggregated/{cc}-aggregated.zone`. Or publish your own export of MaxMind data in the same format. |
-| `SWITCHYARD_REPUTATION_FEEDS` | JSON `{"name": "url"}`. Example: `{"spamhaus-drop": "https://www.spamhaus.org/drop/drop.txt"}`. A CrowdSec or other blocklist can be exported to this format. |
+| `SWITCHYARD_REPUTATION_FEEDS` | JSON `{"name": "url"}`. Example: `{"spamhaus-drop": "https://www.spamhaus.org/drop/drop.txt"}`. Other blocklists can be exported to this format. CrowdSec has its own source: [CrowdSec](crowdsec.md). |
 
 Each answer is a text file with one network or address per line; `#` and `;` start a comment. Redirects are not followed.
 Without either variable the job does not run and the lists stay as they are.
