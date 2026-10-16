@@ -11,7 +11,7 @@ VIP placement and a change-set based API, CLI and web UI.**
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Last commit](https://img.shields.io/github/last-commit/Globius/Switchyard)](https://github.com/Globius/Switchyard/commits/main)
 
-[Docs](https://globius.github.io/Switchyard/) · [Releases](https://github.com/Globius/Switchyard/releases) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[Docs](https://globius.github.io/Switchyard/) · [Releases](https://github.com/Globius/Switchyard/releases) · [Issues](https://github.com/Globius/Switchyard/issues) · [Contributing](https://github.com/Globius/Switchyard/blob/main/CONTRIBUTING.md) · [Security](https://github.com/Globius/Switchyard/security)
 
 </div>
 
