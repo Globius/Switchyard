@@ -95,3 +95,27 @@ def test_signed_bundles_name_the_engine_and_count_up() -> None:
     three = agent_pb2.Bundle()
     three.ParseFromString(fixed)
     assert three.sequence == 7
+
+
+@pytest.mark.parametrize("flag", [False, True])
+def test_token_prints_only_the_token_or_json(monkeypatch: pytest.MonkeyPatch, flag: bool) -> None:
+    import json
+
+    from switchyard import runtime
+    from switchyard.services.tokens import TokenService
+
+    class FakeDb:
+        async def dispose(self) -> None:
+            return None
+
+    async def create(self: object, *args: object) -> tuple[str, None]:
+        return "sy_ab-_cd", None
+
+    monkeypatch.setattr(runtime, "databases", lambda: FakeDb())
+    monkeypatch.setattr(TokenService, "create", create)
+    result = CliRunner().invoke(app, ["token", "--name", "n", *(["--json"] if flag else [])])
+    assert result.exit_code == 0, result.output
+    if flag:
+        assert json.loads(result.stdout) == {"name": "n", "token": "sy_ab-_cd"}
+    else:
+        assert result.stdout == "sy_ab-_cd\n"

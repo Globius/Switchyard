@@ -210,6 +210,8 @@ class Autoscaler:
         out = []
         for gid, group in sorted(groups.items(), key=lambda kv: kv[1].name):
             state = states.get(gid)
+            if not group.autoscale:  # a stored JSON null: the group has no settings
+                continue
             policy = Autoscale.model_validate(group.autoscale)
             out.append(
                 {
@@ -239,6 +241,8 @@ class Autoscaler:
                 ).scalars()
             ]
         for tenant_id, group_id, name, raw in wanted:
+            if not raw:  # JSON null stored by an older release counts as "no settings"
+                continue
             try:
                 outcome = await self._tick(tenant_id, group_id, name, Autoscale.model_validate(raw))
             except Exception:  # one group's trouble must not stop the others
