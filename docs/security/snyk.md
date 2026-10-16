@@ -39,3 +39,13 @@ error. The README badge is the repository-scoped one:
 ```markdown
 [![Snyk security](https://snyk.io/test/github/Globius/Switchyard/badge.svg)](https://snyk.io/test/github/Globius/Switchyard)
 ```
+
+## Container and IaC hardening (2026-10-16)
+
+- `deploy/prod/patroni/Dockerfile` pins its base image by digest and runs `apt-get upgrade` at build time, so
+  the image picks up fixed Debian packages. To refresh the pin, pull `postgres:17-bookworm` and copy its new
+  `sha256:` digest into the `FROM` line.
+- `.snyk` holds the only ignore: CVE-2023-45853 (zlib, `SNYK-DEBIAN12-ZLIB-6008961`), which Debian has not
+  fixed. It carries a reason and expires on 2027-01-16; renew it only after re-checking for a fix.
+- Pods in `deploy/helm/examples/openbao-test.yaml` run as UID 10001 with a read-only root filesystem, all
+  capabilities dropped, no privilege escalation, and CPU and memory limits.

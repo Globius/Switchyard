@@ -32,19 +32,22 @@ spec:
   template:
     metadata: {labels: {app: openbao}}
     spec:
-      securityContext: {runAsUser: 100, runAsGroup: 1000, fsGroup: 1000}
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
       containers:
         - name: openbao
           image: openbao/openbao:latest
           command: ["bao", "server", "-config=/openbao/config/openbao.hcl"]   # skips the image's chown entrypoint
           ports: [{containerPort: 8200}]
-          securityContext: {capabilities: {add: [IPC_LOCK]}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}   # disable_mlock = true, so IPC_LOCK is not needed
+          resources: {requests: {cpu: 50m, memory: 128Mi}, limits: {cpu: 500m, memory: 512Mi}}
           volumeMounts:
             - {name: config, mountPath: /openbao/config}
             - {name: data, mountPath: /openbao/file}
+            - {name: tmp, mountPath: /tmp}
       volumes:
         - name: config
           configMap: {name: openbao-config}
+        - {name: tmp, emptyDir: {}}
   volumeClaimTemplates:
     - metadata: {name: data}
       spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 1Gi}}}
