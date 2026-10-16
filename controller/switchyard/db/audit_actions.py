@@ -84,6 +84,8 @@ CATALOG: tuple[AuditAction, ...] = (
     _a("backup.created", "A configuration backup was written."),
     _a("backup.restored", "A configuration backup was restored into this controller."),
     _a("release_feed.configured", "The release feed settings were changed."),
+    _a("crowdsec.configured", "The CrowdSec integration settings were changed."),
+    _a("crowdsec.sync_requested", "A CrowdSec list sync was requested with Sync now."),
     _a("backup.failed", "A configuration backup could not be written."),
     _a("backup_target.created", "A backup destination was added."),
     _a("backup_target.deleted", "A backup destination was removed."),

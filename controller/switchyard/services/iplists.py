@@ -39,6 +39,7 @@ from switchyard.domain.changes import Action, ChangeOp, ObjectType
 from switchyard.domain.workflow import ChangeSetState, Role
 from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases, Principal
+from switchyard.services.crowdsec import CROWDSEC_FEED, CrowdSecIntegration
 from switchyard.services.errors import PermissionDeniedError
 
 log = logging.getLogger("switchyard.iplists")
@@ -75,28 +76,41 @@ def shrinks_too_far(old: int, new: int) -> bool:
 class IpListSync:
     """Runs the sync for every tenant."""
 
-    def __init__(self, db: Databases, source: IpLists, change_sets: ChangeSetService) -> None:
+    def __init__(
+        self,
+        db: Databases,
+        source: IpLists | None,
+        change_sets: ChangeSetService,
+        crowdsec: CrowdSecIntegration | None = None,
+    ) -> None:
         """Create the service.
 
         Args:
             db: Database handles.
-            source: Where lists come from.
+            source: Where country and feed lists come from; ``None`` when none is configured.
             change_sets: Used to open and apply the change sets.
+            crowdsec: The CrowdSec integration, which provides the feed ``crowdsec`` (ADR 0213).
         """
         self._db = db
         self._source = source
         self._change_sets = change_sets
+        self._crowdsec = crowdsec
 
     async def _fetch(self, policy: dm.AllowListPolicySet) -> list[str] | None:
         """The wanted networks, or ``None`` when the list must stay as it is."""
         try:
             if policy.managed_by == "geo":
-                if not self._source.has_geo():
+                if self._source is None or not self._source.has_geo():
                     log.warning("%s: country lists are not configured", policy.name)
                     return None
                 parts = [await self._source.country(cc) for cc in policy.countries]
+            elif policy.feed == CROWDSEC_FEED:
+                if self._crowdsec is None or not (await self._crowdsec.config()).configured:
+                    log.warning("%s: CrowdSec is not configured", policy.name)
+                    return None
+                parts = [await self._crowdsec.networks()]
             else:
-                if policy.feed not in self._source.feeds():
+                if self._source is None or policy.feed not in self._source.feeds():
                     log.warning("%s: feed %s is not configured", policy.name, policy.feed)
                     return None
                 parts = [await self._source.feed(policy.feed or "")]

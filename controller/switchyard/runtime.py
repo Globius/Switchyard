@@ -31,6 +31,7 @@ from urllib.parse import urlparse
 
 from switchyard.adapters.agent import BundleSigner
 from switchyard.adapters.cloudflare import Cloudflare, HttpCloudflare
+from switchyard.adapters.crowdsec import HttpCrowdSec
 from switchyard.adapters.git import GitLabMirror, GitMirror
 from switchyard.adapters.grafana import HttpGrafana
 from switchyard.adapters.iplists import HttpIpLists
@@ -61,6 +62,7 @@ from switchyard.services.certificates import (
 from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases
 from switchyard.services.controller_settings import CONTROLLER_TICK_JOB, ControllerSettings
+from switchyard.services.crowdsec import CrowdSecIntegration
 from switchyard.services.devices import DeviceService
 from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.dns_providers import DnsProviders
@@ -362,9 +364,7 @@ def ip_list_source() -> HttpIpLists | None:
     """Country and reputation list sources from the environment, or ``None`` when neither is set.
 
     ``SWITCHYARD_GEO_URL`` is a template with ``{cc}``; ``SWITCHYARD_REPUTATION_FEEDS`` is JSON
-    ``{"name": "url"}`` (ADR 0147). ``SWITCHYARD_CROWDSEC_URL`` with ``SWITCHYARD_CROWDSEC_API_KEY``
-    adds the ``crowdsec`` feed; ``SWITCHYARD_CROWDSEC_ORIGINS`` (comma separated) filters it
-    (ADR 0213).
+    ``{"name": "url"}`` (ADR 0147).
     """
     geo = os.environ.get("SWITCHYARD_GEO_URL") or None
     raw = os.environ.get("SWITCHYARD_REPUTATION_FEEDS") or "{}"
@@ -373,17 +373,7 @@ def ip_list_source() -> HttpIpLists | None:
         isinstance(k, str) and isinstance(v, str) for k, v in feeds.items()
     ):
         raise ValueError('SWITCHYARD_REPUTATION_FEEDS must be a JSON object of {"name": "url"}')
-    crowdsec = os.environ.get("SWITCHYARD_CROWDSEC_URL") or None
-    origins = os.environ.get("SWITCHYARD_CROWDSEC_ORIGINS", "")
-    if not (geo or feeds or crowdsec):
-        return None
-    return HttpIpLists(
-        geo,
-        feeds,
-        crowdsec_url=crowdsec,
-        crowdsec_key=os.environ.get("SWITCHYARD_CROWDSEC_API_KEY") or None,
-        crowdsec_origins=frozenset(o.strip() for o in origins.split(",") if o.strip()) or None,
-    )
+    return HttpIpLists(geo, feeds) if geo or feeds else None
 
 
 def discovery_service(db: Databases) -> DiscoveryService | None:
@@ -503,7 +493,8 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     certs = certificates(db, secrets)
     discovery = discovery_service(db)
     lists = ip_list_source()
-    iplists = IpListSync(db, lists, ChangeSetService(db)) if lists else None
+    crowdsec = CrowdSecIntegration(db, HttpCrowdSec(), secrets)
+    iplists = IpListSync(db, lists, ChangeSetService(db), crowdsec)
     handlers = build_handlers(
         db,
         pipeline,
@@ -547,8 +538,7 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         schedule[PROBE_GSLB_JOB] = timedelta(minutes=1)
     if discovery is not None:
         schedule[DISCOVER_POOLS_JOB] = timedelta(minutes=1)
-    if iplists is not None:
-        schedule[SYNC_IP_LISTS_JOB] = timedelta(hours=6)
+    schedule[SYNC_IP_LISTS_JOB] = timedelta(hours=6)
     if certs is not None:
         schedule[RENEW_CERTS_JOB] = timedelta(days=1)
         if os.environ.get("SWITCHYARD_CLOUDFLARE_TOKEN"):
