@@ -17,17 +17,22 @@ Example:
 
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
-
-from sqlalchemy import select
 
 from switchyard.adapters.crowdsec import CrowdSec, CrowdSecError, check_url
 from switchyard.adapters.iplists import IpListError
 from switchyard.adapters.secrets import SecretNotFoundError, SecretsReader
 from switchyard.db import audit_log
 from switchyard.db.auth_models import SystemSettingRow
+from switchyard.db.crowdsec_config import (
+    CONFIG_KEY,
+    CrowdSecConfig,
+    get_setting,
+    load_config,
+    normalize_origins,
+)
 from switchyard.db.tenancy import admin_session
 from switchyard.domain import validators as v
 from switchyard.jobs import queue
@@ -37,7 +42,6 @@ from switchyard.services.errors import FieldErrors
 
 log = logging.getLogger("switchyard.crowdsec")
 
-CONFIG_KEY = "crowdsec"
 STATE_KEY = "crowdsec_state"
 #: Name of the reputation feed that this integration provides.
 CROWDSEC_FEED = "crowdsec"
@@ -46,40 +50,6 @@ DEFAULT_KEY_REF = "kv/system/crowdsec/bouncer-key"
 #: The job that keeps managed IP lists current (see :mod:`switchyard.services.iplists`).
 SYNC_JOB = "sync_ip_lists"
 _MAX_ORIGINS = 20
-
-
-def normalize_origins(value: str | list[str] | None) -> list[str]:
-    """A comma-separated string or a list as a clean list of origin names.
-
-    Example:
-        >>> normalize_origins(["CAPI", " crowdsec "]), normalize_origins(None)
-        (['CAPI', 'crowdsec'], [])
-    """
-    items = value.split(",") if isinstance(value, str) else (value or [])
-    return [o.strip() for o in items if o and o.strip()]
-
-
-@dataclass(frozen=True)
-class CrowdSecConfig:
-    """The effective settings.
-
-    Attributes:
-        url: Base URL of the CrowdSec local API; empty when not configured.
-        key_ref: Reference of the bouncer key in the secrets backend; empty when it comes from the
-            environment or is not set.
-        origins: Keep only decisions from these origins; empty keeps all.
-        source: ``database``, ``environment`` or ``none``.
-    """
-
-    url: str = ""
-    key_ref: str = ""
-    origins: list[str] = field(default_factory=list)
-    source: str = "none"
-
-    @property
-    def configured(self) -> bool:
-        """True when there is a URL."""
-        return bool(self.url)
 
 
 @dataclass(frozen=True)
@@ -140,11 +110,7 @@ class CrowdSecIntegration:
         self._secrets = secrets
 
     async def _get(self, key: str) -> Any:
-        async with admin_session(self._db.admin) as session:
-            row = (
-                await session.execute(select(SystemSettingRow).where(SystemSettingRow.key == key))
-            ).scalar_one_or_none()
-        return None if row is None else row.value
+        return await get_setting(self._db.admin, key)
 
     async def _put(self, session: Any, key: str, value: Any, actor: str) -> None:
         row = await session.get(SystemSettingRow, key)
@@ -157,20 +123,7 @@ class CrowdSecIntegration:
         """The effective settings (a system-admin check when ``principal`` is given)."""
         if principal is not None:
             require(principal, "manage", "controller")
-        raw = await self._get(CONFIG_KEY)
-        if raw and raw.get("url"):
-            return CrowdSecConfig(
-                raw["url"], raw.get("key_ref", ""), list(raw.get("origins", [])), "database"
-            )
-        env_url = os.environ.get("SWITCHYARD_CROWDSEC_URL") or ""
-        if env_url:
-            return CrowdSecConfig(
-                env_url,
-                "",
-                normalize_origins(os.environ.get("SWITCHYARD_CROWDSEC_ORIGINS")),
-                "environment",
-            )
-        return CrowdSecConfig()
+        return await load_config(self._db.admin)
 
     async def set_config(
         self, principal: Principal, body: dict[str, Any], *, request_id: str | None = None

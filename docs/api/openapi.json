@@ -7043,6 +7043,380 @@
         "title": "CrowdSecIn",
         "type": "object"
       },
+      "CrowdSecPolicySet": {
+        "additionalProperties": false,
+        "description": "Block clients that a CrowdSec security engine has banned, on the engine itself (ADR 0215).\n\nThe CrowdSec SPOA bouncer runs on every engine, pulls the decision stream from the operator's\nCrowdSec local API (Admin > Integrations) and answers HAProxy per request. New policies start in\n``detect`` mode: the verdict is logged (``{ban}`` before the request line) and nothing is\nblocked, so a tenant can read the logs before turning blocking on. A service can carry one\nCrowdSec policy. Captcha decisions are not enforced; they are let through.\n\nAttributes:\n    mode: ``detect`` logs only; ``block`` refuses banned clients with 403.\n    fail_mode: What to do when the bouncer does not answer in ``timeout_ms``: ``open`` lets the\n        request through, ``closed`` refuses it with 503. Banned clients stay blocked while the\n        bouncer runs even if the CrowdSec API is down (it keeps its decisions in memory).\n    timeout_ms: How long HAProxy waits for the bouncer's verdict.\n    allow_cidrs: Client networks that are never checked (office, monitoring, partners).\n    excluded_paths: Paths that skip the check (``path_beg`` match), such as health endpoints.\n\nExample:\n    >>> CrowdSecPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"c\"}\n    ... ).mode\n    'detect'",
+        "properties": {
+          "allow_cidrs": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 64,
+            "title": "Allow Cidrs",
+            "type": "array"
+          },
+          "excluded_paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Excluded Paths",
+            "type": "array"
+          },
+          "fail_mode": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Fail Mode",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "crowdsec",
+            "default": "crowdsec",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "default": "detect",
+            "enum": [
+              "detect",
+              "block"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "timeout_ms": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 10.0,
+            "title": "Timeout Ms",
+            "type": "integer"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name"
+        ],
+        "title": "CrowdSecPolicySet",
+        "type": "object"
+      },
+      "CrowdSecPolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_cidrs": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 64,
+            "title": "Allow Cidrs",
+            "type": "array"
+          },
+          "excluded_paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Excluded Paths",
+            "type": "array"
+          },
+          "fail_mode": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Fail Mode",
+            "type": "string"
+          },
+          "kind": {
+            "const": "crowdsec",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "default": "detect",
+            "enum": [
+              "detect",
+              "block"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "timeout_ms": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 10.0,
+            "title": "Timeout Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "CrowdSecPolicySetCreate",
+        "type": "object"
+      },
+      "CrowdSecPolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_cidrs": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "format": "ipv4network",
+                      "type": "string"
+                    },
+                    {
+                      "format": "ipv6network",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Cidrs"
+          },
+          "excluded_paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded Paths"
+          },
+          "fail_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "open",
+                  "closed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fail Mode"
+          },
+          "kind": {
+            "const": "crowdsec",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "detect",
+                  "block"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "timeout_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Ms"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "CrowdSecPolicySetPatch",
+        "type": "object"
+      },
+      "CrowdSecPolicySetRead": {
+        "additionalProperties": false,
+        "description": "CrowdSecPolicySet as returned by the API.",
+        "properties": {
+          "allow_cidrs": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 64,
+            "title": "Allow Cidrs",
+            "type": "array"
+          },
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "excluded_paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Excluded Paths",
+            "type": "array"
+          },
+          "fail_mode": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Fail Mode",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "crowdsec",
+            "default": "crowdsec",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "default": "detect",
+            "enum": [
+              "detect",
+              "block"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "timeout_ms": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 10.0,
+            "title": "Timeout Ms",
+            "type": "integer"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "CrowdSecPolicySetRead",
+        "type": "object"
+      },
       "CrowdSecRead": {
         "additionalProperties": false,
         "description": "The settings in effect and how the last read of the decision stream went.",
@@ -15087,7 +15461,7 @@
         "title": "OsMinimum",
         "type": "object"
       },
-      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
+      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__CrowdSecPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
         "additionalProperties": false,
         "properties": {
           "items": {
@@ -15097,6 +15471,7 @@
                   "access": "#/components/schemas/AccessPolicySetRead",
                   "allow_list": "#/components/schemas/AllowListPolicySetRead",
                   "client_cert": "#/components/schemas/ClientCertPolicySetRead",
+                  "crowdsec": "#/components/schemas/CrowdSecPolicySetRead",
                   "directory": "#/components/schemas/DirectoryPolicySetRead",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
                   "jwt": "#/components/schemas/JwtPolicySetRead",
@@ -15131,6 +15506,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/WafPolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/CrowdSecPolicySetRead"
                 },
                 {
                   "$ref": "#/components/schemas/ProtectionPolicySetRead"
@@ -15171,7 +15549,7 @@
         "required": [
           "items"
         ],
-        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead, DirectoryPolicySetRead, PosturePolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
+        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, CrowdSecPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead, DirectoryPolicySetRead, PosturePolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
         "type": "object"
       },
       "Page_Annotated_Union_VrrpProfileRead__BgpProfileRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
@@ -22522,6 +22900,7 @@
                   "access": "#/components/schemas/AccessPolicySet",
                   "allow_list": "#/components/schemas/AllowListPolicySet",
                   "client_cert": "#/components/schemas/ClientCertPolicySet",
+                  "crowdsec": "#/components/schemas/CrowdSecPolicySet",
                   "directory": "#/components/schemas/DirectoryPolicySet",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySet",
                   "jwt": "#/components/schemas/JwtPolicySet",
@@ -22556,6 +22935,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/WafPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/CrowdSecPolicySet"
                 },
                 {
                   "$ref": "#/components/schemas/ProtectionPolicySet"
@@ -51943,7 +52325,7 @@
                   ]
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
+                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__CrowdSecPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
                 }
               }
             },
@@ -52111,6 +52493,7 @@
                     "access": "#/components/schemas/AccessPolicySetCreate",
                     "allow_list": "#/components/schemas/AllowListPolicySetCreate",
                     "client_cert": "#/components/schemas/ClientCertPolicySetCreate",
+                    "crowdsec": "#/components/schemas/CrowdSecPolicySetCreate",
                     "directory": "#/components/schemas/DirectoryPolicySetCreate",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetCreate",
                     "jwt": "#/components/schemas/JwtPolicySetCreate",
@@ -52145,6 +52528,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/WafPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CrowdSecPolicySetCreate"
                   },
                   {
                     "$ref": "#/components/schemas/ProtectionPolicySetCreate"
@@ -52519,6 +52905,7 @@
                       "access": "#/components/schemas/AccessPolicySetRead",
                       "allow_list": "#/components/schemas/AllowListPolicySetRead",
                       "client_cert": "#/components/schemas/ClientCertPolicySetRead",
+                      "crowdsec": "#/components/schemas/CrowdSecPolicySetRead",
                       "directory": "#/components/schemas/DirectoryPolicySetRead",
                       "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
                       "jwt": "#/components/schemas/JwtPolicySetRead",
@@ -52553,6 +52940,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/WafPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CrowdSecPolicySetRead"
                     },
                     {
                       "$ref": "#/components/schemas/ProtectionPolicySetRead"
@@ -52738,6 +53128,7 @@
                     "access": "#/components/schemas/AccessPolicySetPatch",
                     "allow_list": "#/components/schemas/AllowListPolicySetPatch",
                     "client_cert": "#/components/schemas/ClientCertPolicySetPatch",
+                    "crowdsec": "#/components/schemas/CrowdSecPolicySetPatch",
                     "directory": "#/components/schemas/DirectoryPolicySetPatch",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetPatch",
                     "jwt": "#/components/schemas/JwtPolicySetPatch",
@@ -52772,6 +53163,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/WafPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CrowdSecPolicySetPatch"
                   },
                   {
                     "$ref": "#/components/schemas/ProtectionPolicySetPatch"

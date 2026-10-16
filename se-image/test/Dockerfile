@@ -13,6 +13,10 @@ FROM ${REGISTRY}debian:trixie AS auth
 COPY se-image/versions.env /versions.env
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates  && . /versions.env && curl -fsSL -o /o.tgz "https://github.com/oauth2-proxy/oauth2-proxy/releases/download/$OAUTH2_PROXY_VERSION/oauth2-proxy-$OAUTH2_PROXY_VERSION.linux-amd64.tar.gz"  && echo "$OAUTH2_PROXY_SHA256_LINUX_AMD64  /o.tgz" | sha256sum -c -  && tar -xzf /o.tgz --strip-components=1 "oauth2-proxy-$OAUTH2_PROXY_VERSION.linux-amd64/oauth2-proxy" -C /
 
+FROM ${REGISTRY}debian:trixie AS crowdsec
+COPY se-image/versions.env /versions.env
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates  && . /versions.env && curl -fsSL -o /c.tgz "https://github.com/crowdsecurity/cs-haproxy-spoa-bouncer/releases/download/$CROWDSEC_SPOA_VERSION/crowdsec-spoa-bouncer-linux-amd64.tgz"  && echo "$CROWDSEC_SPOA_SHA256_LINUX_AMD64  /c.tgz" | sha256sum -c -  && tar -xzf /c.tgz --strip-components=1 "crowdsec-spoa-bouncer-$CROWDSEC_SPOA_VERSION/crowdsec-spoa-bouncer" -C /
+
 FROM ${REGISTRY}golang:1.26 AS waf
 COPY se-image/versions.env /versions.env
 RUN . /versions.env && GOBIN=/out CGO_ENABLED=0 go install "github.com/corazawaf/coraza-spoa@$CORAZA_SPOA_VERSION"  && curl -fsSL -o /crs.tgz "https://github.com/coreruleset/coreruleset/archive/refs/tags/v$CRS_VERSION.tar.gz"
@@ -21,9 +25,10 @@ FROM ${REGISTRY}debian:trixie AS provisioned
 COPY --from=agent /sy-agent /tmp/sy-agent
 COPY --from=auth /oauth2-proxy /tmp/oauth2-proxy
 COPY --from=waf /out/coraza-spoa /tmp/coraza-spoa
+COPY --from=crowdsec /crowdsec-spoa-bouncer /tmp/crowdsec-spoa-bouncer
 COPY --from=waf /crs.tgz /tmp/coreruleset.tar.gz
 COPY --from=dp /usr/local/bin/dataplaneapi /tmp/dataplaneapi
 COPY se-image/ /opt/se-image/
-RUN AGENT_BIN=/tmp/sy-agent DATAPLANE_BIN=/tmp/dataplaneapi AUTH_PROXY_BIN=/tmp/oauth2-proxy CORAZA_SPOA_BIN=/tmp/coraza-spoa CRS_TARBALL=/tmp/coreruleset.tar.gz /opt/se-image/provision.sh
+RUN AGENT_BIN=/tmp/sy-agent DATAPLANE_BIN=/tmp/dataplaneapi AUTH_PROXY_BIN=/tmp/oauth2-proxy CORAZA_SPOA_BIN=/tmp/coraza-spoa CROWDSEC_SPOA_BIN=/tmp/crowdsec-spoa-bouncer CRS_TARBALL=/tmp/coreruleset.tar.gz /opt/se-image/provision.sh
 FROM provisioned
 RUN sh /opt/se-image/test/check.sh

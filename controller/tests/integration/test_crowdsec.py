@@ -209,3 +209,26 @@ async def test_a_failed_read_keeps_the_list_and_shows_the_error(rig: Rig) -> Non
 
 
 ROOT_TENANT = Principal("system:iplists", Role.OPERATOR, frozenset({TENANT}))
+
+
+async def test_a_crowdsec_policy_survives_the_database(pg_url: str) -> None:
+    d = world_data()
+    d["policy_sets"] = [
+        {
+            "id": "ps-cs",
+            "tenant_id": "t-acme",
+            "name": "cs",
+            "kind": "crowdsec",
+            "mode": "block",
+            "fail_mode": "closed",
+            "allow_cidrs": ["198.51.100.0/24"],
+            "excluded_paths": ["/healthz"],
+        }
+    ]
+    async with world(pg_url, d) as w:
+        policy = next(
+            p for p in (await w.snapshot()).policy_sets if isinstance(p, dm.CrowdSecPolicySet)
+        )
+    assert (policy.mode, policy.fail_mode) == ("block", "closed")
+    assert [str(n) for n in policy.allow_cidrs] == ["198.51.100.0/24"]
+    assert list(policy.excluded_paths) == ["/healthz"]

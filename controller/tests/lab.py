@@ -19,7 +19,7 @@ import tarfile
 import tempfile
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -102,12 +102,12 @@ frontend f
 """
 
 
-def tar_of(files: dict[str, str], *, executable: set[str] | None = None) -> bytes:
+def tar_of(files: Mapping[str, str | bytes], *, executable: set[str] | None = None) -> bytes:
     """Build a tar archive of ``files`` (path -> content) for ``put_archive("/")``."""
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w") as tar:
         for path, content in files.items():
-            raw = content.encode()
+            raw = content if isinstance(content, bytes) else content.encode()
             info = tarfile.TarInfo(path)
             info.size = len(raw)
             info.mode = 0o755 if executable and path in executable else 0o644
@@ -190,7 +190,7 @@ class Lab:
         image: str,
         ip: str,
         command: Any,
-        files: dict[str, str] | None = None,
+        files: Mapping[str, str | bytes] | None = None,
         executable: set[str] | None = None,
         **kwargs: Any,
     ) -> Any:

@@ -44,6 +44,7 @@ var Units = map[string]string{
 	"frr":        "frr",
 	"keepalived": "keepalived",
 	"coraza":     "coraza-spoa",
+	"crowdsec":   "crowdsec-spoa-bouncer",
 	"certs":      "haproxy",
 	"nftables":   "nftables",
 	"auth":       "sy-auth",
@@ -56,15 +57,16 @@ var Units = map[string]string{
 // unit fails, so it is restarted (stop flushes the ruleset, start loads /etc/nftables.conf, which
 // includes the managed files); conntrack keeps the NAT of flows already established.
 var verbs = map[string]string{
-	"systemd-sysctl": "restart",
-	"nftables":       "restart",
-	"sy-auth":        "restart", // oauth2-proxy does not reload its configuration
+	"systemd-sysctl":        "restart",
+	"nftables":              "restart",
+	"sy-auth":               "restart", // oauth2-proxy does not reload its configuration
+	"crowdsec-spoa-bouncer": "restart", // the bouncer reads its configuration once at start
 }
 
 // onDemand units run only while they have files: they are started when the first file appears and stopped
 // when the last one is gone. The SE image skips them at boot until their configuration exists, so an engine
 // without that feature carries no idle daemon, and one that has it comes back after a reboot without the controller.
-var onDemand = map[string]bool{"keepalived": true, "frr": true, "sy-auth": true, "coraza-spoa": true}
+var onDemand = map[string]bool{"keepalived": true, "frr": true, "sy-auth": true, "coraza-spoa": true, "crowdsec-spoa-bouncer": true}
 
 func verb(unit string) string {
 	if v, ok := verbs[unit]; ok {
@@ -77,7 +79,7 @@ func verb(unit string) string {
 // keeps its crt-lists in the same directory as the certificates, so only "*.pem" files (server
 // certificates and client CA bundles) and "*.crl" files (client CA revocation lists) there are the
 // agent's; everything else is left alone and never removed.
-var suffixOnly = map[string][]string{"certs": {".pem", ".crl", ".secret"}, "auth": {".cfg", ".env", ".pem"}}
+var suffixOnly = map[string][]string{"certs": {".pem", ".crl", ".secret"}, "auth": {".cfg", ".env", ".pem"}, "crowdsec": {".yaml"}}
 
 // secretDirs hold private keys and are written with owner-only permissions.
 // The auth directory is not here: its files are group-readable (0640) because the proxies run as
@@ -88,7 +90,7 @@ var secretDirs = map[string]bool{"certs": true}
 // groupDirs name the group that may read a managed directory: the sidecar that runs from it. The
 // agent writes the files 0640 and, when the group exists on the engine, hands them to it (and the
 // directory with them), so the sidecar needs no other access to /etc/switchyard.
-var groupDirs = map[string]string{"auth": "sy-auth", "coraza": "coraza"}
+var groupDirs = map[string]string{"auth": "sy-auth", "coraza": "coraza", "crowdsec": "crowdsec-spoa"}
 
 func managedFile(rel string) bool {
 	prefix, rest, ok := strings.Cut(rel, "/")

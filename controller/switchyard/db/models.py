@@ -228,7 +228,7 @@ class PolicySetRow(TenantOwnedMixin, Base):
         CheckConstraint(
             "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages',"
             " 'rate_limit', 'access', 'jwt', 'client_cert', 'directory', 'waf',"
-            " 'protection', 'posture')",
+            " 'protection', 'posture', 'crowdsec')",
             name="kind",
         ),
         CheckConstraint(

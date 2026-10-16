@@ -41,3 +41,11 @@ Procedure: `docs/runbooks/build-se-template.md`. Decision: ADR 0050.
 service has a `waf` policy (ADR 0140 to 0144). The image build still has to install the `coraza-spoa` binary at `/usr/local/bin/`, the OWASP CRS
 release named in `CRS_VERSIONS` (`controller/switchyard/domain/models.py`) where Coraza resolves `@owasp_crs`, a `coraza` user, and enable the unit.
 `files/vector.yaml` already ships its journal to Loki.
+
+## CrowdSec sidecar (SPOA bouncer)
+
+`files/crowdsec-spoa-bouncer.service` runs the CrowdSec HAProxy SPOA bouncer (MIT) on `127.0.0.1:9001` from
+`/etc/switchyard/crowdsec/spoa-bouncer.yaml`, which the agent writes (and starts the unit for) when a service has a `crowdsec` policy
+(ADR 0215). The file holds the bouncer key, so the directory is `root:crowdsec-spoa` `0750`. The bouncer pulls decisions from the
+operator's CrowdSec local API over the network and keeps blocking from memory if that API is down. `fetch-binaries.sh` downloads the
+release named in `versions.env` and checks its pinned SHA-256; `provision.sh` installs it when `CROWDSEC_SPOA_BIN` is given.
