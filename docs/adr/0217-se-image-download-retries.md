@@ -8,7 +8,7 @@ Date: 2026-10-16
 The `se-image` CI job failed on most runs on 2026-10-16 (8 of 11 on the runner pool, on identical code, with passes in between).
 Every failure is the same step: the `waf` stage of `se-image/test/Dockerfile`, where `curl` fetches the OWASP Core Rule Set
 tarball from GitHub and exits with code 35 (TLS handshake failure). The pass/fail mix on unchanged commits, the same failure
-on scheduled pipelines before the base image changes in the pilot fixes (ADR 0214), and the passing `sbom-se-image` job that runs
+on the scheduled main pipeline at 03:15 UTC, and the passing `sbom-se-image` job that runs
 the same Dockerfile show a flaky network path, not a regression. `docker build -q` hides curl's own output, so the log shows only the exit code.
 
 ## Decision
