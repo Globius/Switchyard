@@ -76,7 +76,8 @@ async def test_an_old_agent_is_advised_not_denied(rig: Rig) -> None:
     assert body["schema_state"] == "current"
     by_subject = {f["subject"]: f for f in body["findings"]}
     assert by_subject["se-old"]["code"] == "agent_behind"
-    assert by_subject["se-dev"]["code"] == "agent_version_unknown"
+    assert by_subject["se-dev"]["code"] == "agent_dev_build"
+    assert by_subject["se-dev"]["severity"] == "info"
     assert "se-new" not in by_subject
     assert {e["name"] for e in body["engines"]} >= {"se-old", "se-new", "se-dev"}
 

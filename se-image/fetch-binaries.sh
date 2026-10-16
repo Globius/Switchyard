@@ -14,8 +14,19 @@ cd "$(dirname "$0")/.."
 export MSYS_NO_PATHCONV=1
 ROOT=$(pwd -W 2>/dev/null || pwd)
 mkdir -p se-image/dist
+# The agent reports this to the controller's upgrade check, which needs a semantic version. Default: the controller's release
+# plus the commit as build metadata (0.1.0+310bf75, compared as 0.1.0). A bare SY_VERSION that is not a version (a commit hash)
+# gets the same treatment instead of being reported as is.
+REL=$(grep -m1 '^version = ' controller/pyproject.toml | cut -d'"' -f2)
+SHA=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+case "${SY_VERSION:-}" in
+  "") SY_VERSION="$REL+$SHA" ;;
+  [0-9]*.[0-9]*.[0-9]*|v[0-9]*.[0-9]*.[0-9]*) ;;
+  *) SY_VERSION="$REL+${SY_VERSION}" ;;
+esac
+echo "sy-agent version: $SY_VERSION"
 docker run --rm -e CGO_ENABLED=0 -v "$ROOT/agent:/src:ro" -v "$ROOT/se-image/dist:/out" -w /src "$GO_IMAGE" \
-  go build -trimpath -ldflags "-X switchyard/agent/internal/status.Version=${SY_VERSION:-dev}" -o /out/sy-agent ./cmd/sy-agent
+  go build -trimpath -ldflags "-X switchyard/agent/internal/status.Version=${SY_VERSION}" -o /out/sy-agent ./cmd/sy-agent
 cid=$(docker create "$DATAPLANE_IMAGE")
 docker cp "$cid:/usr/local/bin/dataplaneapi" se-image/dist/dataplaneapi
 docker rm "$cid" >/dev/null
