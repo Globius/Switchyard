@@ -116,7 +116,7 @@ certificate comes from that CA. When `publicUrl` has a publicly trusted certific
 `--controller-ca system` to use the engine's system CA bundle, or `--controller-ca FILE` with the CA that signed it.
 
 Engines that enroll after the group's first apply do not receive the configuration by themselves: run
-`POST /api/v1/tenants/{t}/se-groups/{group}/reapply` (canary first) once they are enrolled ([ADR 0213](adr/0213-pilot-deployment-fixes.md)).
+`POST /api/v1/tenants/{t}/se-groups/{group}/reapply` (canary first) once they are enrolled ([ADR 0214](adr/0214-pilot-deployment-fixes.md)).
 
 ### Scheduling the proxy
 

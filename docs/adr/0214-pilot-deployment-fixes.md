@@ -1,4 +1,4 @@
-# 0213. Pilot deployment fixes: template node, new-engine apply, pinned build images
+# 0214. Pilot deployment fixes: template node, new-engine apply, pinned build images
 
 Status: Accepted
 Date: 2026-10-16
