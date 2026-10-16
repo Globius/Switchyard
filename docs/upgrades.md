@@ -14,8 +14,14 @@ procedure is still in [production.md](production.md#11-upgrades) and [runbooks/r
 
 It only advises. An engine on an old agent keeps receiving configuration; the finding says which template to roll to.
 Findings carry a `severity` (`info`, `warning`, `error`), a stable `code` (`agent_behind`, `agent_unsupported`,
-`agent_version_unknown`, `schema_pending`, `schema_newer_than_code`), the subject and the action.
+`agent_dev_build`, `agent_version_unknown`, `schema_pending`, `schema_newer_than_code`), the subject and the action.
 
+
+**Agent version stamping.** `se-image/fetch-binaries.sh` builds `sy-agent` as `<release>+<commit>` (for example `0.1.0+310bf75`);
+the build metadata is ignored when comparing. `SY_VERSION=<release>` overrides the release, and a value that is not a version
+(a bare commit hash) is appended to the release rather than reported as is. An agent that still reports `dev` or a bare commit
+hash (an older template) gets an `agent_dev_build` finding at `info` level: it is a development build, not a fault, and the
+fix is to rebuild the template. Any other unreadable version (including none) stays an `agent_version_unknown` warning.
 
 ## Configuration backups (built)
 

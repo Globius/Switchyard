@@ -14,14 +14,25 @@ cd "$(dirname "$0")/.."
 export MSYS_NO_PATHCONV=1
 ROOT=$(pwd -W 2>/dev/null || pwd)
 mkdir -p se-image/dist
+# The agent reports this to the controller's upgrade check, which needs a semantic version. Default: the controller's release
+# plus the commit as build metadata (0.1.0+310bf75, compared as 0.1.0). A bare SY_VERSION that is not a version (a commit hash)
+# gets the same treatment instead of being reported as is.
+REL=$(grep -m1 '^version = ' controller/pyproject.toml | cut -d'"' -f2)
+SHA=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+case "${SY_VERSION:-}" in
+  "") SY_VERSION="$REL+$SHA" ;;
+  [0-9]*.[0-9]*.[0-9]*|v[0-9]*.[0-9]*.[0-9]*) ;;
+  *) SY_VERSION="$REL+${SY_VERSION}" ;;
+esac
+echo "sy-agent version: $SY_VERSION"
 docker run --rm -e CGO_ENABLED=0 -v "$ROOT/agent:/src:ro" -v "$ROOT/se-image/dist:/out" -w /src "$GO_IMAGE" \
-  go build -trimpath -ldflags "-X switchyard/agent/internal/status.Version=${SY_VERSION:-dev}" -o /out/sy-agent ./cmd/sy-agent
+  go build -trimpath -ldflags "-X switchyard/agent/internal/status.Version=${SY_VERSION}" -o /out/sy-agent ./cmd/sy-agent
 cid=$(docker create "$DATAPLANE_IMAGE")
 docker cp "$cid:/usr/local/bin/dataplaneapi" se-image/dist/dataplaneapi
 docker rm "$cid" >/dev/null
 if [ "${WITH_AUTH:-1}" = 1 ]; then
   tgz=oauth2-proxy-$OAUTH2_PROXY_VERSION.linux-amd64.tar.gz
-  curl -fsSL -o "se-image/dist/$tgz" "https://github.com/oauth2-proxy/oauth2-proxy/releases/download/$OAUTH2_PROXY_VERSION/$tgz"
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o "se-image/dist/$tgz" "https://github.com/oauth2-proxy/oauth2-proxy/releases/download/$OAUTH2_PROXY_VERSION/$tgz"
   echo "$OAUTH2_PROXY_SHA256_LINUX_AMD64  se-image/dist/$tgz" | sha256sum -c - >/dev/null || { echo "oauth2-proxy checksum mismatch" >&2; exit 1; }
   tar -xzf "se-image/dist/$tgz" -C se-image/dist --strip-components=1 "oauth2-proxy-$OAUTH2_PROXY_VERSION.linux-amd64/oauth2-proxy"
   rm -f "se-image/dist/$tgz"
@@ -29,7 +40,7 @@ if [ "${WITH_AUTH:-1}" = 1 ]; then
 fi
 if [ "${WITH_WAF:-1}" = 1 ]; then   # the WAF sidecar slot: coraza-spoa built from source, and the pinned Core Rule Set
   docker run --rm -e CGO_ENABLED=0 -e GOBIN=/out -v "$ROOT/se-image/dist:/out" "$GO_IMAGE"     go install "github.com/corazawaf/coraza-spoa@$CORAZA_SPOA_VERSION"
-  curl -fsSL -o se-image/dist/coreruleset.tar.gz "https://github.com/coreruleset/coreruleset/archive/refs/tags/v$CRS_VERSION.tar.gz"
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o se-image/dist/coreruleset.tar.gz "https://github.com/coreruleset/coreruleset/archive/refs/tags/v$CRS_VERSION.tar.gz"
   echo "$CRS_SHA256  se-image/dist/coreruleset.tar.gz" | sha256sum -c - >/dev/null || { echo "CRS checksum mismatch" >&2; exit 1; }
   (cd se-image/dist && sha256sum coraza-spoa > coraza-spoa.sha256)
 fi

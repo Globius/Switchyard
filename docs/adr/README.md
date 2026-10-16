@@ -155,3 +155,4 @@ Date: YYYY-MM-DD
 | [0212](0212-reviewed-commits-and-verified-archive-bytes.md) | Reviewed commits and verified archive bytes | Accepted |
 | [0214](0214-pilot-deployment-fixes.md) | Pilot deployment fixes | Accepted |
 | [0216](0216-git-mirror-settings.md) | Git mirror settings in the controller, token as a secret reference | Accepted |
+| [0217](0217-se-image-download-retries.md) | Retry the GitHub downloads in the SE image build | Accepted |
