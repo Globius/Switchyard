@@ -1,0 +1,68 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Snyk scans (docs/security/snyk.md): open source dependencies, Snyk Code (SAST), IaC and the two container images.
+# Results go to GitHub code scanning as SARIF. Findings never fail the run; an absent SNYK_TOKEN (forks, new
+# clones) skips every scan and the run stays green. GitLab has its own scanners; this file is GitHub-only.
+name: snyk
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 4 * * 1" # weekly, Mondays: new advisories appear without new commits
+  workflow_dispatch:
+concurrency:
+  group: snyk-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+permissions:
+  contents: read
+
+env:
+  SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+  SNYK_CFG_ORG: ${{ vars.SNYK_ORG }} # optional; the token's default organization applies when unset
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to code scanning
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {id: deps, title: Snyk Open Source, cmd: "snyk test --all-projects --exclude=node_modules,.venv,docs"}
+          - {id: code, title: Snyk Code, cmd: "snyk code test"}
+          - {id: iac, title: Snyk IaC, cmd: "snyk iac test deploy se-image provider"}
+          - {id: container-controller, title: Snyk Container (controller), image: switchyard-controller, dockerfile: deploy/controller/Dockerfile}
+          - {id: container-proxy, title: Snyk Container (proxy), image: switchyard-proxy, dockerfile: deploy/proxy/Dockerfile}
+    steps:
+      - id: gate
+        name: Check for SNYK_TOKEN
+        run: |
+          if [ -n "$SNYK_TOKEN" ]; then echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::SNYK_TOKEN is not set (fork, or secret not added yet); skipping ${{ matrix.title }}"; fi
+      - if: steps.gate.outputs.enabled == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - if: steps.gate.outputs.enabled == 'true'
+        uses: snyk/actions/setup@11b673cfb4b0dc0d860a1323caa199d54950dcce # master, no semver tag is current
+      - if: steps.gate.outputs.enabled == 'true' && matrix.dockerfile
+        run: docker build -f ${{ matrix.dockerfile }} -t ${{ matrix.image }} .
+      - if: steps.gate.outputs.enabled == 'true'
+        name: Scan
+        run: |
+          cmd='${{ matrix.cmd }}'
+          [ -n '${{ matrix.image }}' ] && cmd="snyk container test ${{ matrix.image }} --file=${{ matrix.dockerfile }}"
+          # Exit 1 means "issues found": report them, do not fail. Anything above 1 is a real error.
+          set +e
+          $cmd --sarif-file-output=snyk.sarif
+          rc=$?
+          [ "$rc" -le 1 ] || exit "$rc"
+          [ -f snyk.sarif ] || echo '{"version":"2.1.0","runs":[]}' > snyk.sarif
+      - if: steps.gate.outputs.enabled == 'true' && github.event.pull_request.head.repo.fork != true
+        uses: github/codeql-action/upload-sarif@ce5e7eeac396d720fe2d802714996c8ce561e311 # v3.39.0
+        with:
+          sarif_file: snyk.sarif
+          category: ${{ matrix.id }}

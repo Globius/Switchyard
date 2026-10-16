@@ -138,6 +138,7 @@ nav:
       - Backend security review: security/backend-review.md
       - UI security review: security/ui-review.md
       - Security review 2026-10-13: security/2026-10-13-review.md
+      - Snyk scanning on GitHub: security/snyk.md
       - Public repository security review: security/2026-10-13-public-repository-review.md
   - Lab results:
       - Lab pass on two real Proxmox hosts, 2026-10-12: lab/2026-10-12-full-pass.md
