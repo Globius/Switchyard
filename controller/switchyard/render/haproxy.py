@@ -57,7 +57,7 @@ from switchyard.domain.snapshot import (
     protection_set,
     rate_limit_rules,
 )
-from switchyard.render import apischema, captcha, waf
+from switchyard.render import apischema, captcha, crowdsec, waf
 from switchyard.render import escape as esc
 from switchyard.render.auth import AuthInstance, auth_instances
 from switchyard.render.escape import RenderError
@@ -423,6 +423,7 @@ class _Renderer:
         self.notices: list[RenderWarning] = []
         self.pool_modes: dict[UUID, str] = {}
         self.uses_waf = False
+        self.uses_crowdsec = False
         self.lua_loads: list[str] = []
         self.limit_backends: list[dict[str, Any]] = []
         self.instances = {i.service.id: i for i in auth_instances(snapshot, self.group.id)}
@@ -459,6 +460,7 @@ class _Renderer:
                 caches=self._caches(),
                 lua_loads=self.lua_loads,
                 waf_backend=waf.backend_lines() if self.uses_waf else [],
+                crowdsec_backend=crowdsec.backend_lines() if self.uses_crowdsec else [],
             )
 
         # The fingerprint covers every file; the config is hashed with a placeholder in its own
@@ -592,6 +594,13 @@ class _Renderer:
                 request_rules += waf_rules
                 self.files[waf.spoe_path(svc)] = waf.render_spoe(svc, policy)
                 self.uses_waf = True
+            bouncer = crowdsec.crowdsec_policy(svc, self.policies)
+            if bouncer is not None:
+                cs_options, cs_rules = crowdsec.frontend_lines(bouncer)
+                options += cs_options
+                request_rules += cs_rules
+                self.files[crowdsec.SPOE_PATH] = crowdsec.render_spoe()
+                self.uses_crowdsec = True
             if svc.cache is not None:
                 cache = self._cache_name(svc)
                 request_rules.append(f"http-request cache-use {cache}")

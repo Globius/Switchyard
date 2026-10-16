@@ -1,0 +1,8 @@
+# Receives the access logs the engines' Vector sends (RFC 3164 over UDP, program "haproxy"); the crowdsecurity/haproxy
+# collection parses them. CrowdSec's syslog datasource is UDP only and is meant for small setups: it can lose messages above a
+# few hundred events a second (docs.crowdsec.net, data sources, syslog).
+source: syslog
+listen_addr: 0.0.0.0
+listen_port: 514
+labels:
+  type: syslog

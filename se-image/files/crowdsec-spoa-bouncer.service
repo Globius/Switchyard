@@ -1,0 +1,39 @@
+[Unit]
+Description=CrowdSec SPOA bouncer for HAProxy
+Documentation=https://docs.crowdsec.net/u/bouncers/haproxy_spoa/
+After=network.target
+# The agent writes this file (it holds the bouncer key); without a CrowdSec policy there is nothing to run.
+# The agent starts the unit when the file appears and stops it when it is gone (agent/internal/bundle, ADR 0215).
+ConditionPathExists=/etc/switchyard/crowdsec/spoa-bouncer.yaml
+ConditionPathExists=/usr/local/bin/crowdsec-spoa-bouncer
+
+[Service]
+User=crowdsec-spoa
+Group=crowdsec-spoa
+# Test the configuration first so a bad file fails the start instead of looping.
+ExecStartPre=/usr/local/bin/crowdsec-spoa-bouncer -c /etc/switchyard/crowdsec/spoa-bouncer.yaml -t
+ExecStart=/usr/local/bin/crowdsec-spoa-bouncer -c /etc/switchyard/crowdsec/spoa-bouncer.yaml
+# The bouncer keeps its decisions in memory and keeps blocking from them if the CrowdSec API is unreachable.
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+# It listens on 127.0.0.1 only and calls the CrowdSec API over the network.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+SystemCallFilter=@system-service
+MemoryMax=512M
+TasksMax=256
+ReadOnlyPaths=/etc/switchyard/crowdsec
+
+[Install]
+WantedBy=multi-user.target

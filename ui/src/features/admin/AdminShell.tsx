@@ -21,6 +21,7 @@ const NAV = [
   { label: "Role mappings", to: "/admin/role-mappings" },
   { label: "System tokens", to: "/admin/tokens" },
   { label: "ACME providers", to: "/admin/acme-providers" },
+  { label: "Integrations", to: "/admin/integrations" },
   { label: "Controller", to: "/admin/controller" },
   { label: "Upgrades", to: "/admin/upgrades" },
   { label: "System settings", to: "/admin/settings" },

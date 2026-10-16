@@ -1,0 +1,22 @@
+# Managed by Switchyard. Do not edit: changes are reported as drift.
+[crowdsec]
+spoe-agent crowdsec-agent
+    messages crowdsec-tcp
+    groups crowdsec-http-no-body
+    option var-prefix crowdsec
+    option set-on-error error
+    timeout hello 200ms
+    timeout idle 55s
+    timeout processing 500ms
+    use-backend sy_crowdsec_spoa
+    log global
+
+spoe-message crowdsec-tcp
+    args id=unique-id src-ip=src src-port=src_port
+    event on-client-session
+
+spoe-message crowdsec-http-no-body
+    args remediation=var(txn.crowdsec.remediation) id=unique-id method=method path=path query=query version=req.ver headers=req.hdrs url=url ssl=ssl_fc src-ip=src src-port=src_port
+
+spoe-group crowdsec-http-no-body
+    messages crowdsec-http-no-body

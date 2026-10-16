@@ -10,15 +10,24 @@ bundle over mTLS (backend design, "Secrets"); they are never rendered into the H
 revision snapshots or the Git mirror.
 """
 
+from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 from switchyard.adapters.secrets import SecretsReader
 from switchyard.config import broker_url
+from switchyard.db.crowdsec_config import ENGINE_KEY_REF, StoredBouncer
 from switchyard.domain import models as dm
+from switchyard.domain import validators as v
 from switchyard.domain.snapshot import Snapshot
 from switchyard.render import captcha
 from switchyard.render import escape as esc
 from switchyard.render.auth import auth_secret_refs, render_auth_files
+from switchyard.render.crowdsec import (
+    BouncerSettings,
+    render_bouncer_files,
+    render_log_feed_files,
+    uses_crowdsec,
+)
 from switchyard.render.escape import RenderError
 from switchyard.render.routing import EngineSlot, render_agent_bundle
 from switchyard.render.tokens import jwt_key_files
@@ -164,8 +173,64 @@ async def _captcha_files(
     return files
 
 
+#: Reads the CrowdSec integration settings (a URL, the reference of its bouncer key or the key).
+CrowdSecLoader = Callable[[], Awaitable[StoredBouncer | None]]
+
+
+async def _crowdsec_files(
+    snapshot: Snapshot,
+    group: dm.SeGroup,
+    secrets: SecretsReader | None,
+    loader: CrowdSecLoader | None,
+    engine: str,
+) -> dict[str, str]:
+    """The group's CrowdSec bouncer configuration, with the key read from the secrets backend.
+
+    With ``per_engine_keys`` the key is the engine's own (:data:`ENGINE_KEY_REF`), so rotating or
+    revoking one engine's key touches no other engine.
+    """
+    if not uses_crowdsec(snapshot, group.id):
+        return {}
+    loaded = await loader() if loader is not None else None
+    if loaded is None:
+        raise BundleError("a CrowdSec policy is in use but CrowdSec is not configured")
+    key = loaded.env_key
+    key_ref = loaded.key_ref
+    if loaded.per_engine_keys:
+        key_ref = ENGINE_KEY_REF.format(engine=engine)
+        try:
+            v.validate_secret_ref(key_ref)
+        except ValueError as exc:
+            raise BundleError(f"engine {engine!r} cannot have its own CrowdSec key: {exc}") from exc
+    if key_ref:
+        if secrets is None:
+            raise BundleError("a CrowdSec policy is in use but no secrets backend is available")
+        try:
+            key = (await secrets.get(key_ref)).strip()
+        except LookupError as exc:
+            hint = (
+                f" (register it with deploy/crowdsec/register-engine.sh {engine})"
+                if loaded.per_engine_keys
+                else ""
+            )
+            raise BundleError(f"the CrowdSec bouncer key {key_ref} was not found{hint}") from exc
+    if not key or "\n" in key:
+        raise BundleError("the CrowdSec bouncer key must be one non-empty line")
+    try:
+        settings = BouncerSettings(loaded.url, key, loaded.origins, loaded.logs_address)
+        return render_bouncer_files(snapshot, group.id, settings) | render_log_feed_files(
+            snapshot, group.id, settings
+        )
+    except RenderError as exc:
+        raise BundleError(str(exc)) from exc
+
+
 async def engine_files(
-    snapshot: Snapshot, group: dm.SeGroup, slot: EngineSlot, secrets: SecretsReader | None
+    snapshot: Snapshot,
+    group: dm.SeGroup,
+    slot: EngineSlot,
+    secrets: SecretsReader | None,
+    crowdsec: CrowdSecLoader | None = None,
 ) -> dict[str, str]:
     """Return ``path -> content`` for one engine (empty if nothing is agent-managed for it).
 
@@ -180,6 +245,7 @@ async def engine_files(
         except RenderError as exc:
             raise BundleError(str(exc)) from exc
     files |= render_waf_files(snapshot, group.id)
+    files |= await _crowdsec_files(snapshot, group, secrets, crowdsec, slot.name)
     files |= await _captcha_files(snapshot, group, secrets)
     files |= await _auth_files(snapshot, group, secrets)
     files |= jwt_key_files(snapshot, group.id)

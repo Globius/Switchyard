@@ -20,4 +20,6 @@ change sets. The full guide: [Country and reputation lists](../ip-lists.md).
 that fails, comes back empty, exceeds 100,000 networks or would drop more than half the list leaves the list as it is. An empty
 deny list denies nothing; an empty enforced allow list rejects everyone until its first sync.
 
+For CrowdSec bans enforced on the engines themselves (within seconds, per-service mode) see [CrowdSec](crowdsec.md).
+
 **Decisions:** [0010](../adr/0010-certificates-and-cloudflare.md), [0147](../adr/0147-country-and-reputation-ip-lists.md).

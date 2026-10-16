@@ -17,6 +17,7 @@ import logging
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import partial
 from typing import Any
 from uuid import UUID
 
@@ -27,6 +28,7 @@ from switchyard.adapters.haproxy import HaproxyEngine, HaproxyError, ServerStatu
 from switchyard.adapters.secrets import SecretsReader
 from switchyard.config import broker_url
 from switchyard.db import audit_log
+from switchyard.db.crowdsec_config import bouncer_settings
 from switchyard.db.models import TenantRow
 from switchyard.db.ops_models import EngineStatusRow, ServiceEngineRow
 from switchyard.db.repository import load_snapshot
@@ -351,6 +353,7 @@ class StatusService:
         self._db = db
         self._directory = directory
         self._secrets = secrets
+        self._crowdsec_loader = partial(bouncer_settings, db.admin)
         self._limit = asyncio.Semaphore(concurrency)
 
     async def _expected(self, snapshot: Snapshot, records: list[EngineRecord]) -> _Expected:
@@ -373,7 +376,9 @@ class StatusService:
         for index, record in enumerate(records):
             slot = EngineSlot(record.name, index, record.mgmt_ip or "0.0.0.0")  # noqa: S104
             try:
-                files = await engine_files(snapshot, group, slot, self._secrets)
+                files = await engine_files(
+                    snapshot, group, slot, self._secrets, self._crowdsec_loader
+                )
             except BundleError:
                 continue
             if files:

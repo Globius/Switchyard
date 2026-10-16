@@ -11,7 +11,7 @@ Every change to a tenant's load-balancing objects goes through a [change set](ch
 | --- | --- |
 | Serving traffic | [Virtual services and routing](virtual-services.md), [Pools and members](pools.md), [Health checks and drain](health-checks.md), [Persistence](persistence.md), [UDP services](udp.md), [HTTP/2, HTTP/3, gRPC and WebSocket](http-protocols.md), [Compression and cache](compression-cache.md) |
 | TLS and certificates | [TLS on the front end](tls.md), [Certificates and ACME](certificates.md) |
-| Request policies | [Policy sets and request stages](policies.md), [Rate and concurrency limits](rate-limits.md), [Country and reputation lists](ip-lists.md) |
+| Request policies | [Policy sets and request stages](policies.md), [Rate and concurrency limits](rate-limits.md), [Country and reputation lists](ip-lists.md), [CrowdSec](crowdsec.md) |
 | Security | [WAF](waf.md), [Bot and DDoS protection](bot-protection.md), [Login in front of a service](access-login.md), [API tokens and client certificates](api-protection.md) |
 | Placement and HA | [VIP placement: VRRP and BGP](vip-placement.md), [Engines on Proxmox](engines.md), [GSLB](gslb.md) |
 | Operating | [Change sets, revisions and drift](change-sets.md), [Alerting](alerting.md), [Metrics and logs](telemetry.md), [Audit log](audit.md), [Tenants, roles and sign-in](tenancy.md), [Usage, quotas and quota requests](quota-requests.md) |

@@ -1,0 +1,17 @@
+# Managed by Switchyard. Do not edit: changes are reported as drift.
+log_mode: stdout
+log_level: info
+update_frequency: 10s
+api_url: "http://crowdsec.example.test:8080"
+api_key: "sample-key-not-a-secret"
+insecure_skip_verify: false
+retry_initial_connect: true
+listen_tcp: "127.0.0.1:9001"
+scopes: ["ip", "range"]
+origins: ["crowdsec"]
+prometheus:
+  enabled: false
+hosts:
+  - host: "*"
+    captcha:
+      fallback_remediation: allow

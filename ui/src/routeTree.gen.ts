@@ -17,6 +17,7 @@ import { Route as AdminAcmeProvidersRouteImport } from './routes/admin.acme-prov
 import { Route as AdminAuditLogRouteImport } from './routes/admin.audit-log'
 import { Route as AdminControllerRouteImport } from './routes/admin.controller'
 import { Route as AdminIdentityProvidersRouteImport } from './routes/admin.identity-providers'
+import { Route as AdminIntegrationsRouteImport } from './routes/admin.integrations'
 import { Route as AdminQuotaRequestsRouteImport } from './routes/admin.quota-requests'
 import { Route as AdminRoleMappingsRouteImport } from './routes/admin.role-mappings'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
@@ -93,6 +94,11 @@ const AdminControllerRoute = AdminControllerRouteImport.update({
 const AdminIdentityProvidersRoute = AdminIdentityProvidersRouteImport.update({
   id: '/identity-providers',
   path: '/identity-providers',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminIntegrationsRoute = AdminIntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminQuotaRequestsRoute = AdminQuotaRequestsRouteImport.update({
@@ -298,6 +304,7 @@ export interface FileRoutesByFullPath {
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/controller': typeof AdminControllerRoute
   '/admin/identity-providers': typeof AdminIdentityProvidersRoute
+  '/admin/integrations': typeof AdminIntegrationsRoute
   '/admin/quota-requests': typeof AdminQuotaRequestsRoute
   '/admin/role-mappings': typeof AdminRoleMappingsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -343,6 +350,7 @@ export interface FileRoutesByTo {
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/controller': typeof AdminControllerRoute
   '/admin/identity-providers': typeof AdminIdentityProvidersRoute
+  '/admin/integrations': typeof AdminIntegrationsRoute
   '/admin/quota-requests': typeof AdminQuotaRequestsRoute
   '/admin/role-mappings': typeof AdminRoleMappingsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -388,6 +396,7 @@ export interface FileRoutesById {
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/controller': typeof AdminControllerRoute
   '/admin/identity-providers': typeof AdminIdentityProvidersRoute
+  '/admin/integrations': typeof AdminIntegrationsRoute
   '/admin/quota-requests': typeof AdminQuotaRequestsRoute
   '/admin/role-mappings': typeof AdminRoleMappingsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -437,6 +446,7 @@ export interface FileRouteTypes {
     | '/admin/audit-log'
     | '/admin/controller'
     | '/admin/identity-providers'
+    | '/admin/integrations'
     | '/admin/quota-requests'
     | '/admin/role-mappings'
     | '/admin/settings'
@@ -482,6 +492,7 @@ export interface FileRouteTypes {
     | '/admin/audit-log'
     | '/admin/controller'
     | '/admin/identity-providers'
+    | '/admin/integrations'
     | '/admin/quota-requests'
     | '/admin/role-mappings'
     | '/admin/settings'
@@ -526,6 +537,7 @@ export interface FileRouteTypes {
     | '/admin/audit-log'
     | '/admin/controller'
     | '/admin/identity-providers'
+    | '/admin/integrations'
     | '/admin/quota-requests'
     | '/admin/role-mappings'
     | '/admin/settings'
@@ -629,6 +641,13 @@ declare module '@tanstack/react-router' {
       path: '/identity-providers'
       fullPath: '/admin/identity-providers'
       preLoaderRoute: typeof AdminIdentityProvidersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/integrations': {
+      id: '/admin/integrations'
+      path: '/integrations'
+      fullPath: '/admin/integrations'
+      preLoaderRoute: typeof AdminIntegrationsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/quota-requests': {
@@ -898,6 +917,7 @@ interface AdminRouteChildren {
   AdminAuditLogRoute: typeof AdminAuditLogRoute
   AdminControllerRoute: typeof AdminControllerRoute
   AdminIdentityProvidersRoute: typeof AdminIdentityProvidersRoute
+  AdminIntegrationsRoute: typeof AdminIntegrationsRoute
   AdminQuotaRequestsRoute: typeof AdminQuotaRequestsRoute
   AdminRoleMappingsRoute: typeof AdminRoleMappingsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
@@ -913,6 +933,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAuditLogRoute: AdminAuditLogRoute,
   AdminControllerRoute: AdminControllerRoute,
   AdminIdentityProvidersRoute: AdminIdentityProvidersRoute,
+  AdminIntegrationsRoute: AdminIntegrationsRoute,
   AdminQuotaRequestsRoute: AdminQuotaRequestsRoute,
   AdminRoleMappingsRoute: AdminRoleMappingsRoute,
   AdminSettingsRoute: AdminSettingsRoute,

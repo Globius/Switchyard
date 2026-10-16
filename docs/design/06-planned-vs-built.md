@@ -78,7 +78,8 @@ The `.p12` upload and the conflict view were never verified live; `deploy/lab/ch
 | Rate limits | done | `rate_limit` policy set (ADR 0110) | |
 | Bot and DDoS protection | partial | `protection` policy set: connection limits, slow-client timeouts, user-agent rules (ADR 0170). JavaScript challenge (ADR 0171) and CAPTCHA gate (ADR 0172, Turnstile and hCaptcha); reputation feeds belong to plan C11 | UI; lab test with hCaptcha and live keys |
 | IP groups | missing | *deferred*: geo and reputation lists (plan C11) | |
-| CrowdSec, oauth2-proxy SSO, caching, compression, Lua | missing | *deferred* or out of scope in 01 | |
+| oauth2-proxy SSO, caching, compression, Lua | missing | *deferred* or out of scope in 01 | |
+| CrowdSec bouncer, log feed and sharing | built | ADR 0213, 0215; `docs/crowdsec.md` | Captcha decisions and AppSec are not used |
 | Passive checks (`observe`) and slow-start | done | `passive_check` and `slow_start_s` on the pool (ADR 0066) | |
 | `external-check` | missing | *not built on purpose*: runs a command on the SE (ADR 0066) | Fixed named checks in the SE image, own ADR |
 | Pool discovery by Proxmox tags | missing | *deferred*: phase 2 | |

@@ -718,6 +718,49 @@ describe("policies", () => {
     );
   });
 
+  it("creates a list kept current from CrowdSec and offers no typed ranges", async () => {
+    server.use(
+      http.get("*/api/v1/me", () =>
+        HttpResponse.json({
+          auth: "session",
+          break_glass: false,
+          csrf_token: "tok",
+          email: null,
+          id: "s",
+          is_system: false,
+          name: "Me",
+          principal: "me",
+          session: null,
+          tenants: [{ id: "t1", name: "acme", role, via: [] }],
+          features: { lxc_guests: false, ip_list_feeds: ["crowdsec"], ip_list_geo: false },
+        }),
+      ),
+    );
+    renderAt("/t/acme/policies");
+    const n = await screen.findByRole("button", { name: "New allow list" });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "crowdsec-bans");
+    await userEvent.selectOptions(
+      await screen.findByLabelText("Networks come from"),
+      "CrowdSec bans",
+    );
+    expect(screen.queryByLabelText("Allowed source ranges")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() =>
+      expect(posted?.ops[0]).toMatchObject({
+        action: "create",
+        body: {
+          kind: "allow_list",
+          name: "crowdsec-bans",
+          managed_by: "reputation",
+          feed: "crowdsec",
+          cidrs: [],
+        },
+      }),
+    );
+  });
+
   it("creates a redirect policy and maps a 422 onto its rule", async () => {
     server.use(
       http.post("*/api/v1/tenants/acme/change-sets/cs1/ops", () =>
@@ -1143,6 +1186,50 @@ describe("security policies", () => {
       paranoia_level: 2,
       disabled_rule_ids: [942100],
       excluded_paths: ["/health"],
+    });
+  });
+
+  it("creates a CrowdSec policy in detect mode, then blocks with exclusions", async () => {
+    await userEvent.type(await open("crowdsec"), "bans");
+    expect(screen.getByLabelText("Detect")).toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "crowdsec",
+      mode: "detect",
+      fail_mode: "open",
+      timeout_ms: 100,
+      allow_cidrs: [],
+      excluded_paths: [],
+      share_logs: false,
+    });
+  });
+
+  it("turns on the access log feed of a CrowdSec policy", async () => {
+    await userEvent.type(await open("crowdsec"), "feeding");
+    await userEvent.click(screen.getByRole("switch", { name: "Send access logs to CrowdSec" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({ kind: "crowdsec", share_logs: true });
+  });
+
+  it("sets CrowdSec to block, fail closed, with a trusted network and a path", async () => {
+    await userEvent.type(await open("crowdsec"), "strict-bans");
+    await userEvent.click(screen.getByLabelText("Block"));
+    await userEvent.selectOptions(screen.getByLabelText("Fail mode"), "closed");
+    await userEvent.type(
+      screen.getByRole("combobox", { name: "Never check these networks" }),
+      "198.51.100.0/24,",
+    );
+    await userEvent.type(screen.getByRole("combobox", { name: "Paths not checked" }), "/healthz,");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "crowdsec",
+      mode: "block",
+      fail_mode: "closed",
+      allow_cidrs: ["198.51.100.0/24"],
+      excluded_paths: ["/healthz"],
     });
   });
 

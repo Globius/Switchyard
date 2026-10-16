@@ -61,3 +61,5 @@ Deliberate exceptions are recorded here:
 | Dependency | Licence | Used for | Decision |
 | --- | --- | --- | --- |
 | asyncssh | EPL-2.0 (or GPL-2.0-or-later) | SFTP backup targets | [ADR 0205](adr/0205-upgrades-versions-bundles-backups.md); unmodified, used under EPL-2.0 |
+| crowdsec-spoa-bouncer (binary) | MIT (per its repository and CrowdSec's documentation) | CrowdSec sidecar slot in the SE image | [ADR 0215](adr/0215-crowdsec-engine-bouncer-and-signals.md); unmodified release, pinned by SHA-256 in `se-image/versions.env`; its dependencies are in the binary and appear in the SE image SBOM |
+| CrowdSec Security Engine and Hub content (`deploy/crowdsec`) | MIT (engine, remediation components and hub repository per CrowdSec) | The optional engine the operator runs; not part of the SE image | ADR 0215; pulled as the official container image, not redistributed by this project. CrowdSec's Terms, EULA and community blocklist terms were not read by this project: see the CrowdSec runbook |

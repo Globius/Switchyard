@@ -28,6 +28,7 @@ IMAGES = (
     "alpine:3.20",
     "busybox:1.36",
     "curlimages/curl:8.10.1",
+    "crowdsecurity/crowdsec:v1.7.0",
     "ghcr.io/dexidp/dex:v2.41.1-alpine",
     "ghcr.io/letsencrypt/pebble:latest",
     "grafana/grafana:11.4.0",
@@ -38,6 +39,7 @@ IMAGES = (
     "powerdns/dnsdist-19:latest",
     "powerdns/pdns-auth-50:latest",
     "prom/prometheus:v3.0.1",
+    "timberio/vector:0.46.1-debian",
     "quay.io/frrouting/frr:10.2.1",
 )
 

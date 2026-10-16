@@ -166,6 +166,7 @@ def test_object_reads_document_etag_and_if_match_problems() -> None:
                 "jwt",
                 "client_cert",
                 "waf",
+                "crowdsec",
                 "protection",
                 "directory",
                 "posture",

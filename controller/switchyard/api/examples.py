@@ -1522,6 +1522,24 @@ BACKUP_VERIFY = {
 
 BACKUP_RESTORE = {**BACKUP_VERIFY, "restored": True}
 
+CROWDSEC = {
+    "url": "https://crowdsec.example.test:8080",
+    "key_ref": "kv/system/crowdsec/bouncer-key",
+    "origins": ["crowdsec", "CAPI"],
+    "logs_address": "crowdsec.example.test:514",
+    "per_engine_keys": True,
+    "source": "database",
+    "configured": True,
+    "synced_at": "2026-10-16T06:00:00+00:00",
+    "ok": True,
+    "bans": 4210,
+    "error": None,
+}
+
+CROWDSEC_TEST = {"ok": True, "bans": 4210, "error": None}
+
+CROWDSEC_SYNC = {"job_id": "0190a5f2-0000-7000-8000-000000000030"}
+
 GIT_MIRROR = {
     "enabled": True,
     "url": "https://git.example.test",

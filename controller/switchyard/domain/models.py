@@ -1769,6 +1769,54 @@ class WafPolicySet(TenantOwned):
         return self
 
 
+class CrowdSecPolicySet(TenantOwned):
+    """Block clients that a CrowdSec security engine has banned, on the engine itself (ADR 0215).
+
+    The CrowdSec SPOA bouncer runs on every engine, pulls the decision stream from the operator's
+    CrowdSec local API (Admin > Integrations) and answers HAProxy per request. New policies start in
+    ``detect`` mode: the verdict is logged (``{ban}`` before the request line) and nothing is
+    blocked, so a tenant can read the logs before turning blocking on. A service can carry one
+    CrowdSec policy. Captcha decisions are not enforced; they are let through.
+
+    Attributes:
+        mode: ``detect`` logs only; ``block`` refuses banned clients with 403.
+        fail_mode: What to do when the bouncer does not answer in ``timeout_ms``: ``open`` lets the
+            request through, ``closed`` refuses it with 503. Banned clients stay blocked while the
+            bouncer runs even if the CrowdSec API is down (it keeps its decisions in memory).
+        timeout_ms: How long HAProxy waits for the bouncer's verdict.
+        allow_cidrs: Client networks that are never checked (office, monitoring, partners).
+        excluded_paths: Paths that skip the check (``path_beg`` match), such as health endpoints.
+        share_logs: Send this service's HTTP access logs (client addresses and request lines)
+            to the CrowdSec engine the administrator configured, so it can detect attacks on this
+            service and add them to the decisions every engine enforces. Off by default; whether
+            the engine then shares signals with CrowdSec is the administrator's separate choice
+            (ADR 0215).
+
+    Example:
+        >>> CrowdSecPolicySet.model_validate(
+        ...     {"id": "00000000-0000-0000-0000-000000000001",
+        ...      "tenant_id": "00000000-0000-0000-0000-000000000002", "name": "c"}
+        ... ).mode
+        'detect'
+    """
+
+    kind: Literal["crowdsec"] = "crowdsec"
+    mode: Literal["detect", "block"] = "detect"
+    fail_mode: Literal["open", "closed"] = "open"
+    timeout_ms: int = Field(default=100, ge=10, le=2000)
+    allow_cidrs: tuple[IPNetwork, ...] = Field(default=(), max_length=64)
+    excluded_paths: tuple[UrlPath, ...] = Field(default=(), max_length=16)
+    share_logs: bool = False
+
+    @model_validator(mode="after")
+    def _unique(self) -> Self:
+        if len(set(self.allow_cidrs)) != len(self.allow_cidrs):
+            raise ValueError("allow_cidrs must be unique")
+        if len(set(self.excluded_paths)) != len(self.excluded_paths):
+            raise ValueError("excluded_paths must be unique")
+        return self
+
+
 class OidcSettings(Model):
     """OpenID Connect login against a tenant's identity provider (ADR 0130).
 
@@ -2535,6 +2583,7 @@ PolicySet = Annotated[
     | ErrorPagesPolicySet
     | RateLimitPolicySet
     | WafPolicySet
+    | CrowdSecPolicySet
     | ProtectionPolicySet
     | AccessPolicySet
     | JwtPolicySet
@@ -2551,6 +2600,7 @@ ATTACHABLE_POLICY_KINDS = (
     ErrorPagesPolicySet,
     RateLimitPolicySet,
     WafPolicySet,
+    CrowdSecPolicySet,
     ProtectionPolicySet,
     AccessPolicySet,
     JwtPolicySet,

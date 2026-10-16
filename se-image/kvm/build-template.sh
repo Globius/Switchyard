@@ -26,11 +26,12 @@ cp -r "$HERE/files" "$HERE/cloud-init" "$HERE/provision.sh" "$HERE/packages.txt"
 cp "$AGENT" "$WEB/sy-agent"; cp "$DP" "$WEB/dataplaneapi"
 EXTRA=""; AUTHENV=""
 if [ -n "${SIDECAR_DIR:-}" ]; then   # sidecar slots (ADR 0083): whatever fetch-binaries.sh put in SIDECAR_DIR (se-image/dist)
-  for f in oauth2-proxy oauth2-proxy.sha256 coraza-spoa coraza-spoa.sha256 coreruleset.tar.gz; do
+  for f in oauth2-proxy oauth2-proxy.sha256 coraza-spoa coraza-spoa.sha256 crowdsec-spoa-bouncer crowdsec-spoa-bouncer.sha256 coreruleset.tar.gz; do
     [ ! -f "$SIDECAR_DIR/$f" ] || { cp "$SIDECAR_DIR/$f" "$WEB/$f"; EXTRA="$EXTRA $f"; }
   done
   [ ! -f "$SIDECAR_DIR/oauth2-proxy" ] || AUTHENV="$AUTHENV AUTH_PROXY_BIN=/root/oauth2-proxy"
   [ ! -f "$SIDECAR_DIR/coraza-spoa" ] || AUTHENV="$AUTHENV CORAZA_SPOA_BIN=/root/coraza-spoa"
+  [ ! -f "$SIDECAR_DIR/crowdsec-spoa-bouncer" ] || AUTHENV="$AUTHENV CROWDSEC_SPOA_BIN=/root/crowdsec-spoa-bouncer"
   [ ! -f "$SIDECAR_DIR/coreruleset.tar.gz" ] || AUTHENV="$AUTHENV CRS_TARBALL=/root/coreruleset.tar.gz"
 fi
 tar -C "$WEB" -czf "$WEB/build.tar.gz" se-image sy-agent dataplaneapi $EXTRA
