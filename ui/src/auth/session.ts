@@ -10,6 +10,7 @@ import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/re
 import { useMemo } from "react";
 import { ApiError, api, setCsrfToken, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
+import { clearSessionExpired } from "@/auth/expired";
 import { createCan } from "@/lib/permissions";
 
 export type Me = components["schemas"]["Me"];
@@ -101,14 +102,25 @@ export function useBreakGlassLogin() {
   });
 }
 
-/** Ends the session and drops every cached query. */
-export function useLogout() {
+/**
+ * Ends the session, drops every cached query, then calls `onDone` (the caller sends the browser to
+ * `/login`).
+ *
+ * `qc.clear()` alone leaves the page as it was: mounted `useMe` observers keep their last result
+ * and nothing refetches `/me`, so no guard ever sees a 401. The explicit `onDone` hop is what puts
+ * the login prompt back. It runs even when the request fails (the cookie is gone either way once the
+ * server session is revoked, and a 401 means it already was). Every login mode (OIDC, SAML,
+ * break-glass) ends through this one endpoint and cookie.
+ */
+export function useLogout(onDone?: () => void) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => unwrap(await api.POST("/api/v1/auth/logout")),
     onSettled: () => {
       setCsrfToken(null);
+      clearSessionExpired();
       qc.clear();
+      onDone?.();
     },
   });
 }

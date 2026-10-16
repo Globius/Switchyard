@@ -1540,6 +1540,19 @@ CROWDSEC_TEST = {"ok": True, "bans": 4210, "error": None}
 
 CROWDSEC_SYNC = {"job_id": "0190a5f2-0000-7000-8000-000000000030"}
 
+GIT_MIRROR = {
+    "enabled": True,
+    "url": "https://git.example.test",
+    "project": "ops/switchyard-mirror",
+    "branch": "main",
+    "token_ref": "kv/git/mirror-token",
+    "source": "settings",
+    "last_ok_at": "2026-10-13T04:00:00+00:00",
+    "last_sha": "0123456789abcdef0123456789abcdef01234567",
+    "last_error": None,
+}
+GIT_MIRROR_TEST = {"ok": True, "head": "0123456789abcdef0123456789abcdef01234567", "error": None}
+
 RELEASE_FEED = {
     "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json",
     "channel": "stable",

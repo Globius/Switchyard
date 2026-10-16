@@ -156,3 +156,5 @@ Date: YYYY-MM-DD
 | [0213](0213-crowdsec-bouncer-source.md) | CrowdSec as a reputation source | Accepted |
 | [0214](0214-pilot-deployment-fixes.md) | Pilot deployment fixes | Accepted |
 | [0215](0215-crowdsec-engine-bouncer-and-signals.md) | CrowdSec on the engines: bouncer, access log feed and signal sharing | Accepted |
+| [0216](0216-git-mirror-settings.md) | Git mirror settings in the controller, token as a secret reference | Accepted |
+| [0217](0217-se-image-download-retries.md) | Retry the GitHub downloads in the SE image build | Accepted |

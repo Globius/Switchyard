@@ -214,6 +214,9 @@ from switchyard.api.upgrade_models import (
     BackupVerifyRead,
     BundleFetchIn,
     BundlePlanRead,
+    GitMirrorIn,
+    GitMirrorRead,
+    GitMirrorTestRead,
     ReleaseFeedIn,
     ReleaseFeedRead,
     RollActionIn,
@@ -274,6 +277,7 @@ from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.dns_records import DnsRecordSync
 from switchyard.services.engines import EngineDetail, EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
+from switchyard.services.git_mirror import GitMirrorSettings
 from switchyard.services.grafana import GrafanaLaunchError, GrafanaService
 from switchyard.services.gslb import GslbService
 from switchyard.services.hosts import HostService
@@ -356,6 +360,7 @@ class ApiServices:
     upgrade: UpgradeService = None  # type: ignore[assignment]
     release_feed: ReleaseFeedService = None  # type: ignore[assignment]
     crowdsec: CrowdSecIntegration = None  # type: ignore[assignment]
+    git_mirror: GitMirrorSettings = None  # type: ignore[assignment]
     rolls: RollService = None  # type: ignore[assignment]
     bundles: BundleStaging = None  # type: ignore[assignment]
     backup: BackupService = None  # type: ignore[assignment]
@@ -454,6 +459,7 @@ def build_services(
         upgrade=UpgradeService(db, backup=backup, feed=release_feed),
         release_feed=release_feed,
         crowdsec=crowdsec,
+        git_mirror=GitMirrorSettings(db, secrets),
         rolls=RollService(db),
         bundles=BundleStaging(
             db,
@@ -4793,6 +4799,46 @@ def create_app(
         return {"job_id": await svc.crowdsec.sync_now(who, request_id=_rid())}
 
     @router.get(
+        "/system/git-mirror",
+        tags=["system"],
+        summary="The Git mirror settings and how the last write went",
+        response_model=GitMirrorRead,
+        responses=_ok(ex.GIT_MIRROR),
+    )
+    async def get_git_mirror(who: Who, svc: Services) -> dict[str, Any]:
+        """Every applied revision can be written as YAML to a GitLab repository.
+
+        Requires a system administrator.
+        """
+        return _git_mirror_json(await svc.git_mirror.view(who))
+
+    @router.put(
+        "/system/git-mirror",
+        tags=["system"],
+        summary="Set where revisions are mirrored",
+        response_model=GitMirrorRead,
+        responses=_ok(ex.GIT_MIRROR) | VALIDATION_RESPONSE,
+    )
+    async def put_git_mirror(body: GitMirrorIn, who: Who, svc: Services) -> dict[str, Any]:
+        """Save the settings. The token is a `secret_ref`; a token value is rejected.
+
+        Applying a change never waits for the mirror: a failed write is retried and shown here.
+        """
+        view = await svc.git_mirror.set_config(who, body.model_dump(), request_id=_rid())
+        return _git_mirror_json(view)
+
+    @router.post(
+        "/system/git-mirror/test",
+        tags=["system"],
+        summary="Check that the mirror can be reached",
+        response_model=GitMirrorTestRead,
+        responses=_ok(ex.GIT_MIRROR_TEST),
+    )
+    async def test_git_mirror(who: Who, svc: Services) -> dict[str, Any]:
+        """Reads the mirror branch with the stored credentials. Writes nothing."""
+        return await svc.git_mirror.test(who)
+
+    @router.get(
         "/system/bundles",
         tags=["system"],
         summary="Upgrade bundles kept on the controller",
@@ -6499,6 +6545,10 @@ def _backup_json(r: Any) -> dict[str, Any]:
 async def _crowdsec_json(svc: ApiServices, who: Any) -> dict[str, Any]:
     cfg, state = await svc.crowdsec.config(who), await svc.crowdsec.state()
     return {**asdict(cfg), "configured": cfg.configured, **asdict(state)}
+
+
+def _git_mirror_json(view: Any) -> dict[str, Any]:
+    return {**asdict(view.config), **asdict(view.state), "source": view.source}
 
 
 async def _release_feed_json(svc: ApiServices, who: Any) -> dict[str, Any]:

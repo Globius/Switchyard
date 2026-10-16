@@ -5,9 +5,11 @@
 /** The system-admin area: its own top bar and nav, outside any tenant. */
 import { Link, Outlet } from "@tanstack/react-router";
 import { Signpost } from "lucide-react";
+import { useRef } from "react";
 import { useMe } from "@/auth/session";
 import { Badge } from "@/components/ui/badge";
 import { usePendingCount } from "@/features/portal/QuotaQueue";
+import { useKeepActiveInView } from "@/features/shell/useNavScroll";
 import { UserMenu } from "@/features/shell/UserMenu";
 import { t } from "@/lib/i18n";
 
@@ -38,10 +40,12 @@ function WaitingBadge() {
 
 export function AdminShell() {
   const { data: me, isPending } = useMe();
+  const navRef = useRef<HTMLElement>(null);
+  useKeepActiveInView(navRef);
   const back = me?.tenants[0]?.name;
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex h-14 items-center gap-3 border-b bg-card px-4">
+      <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-card px-4">
         <span className="flex items-center gap-2 font-semibold">
           <span className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground">
             <Signpost className="size-4" aria-hidden />
@@ -64,8 +68,9 @@ export function AdminShell() {
       </header>
       <div className="flex flex-1">
         <nav
+          ref={navRef}
           aria-label={t("Admin sections")}
-          className="w-56 shrink-0 border-r bg-sidebar p-3 text-sm"
+          className="sticky top-14 h-[calc(100dvh-3.5rem)] w-56 shrink-0 self-start overflow-y-auto border-r bg-sidebar p-3 text-sm"
         >
           <div className="px-3 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
             {t("Admin")}

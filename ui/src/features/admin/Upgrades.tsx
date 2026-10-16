@@ -15,6 +15,7 @@ import { StatusPill } from "@/components/sy/StatusPill";
 import { ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { BackupTargets } from "@/features/admin/BackupTargets";
 import { Bundles } from "@/features/admin/Bundles";
 import { shortWhen } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -61,7 +62,28 @@ export function FindingList({ findings }: { findings: Finding[] }) {
             <div>
               <span className="font-medium">{f.subject}</span>: {f.message}
             </div>
-            {f.action && <div className="text-muted-foreground">{f.action}</div>}
+            {f.action && (
+              <div className="text-muted-foreground">
+                {f.action}
+                {f.code === "backup_missing" && (
+                  <>
+                    {" "}
+                    <a
+                      href="#backup-targets"
+                      className="text-primary hover:underline"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        const el = document.getElementById("backup-targets");
+                        el?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+                        el?.focus({ preventScroll: true });
+                      }}
+                    >
+                      {t("Go to backup targets")}
+                    </a>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </li>
       ))}
@@ -213,15 +235,9 @@ function Backups() {
         </>
       }
     >
+      <BackupTargets />
       <div className="space-y-2 p-4 text-sm">
         {run.error && <ErrorState error={run.error} />}
-        {targets.data?.length === 0 && (
-          <p>
-            {t(
-              "No backup destination yet. Add one with the API (POST /system/backup-targets): local disk, S3-compatible storage, SFTP or FTP.",
-            )}
-          </p>
-        )}
         <p className="text-muted-foreground">
           {t(
             "A backup holds the desired state of every tenant, encrypted. Users, tokens and the audit log come from the database backup.",

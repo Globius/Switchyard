@@ -37,8 +37,21 @@ def test_supported_but_behind_is_a_warning() -> None:
 
 
 def test_unknown_version_is_reported() -> None:
-    (f,) = check_agent("dev", "0.10.0", COMPAT)
-    assert f.code == "agent_version_unknown"
+    for text in ("", "nightly", "1.0"):
+        (f,) = check_agent(text, "0.10.0", COMPAT)
+        assert (f.code, f.severity) == ("agent_version_unknown", "warning")
+
+
+def test_dev_builds_and_commit_hashes_are_info_not_a_replace_warning() -> None:
+    for text in ("dev", "310bf75", "310BF75A", "0123456789abcdef0123456789abcdef01234567"):
+        (f,) = check_agent(text, "0.10.0", COMPAT, "edge-1")
+        assert (f.code, f.severity) == ("agent_dev_build", "info")
+        assert "Replace the engine" not in f.action
+
+
+def test_release_stamped_with_build_metadata_compares_normally() -> None:
+    assert check_agent("0.10.0+310bf75", "0.10.0", COMPAT) == []
+    assert check_agent("0.9.0+310bf75", "0.10.0", COMPAT)[0].code == "agent_behind"
 
 
 def test_schema() -> None:

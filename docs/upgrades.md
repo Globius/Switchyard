@@ -14,8 +14,14 @@ procedure is still in [production.md](production.md#11-upgrades) and [runbooks/r
 
 It only advises. An engine on an old agent keeps receiving configuration; the finding says which template to roll to.
 Findings carry a `severity` (`info`, `warning`, `error`), a stable `code` (`agent_behind`, `agent_unsupported`,
-`agent_version_unknown`, `schema_pending`, `schema_newer_than_code`), the subject and the action.
+`agent_dev_build`, `agent_version_unknown`, `schema_pending`, `schema_newer_than_code`), the subject and the action.
 
+
+**Agent version stamping.** `se-image/fetch-binaries.sh` builds `sy-agent` as `<release>+<commit>` (for example `0.1.0+310bf75`);
+the build metadata is ignored when comparing. `SY_VERSION=<release>` overrides the release, and a value that is not a version
+(a bare commit hash) is appended to the release rather than reported as is. An agent that still reports `dev` or a bare commit
+hash (an older template) gets an `agent_dev_build` finding at `info` level: it is a development build, not a fault, and the
+fix is to rebuild the template. Any other unreadable version (including none) stays an `agent_version_unknown` warning.
 
 ## Configuration backups (built)
 
@@ -201,7 +207,8 @@ Lab runs, with screenshots and the problems found: [upgrades, backups, restore a
 
 Admin > Upgrades (system administrators) shows the controller, database and engine versions, a one-line verdict ("Up to date", "Version X is available.
 Upgrading is recommended.", or "Something needs fixing before an upgrade"), every finding with what to do about it, the release notes and install order when
-the feed found a newer release, the recent backups with **Back up now**, and the feed settings with **Check now**. It advises and never blocks.
+the feed found a newer release, the backup targets (**Add target**, **Test**, **Delete**; credentials are `secret_ref`s, never values, and the
+"no backup" finding links straight to them), the recent backups with **Back up now**, and the feed settings with **Check now**. It advises and never blocks.
 Engine rolls have their own page in each tenant (Infrastructure > Engine rolls): start one with a template, a window and a soak time, and pause, resume or abort it.
 
 ## Planned (ADR 0205)

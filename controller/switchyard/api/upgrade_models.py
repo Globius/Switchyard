@@ -190,6 +190,44 @@ class ReleaseFeedRead(ReleaseFeedIn):
     )
 
 
+class GitMirrorIn(ApiModel):
+    """Where committed revisions are mirrored as YAML. Off until `enabled` is true."""
+
+    enabled: bool = False
+    url: str = Field(
+        default="", description="The GitLab address, `https://` and no credentials in it."
+    )
+    project: str = Field(default="", description="Numeric project id or path (`group/project`).")
+    branch: str = Field(default="main", description="The branch that receives the commits.")
+    token_ref: str = Field(
+        default="",
+        description="Secret reference of a project access token with write access to that "
+        "repository only (for example `kv/git/mirror-token`). Never the token itself.",
+    )
+
+
+class GitMirrorRead(GitMirrorIn):
+    """The mirror settings, where they come from, and how the last write went."""
+
+    source: Literal["settings", "environment", "none"] = Field(
+        description="`settings`: saved here. `environment`: from SWITCHYARD_GITLAB_* on the "
+        "controller (saving settings replaces it). `none`: not configured."
+    )
+    last_ok_at: str | None = Field(default=None, description="When a revision last reached Git.")
+    last_sha: str | None = Field(default=None, description="The commit of that write.")
+    last_error: str | None = Field(
+        default=None, description="Why the last write failed, if it did."
+    )
+
+
+class GitMirrorTestRead(ApiModel):
+    """The outcome of reading the mirror branch."""
+
+    ok: bool
+    head: str | None = Field(default=None, description="The branch's head commit.")
+    error: str | None = None
+
+
 class RollStartIn(ApiModel):
     """Replace every enabled engine of an SE group with one cloned from a new template."""
 

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Menu, MenuContent, MenuTrigger } from "@/components/ui/popover-menu";
@@ -26,7 +26,8 @@ export function initials(name: string): string {
 export function UserMenu() {
   const { data: me } = useMe();
   const refresh = useRefreshAccess();
-  const logout = useLogout();
+  const navigate = useNavigate();
+  const logout = useLogout(() => void navigate({ to: "/login", replace: true }));
   const { theme, setTheme } = useTheme();
   if (!me) return null;
   return (

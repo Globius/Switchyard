@@ -1488,6 +1488,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/git-mirror": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The Git mirror settings and how the last write went
+         * @description Every applied revision can be written as YAML to a GitLab repository.
+         *
+         *     Requires a system administrator.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["get_git_mirror_api_v1_system_git_mirror_get"];
+        /**
+         * Set where revisions are mirrored
+         * @description Save the settings. The token is a `secret_ref`; a token value is rejected.
+         *
+         *     Applying a change never waits for the mirror: a failed write is retried and shown here.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        put: operations["put_git_mirror_api_v1_system_git_mirror_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/git-mirror/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check that the mirror can be reached
+         * @description Reads the mirror branch with the stored credentials. Writes nothing.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["test_git_mirror_api_v1_system_git_mirror_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/releases": {
         parameters: {
             query?: never;
@@ -10096,6 +10150,112 @@ export interface components {
             tls: boolean;
             /** Username */
             username: string;
+        };
+        /**
+         * GitMirrorIn
+         * @description Where committed revisions are mirrored as YAML. Off until `enabled` is true.
+         */
+        GitMirrorIn: {
+            /**
+             * Branch
+             * @description The branch that receives the commits.
+             * @default main
+             */
+            branch: string;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Project
+             * @description Numeric project id or path (`group/project`).
+             * @default
+             */
+            project: string;
+            /**
+             * Token Ref
+             * @description Secret reference of a project access token with write access to that repository only (for example `kv/git/mirror-token`). Never the token itself.
+             * @default
+             */
+            token_ref: string;
+            /**
+             * Url
+             * @description The GitLab address, `https://` and no credentials in it.
+             * @default
+             */
+            url: string;
+        };
+        /**
+         * GitMirrorRead
+         * @description The mirror settings, where they come from, and how the last write went.
+         */
+        GitMirrorRead: {
+            /**
+             * Branch
+             * @description The branch that receives the commits.
+             * @default main
+             */
+            branch: string;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Last Error
+             * @description Why the last write failed, if it did.
+             */
+            last_error?: string | null;
+            /**
+             * Last Ok At
+             * @description When a revision last reached Git.
+             */
+            last_ok_at?: string | null;
+            /**
+             * Last Sha
+             * @description The commit of that write.
+             */
+            last_sha?: string | null;
+            /**
+             * Project
+             * @description Numeric project id or path (`group/project`).
+             * @default
+             */
+            project: string;
+            /**
+             * Source
+             * @description `settings`: saved here. `environment`: from SWITCHYARD_GITLAB_* on the controller (saving settings replaces it). `none`: not configured.
+             * @enum {string}
+             */
+            source: "settings" | "environment" | "none";
+            /**
+             * Token Ref
+             * @description Secret reference of a project access token with write access to that repository only (for example `kv/git/mirror-token`). Never the token itself.
+             * @default
+             */
+            token_ref: string;
+            /**
+             * Url
+             * @description The GitLab address, `https://` and no credentials in it.
+             * @default
+             */
+            url: string;
+        };
+        /**
+         * GitMirrorTestRead
+         * @description The outcome of reading the mirror branch.
+         */
+        GitMirrorTestRead: {
+            /** Error */
+            error?: string | null;
+            /**
+             * Head
+             * @description The branch's head commit.
+             */
+            head?: string | null;
+            /** Ok */
+            ok: boolean;
         };
         /**
          * GrafanaLaunchIn
@@ -23969,6 +24129,226 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["CrowdSecTestRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_git_mirror_api_v1_system_git_mirror_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "branch": "main",
+                     *       "enabled": true,
+                     *       "last_ok_at": "2026-10-13T04:00:00+00:00",
+                     *       "last_sha": "0123456789abcdef0123456789abcdef01234567",
+                     *       "project": "ops/switchyard-mirror",
+                     *       "source": "settings",
+                     *       "token_ref": "kv/git/mirror-token",
+                     *       "url": "https://git.example.test"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GitMirrorRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    put_git_mirror_api_v1_system_git_mirror_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "branch": "main",
+                 *       "enabled": true,
+                 *       "project": "ops/switchyard-mirror",
+                 *       "token_ref": "kv/git/mirror-token",
+                 *       "url": "https://git.example.test"
+                 *     }
+                 */
+                "application/json": components["schemas"]["GitMirrorIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "branch": "main",
+                     *       "enabled": true,
+                     *       "last_ok_at": "2026-10-13T04:00:00+00:00",
+                     *       "last_sha": "0123456789abcdef0123456789abcdef01234567",
+                     *       "project": "ops/switchyard-mirror",
+                     *       "source": "settings",
+                     *       "token_ref": "kv/git/mirror-token",
+                     *       "url": "https://git.example.test"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GitMirrorRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    test_git_mirror_api_v1_system_git_mirror_test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "head": "0123456789abcdef0123456789abcdef01234567",
+                     *       "ok": true
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GitMirrorTestRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */

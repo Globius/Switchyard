@@ -32,7 +32,7 @@ from urllib.parse import urlparse
 from switchyard.adapters.agent import BundleSigner
 from switchyard.adapters.cloudflare import Cloudflare, HttpCloudflare
 from switchyard.adapters.crowdsec import HttpCrowdSec
-from switchyard.adapters.git import GitLabMirror, GitMirror
+from switchyard.adapters.git import GitMirror
 from switchyard.adapters.grafana import HttpGrafana
 from switchyard.adapters.iplists import HttpIpLists
 from switchyard.adapters.notify import HttpNotifier, SmtpSettings
@@ -69,6 +69,7 @@ from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.dns_records import SYNC_DNS_RECORDS_JOB, DnsRecordSync
 from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.gc import GC_JOB, GarbageCollector
+from switchyard.services.git_mirror import GitMirrorSettings
 from switchyard.services.grafana import GrafanaConfig, GrafanaService
 from switchyard.services.gslb import (
     PROBE_GSLB_JOB,
@@ -342,12 +343,14 @@ def gslb_service(db: Databases) -> GslbService | None:
     return GslbService(db, HttpPowerDns(url, key, server_id=server))
 
 
-def git_mirror() -> GitMirror | None:
-    """The GitLab mirror, if configured."""
-    url = os.environ.get("SWITCHYARD_GITLAB_URL")
-    project = os.environ.get("SWITCHYARD_GITLAB_PROJECT")
-    token = os.environ.get("SWITCHYARD_GITLAB_TOKEN")
-    return GitLabMirror(url, project, token) if url and project and token else None
+def git_mirror(db: Databases, secrets: SecretsReader) -> GitMirror:
+    """The Git mirror the worker writes with.
+
+    Reads the settings saved on the Git mirror page each time, so a change applies without a
+    restart. Without saved settings, ``SWITCHYARD_GITLAB_URL``, ``SWITCHYARD_GITLAB_PROJECT`` and
+    ``SWITCHYARD_GITLAB_TOKEN`` still work. When neither is set, mirror jobs do nothing.
+    """
+    return GitMirrorSettings(db, secrets)
 
 
 def infra_service(db: Databases, secrets: SecretsReader) -> InfraService | None:
@@ -498,7 +501,7 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     handlers = build_handlers(
         db,
         pipeline,
-        git_mirror(),
+        git_mirror(db, secrets),
         status,
         infra_service(db, secrets),
         certs,
