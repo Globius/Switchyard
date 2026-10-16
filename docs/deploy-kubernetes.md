@@ -107,6 +107,22 @@ Everything after that (tenants, networks, SE groups, deploying and enrolling eng
 enrollment, run `deploy/quickstart/enroll-engine.sh` with `HOST_ADDR` and `HTTPS_PORT` set to the controller's public address
 and `SECRETS_DIR` holding `ca.pem` (the CA in `switchyard-secrets`) and `dp_password` (the secret stored at `kv/se/dataplane`).
 
+`syctl token` prints the token and a newline, so `TOKEN=$(syctl token)` captures it (`syctl token --json` prints
+`{"name": ..., "token": ...}`). The token is `sy_` plus URL-safe base64, which includes `-` and `_`: quote it in shells.
+
+Two different CAs are involved. The **agent CA** (`ca.pem`) signs the engines' client certificates. The agent also needs a CA
+for the controller's **HTTPS** certificate. The script defaults to `ca.pem`, which is right only when the controller's HTTPS
+certificate comes from that CA. When `publicUrl` has a publicly trusted certificate (for example Let's Encrypt), pass
+`--controller-ca system` to use the engine's system CA bundle, or `--controller-ca FILE` with the CA that signed it.
+
+Engines that enroll after the group's first apply do not receive the configuration by themselves: run
+`POST /api/v1/tenants/{t}/se-groups/{group}/reapply` (canary first) once they are enrolled ([ADR 0213](adr/0213-pilot-deployment-fixes.md)).
+
+### Scheduling the proxy
+
+`proxy.nodeSelector`, `proxy.tolerations` and `proxy.affinity` work like those of `api` and `worker`. With
+`service.externalTrafficPolicy: Local` and a LoadBalancer announced from some nodes only, set them so proxy pods run on those nodes.
+
 ### Exposure on a bare cluster, and a database failover
 
 On a cluster without a cloud load balancer, k3s's built-in `servicelb` answers `type: LoadBalancer` with the node addresses (it is
