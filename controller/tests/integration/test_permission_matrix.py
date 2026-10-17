@@ -258,6 +258,13 @@ for _path in (
 ROUTES[("GET", "/system/controller")] = ("manage", "controller")
 ROUTES[("GET", "/system/upgrade/check")] = ("manage", "controller")
 ROUTES[("DELETE", "/system/bundles/{bundle}")] = ("manage", "controller")
+ROUTES[("GET", "/system/crowdsec")] = ("manage", "controller")
+ROUTES[("PUT", "/system/crowdsec")] = ("manage", "controller")
+ROUTES[("POST", "/system/crowdsec/test")] = ("manage", "controller")
+ROUTES[("POST", "/system/crowdsec/sync")] = ("manage", "controller")
+ROUTES[("GET", "/system/git-mirror")] = ("manage", "controller")
+ROUTES[("PUT", "/system/git-mirror")] = ("manage", "controller")
+ROUTES[("POST", "/system/git-mirror/test")] = ("manage", "controller")
 ROUTES[("GET", "/system/bundles/{bundle}/file")] = ("manage", "controller")
 ROUTES[("GET", "/system/bundles/{bundle}")] = ("manage", "controller")
 ROUTES[("POST", "/system/bundles/fetch")] = ("manage", "controller")
@@ -300,6 +307,8 @@ ROUTES.pop(("GET", "/tenants/{t}/routing-profiles/{object_id}/rendered"), None)
 # valid request bodies, so the role check (not body validation) decides the status
 NOW = "2038-01-01T00:00:00+00:00"
 BODIES: dict[tuple[str, str], Any] = {
+    ("PUT", "/system/crowdsec"): {},
+    ("PUT", "/system/git-mirror"): {},
     ("POST", "/tenants/{t}/device-enrollments"): {"policy_id": "{uuid}"},
     ("POST", "/tenants/{t}/engines/{engine}/captures"): {"interface": "any", "duration_s": 5},
     ("POST", "/tenants/{t}/health-monitors/{monitor_id}/test"): {

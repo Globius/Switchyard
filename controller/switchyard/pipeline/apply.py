@@ -524,7 +524,9 @@ class ApplyPipeline:
                 continue  # no agent: routing and certificates are provisioned out of band
             slot = EngineSlot(record.name, index, record.mgmt_ip or "0.0.0.0")  # noqa: S104
             try:
-                files = await engine_files(after, group, slot, self._secrets, self._crowdsec_loader)
+                files = await engine_files(
+                    after, group, slot, self._secrets, self._crowdsec_loader, plan.target.files
+                )
             except BundleError as exc:
                 raise _PlanError(str(exc)) from exc
             if not files:
@@ -533,7 +535,12 @@ class ApplyPipeline:
             if existed:
                 with contextlib.suppress(BundleError):
                     plan.previous_bundles[record.name] = await engine_files(
-                        base, group, slot, self._secrets, self._crowdsec_loader
+                        base,
+                        group,
+                        slot,
+                        self._secrets,
+                        self._crowdsec_loader,
+                        plan.previous.files if plan.previous else None,
                     )
 
     # -- execution -------------------------------------------------------------------------------

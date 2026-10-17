@@ -6279,8 +6279,8 @@ export interface components {
          * ApplyJobResult
          * @description Result of an ``apply_change_set`` job.
          *
-         *     ``ok: false`` means the change set was rejected or reverted: the job *finished* and will not be
-         *     retried. Compare ``Job.retrying``.
+         *     A change set that is rejected or reverted fails the job (state ``dead``, no retry, the reason
+         *     in ``error``): ADR 0223. A succeeded job always has ``ok: true``. Compare ``Job.retrying``.
          */
         ApplyJobResult: {
             /**
@@ -11005,7 +11005,7 @@ export interface components {
             } | null;
             /**
              * Retrying
-             * @description True while a failed attempt waits for its next try (state `queued`, attempts > 0). A reverted or rejected apply is not retrying: it is `succeeded` with `ok: false`.
+             * @description True while a failed attempt waits for its next try (state `queued`, attempts > 0). A reverted or rejected apply is not retrying: it is `dead` with the reason in `error`.
              */
             retrying: boolean;
             /** Stages */

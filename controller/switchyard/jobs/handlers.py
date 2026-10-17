@@ -55,6 +55,12 @@ from switchyard.services.roll import ADVANCE_ROLLS_JOB, RollService
 from switchyard.services.status import StatusService
 
 log = logging.getLogger("switchyard.jobs")
+
+
+class ChangeSetFailedError(RuntimeError):
+    """The pipeline ran and the change set did not apply; the job fails with its reason."""
+
+
 GIT_MIRROR_JOB = "git_mirror"
 
 
@@ -124,6 +130,9 @@ def build_handlers(
             request_id=job.request_id,
             progress=JobProgress(db.admin, job.id),
         )
+        if not report.ok:
+            # a failed change set is a failed job, not a finished one with ok=false in its result
+            raise ChangeSetFailedError(report.error or "the change set failed")
         return report.as_dict()
 
     async def reapply_se_group(job: Job) -> dict[str, Any]:
@@ -133,6 +142,8 @@ def build_handlers(
             request_id=job.request_id,
             progress=JobProgress(db.admin, job.id),
         )
+        if not report.ok:
+            raise ChangeSetFailedError(report.error or "the SE group could not be updated")
         return report.as_dict()
 
     handlers: dict[str, Handler] = {APPLY_JOB: apply_change_set, REAPPLY_JOB: reapply_se_group}

@@ -63,7 +63,7 @@ async def test_apply_job_then_git_mirror_job(pg_url: str) -> None:
         assert not await worker.run_once()
 
 
-async def test_failed_apply_is_a_finished_job_not_a_retry(pg_url: str) -> None:
+async def test_failed_apply_fails_the_job_without_a_retry(pg_url: str) -> None:
     async with world(pg_url) as w:
         worker = Worker(w.db.admin, build_handlers(w.db, w.pipeline, None), worker_id="t")
         w.engines["se-a"].fail_next("rejected")
@@ -73,8 +73,9 @@ async def test_failed_apply_is_a_finished_job_not_a_retry(pg_url: str) -> None:
         )
         job_id = await w.service.apply(principal(), TENANT, detail.record.id)
         assert await worker.run_once()
-        assert await scalar(w, "SELECT state FROM job WHERE id = :i", i=job_id) == "succeeded"
-        assert await scalar(w, "SELECT result->>'ok' FROM job WHERE id = :i", i=job_id) == "false"
+        assert await scalar(w, "SELECT state FROM job WHERE id = :i", i=job_id) == "dead"
+        error = await scalar(w, "SELECT error FROM job WHERE id = :i", i=job_id)
+        assert "rejected" in str(error)
         assert await scalar(w, "SELECT attempts FROM job WHERE id = :i", i=job_id) == 1
         assert await scalar(w, "SELECT state FROM change_set") == "failed"
 

@@ -522,7 +522,7 @@ class ChangeSetService:
                 APPLY_JOB,
                 {"tenant_id": str(tenant_id), "change_set_id": str(change_set_id)},
                 tenant_id=tenant_id,
-                max_attempts=3,
+                max_attempts=1,  # a failed change set is final (ADR 0223)
                 request_id=request_id,
             )
 
@@ -589,7 +589,7 @@ class ChangeSetService:
                 APPLY_JOB,
                 {"tenant_id": str(tenant_id), "change_set_id": str(change_set_id)},
                 tenant_id=tenant_id,
-                max_attempts=3,
+                max_attempts=1,  # a failed change set is final (ADR 0223)
                 request_id=request_id,
             )
 

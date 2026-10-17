@@ -98,8 +98,8 @@ shows one job with its `stages`; for an apply they are `lock, render, validate, 
 with `state` (`pending`, `running`, `succeeded`, `failed`, `skipped`), timing and the error of the stage that
 failed. `GET …/jobs/{id}/log` returns the log lines.
 
-- An apply that was rejected or reverted is a **finished** job (`state: succeeded`, `ok: false`); read the
-  failing stage and `result.error`. `retrying: true` means an attempt failed and the job waits for its next try.
+- An apply that was rejected or reverted **fails** the job (`state: dead`, the reason in `error`, no retry; ADR 0223);
+  read the failing stage. A `succeeded` apply job always has `ok: true`. `retrying: true` means an attempt failed and the job waits for its next try.
 - `POST …/jobs/{id}/retry` (operator) queues a `dead` job again with a fresh attempt budget.
 - `POST …/jobs/{id}/cancel` (operator) cancels a job that has not started; a running job cannot be cancelled.
   Cancelling an apply sets its change set to `failed`, so it can be applied again.

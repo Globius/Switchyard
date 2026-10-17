@@ -93,10 +93,10 @@ async def test_failed_canary_shows_the_failing_stage_and_error(pg_url: str) -> N
 
         job = Job.from_row(await JobService(w.db).get(principal(), TENANT, job_id))
         by_name = {s.name: s for s in job.stages}
-        # Finished, not retrying: the apply was reverted.
+        # Failed, not retrying: the apply was reverted (ADR 0223).
         assert (job.state, job.ok, job.retrying, job.attempts) == (
-            JobState.SUCCEEDED,
-            False,
+            JobState.DEAD,
+            None,
             False,
             1,
         )

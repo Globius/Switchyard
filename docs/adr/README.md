@@ -160,3 +160,5 @@ Date: YYYY-MM-DD
 | [0217](0217-se-image-download-retries.md) | Retry the GitHub downloads in the SE image build | Accepted |
 | [0218](0218-snyk-code-triage.md) | Snyk Code triage: fix real findings, ignore the rest with a reason | Accepted |
 | [0221](0221-optional-otlp-log-sink.md) | Optional OTLP log sink on engines, Loki optional | Accepted |
+| [0222](0222-health-check-sni.md) | Server name on health checks to TLS pools | Accepted |
+| [0223](0223-crt-list-certificates-and-failed-apply-jobs.md) | Bundle every certificate a crt-list names; a failed change set fails its job | Accepted |

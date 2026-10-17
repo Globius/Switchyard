@@ -10,7 +10,7 @@ bundle over mTLS (backend design, "Secrets"); they are never rendered into the H
 revision snapshots or the Git mirror.
 """
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from uuid import UUID
 
 from switchyard.adapters.secrets import SecretsReader
@@ -29,6 +29,7 @@ from switchyard.render.crowdsec import (
     uses_crowdsec,
 )
 from switchyard.render.escape import RenderError
+from switchyard.render.haproxy import CERT_DIR
 from switchyard.render.routing import EngineSlot, render_agent_bundle
 from switchyard.render.tokens import jwt_key_files
 from switchyard.render.waf import render_waf_files
@@ -225,14 +226,54 @@ async def _crowdsec_files(
         raise BundleError(str(exc)) from exc
 
 
+def _crt_list_certs(snapshot: Snapshot, rendered: Mapping[str, str]) -> list[dm.Certificate]:
+    """The certificates the rendered crt-lists name, whatever referenced them.
+
+    Raises:
+        BundleError: If a crt-list names a certificate the tenant does not have.
+
+    Example:
+        >>> from switchyard.domain.snapshot import Snapshot
+        >>> _crt_list_certs(Snapshot(), {})
+        []
+    """
+    by_file = {CERT_PATH.format(name=esc.ident(c.name)): c for c in snapshot.certificates}
+    found: dict[str, dm.Certificate] = {}
+    for path, text in rendered.items():
+        if not (path.startswith("certs/") and path.endswith(".crtlist")):
+            continue
+        for line in text.splitlines():
+            token = line.split(" ", 1)[0].strip()
+            if not token:
+                continue
+            rel = token.removeprefix(f"{CERT_DIR}/")
+            if f"{CERT_DIR}/{rel}" != token:
+                raise BundleError(f"{path} names {token}, which is outside {CERT_DIR}")
+            cert = by_file.get(f"certs/{rel}")
+            if cert is None:
+                raise BundleError(f"{path} names {token}, but no certificate has that file name")
+            found[f"certs/{rel}"] = cert
+    return list(found.values())
+
+
 async def engine_files(
     snapshot: Snapshot,
     group: dm.SeGroup,
     slot: EngineSlot,
     secrets: SecretsReader | None,
     crowdsec: CrowdSecLoader | None = None,
+    rendered: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
     """Return ``path -> content`` for one engine (empty if nothing is agent-managed for it).
+
+    Args:
+        snapshot: Desired state.
+        group: The engine's SE group.
+        slot: The engine's slot in the group.
+        secrets: Where certificate material comes from.
+        crowdsec: CrowdSec bouncer settings loader.
+        rendered: The group's rendered HAProxy files. Every certificate a rendered crt-list names
+            is bundled too, so the engine never gets a crt-list that points at a missing file.
 
     Raises:
         BundleError: If a secret is missing or a certificate bundle is not a PEM with a key.
@@ -249,8 +290,11 @@ async def engine_files(
     files |= await _captcha_files(snapshot, group, secrets)
     files |= await _auth_files(snapshot, group, secrets)
     files |= jwt_key_files(snapshot, group.id)
-    for cert in referenced_certs(snapshot, group.id):
-        if cert.purpose == "client_ca":
+    listed = _crt_list_certs(snapshot, rendered or {})
+    wanted = {c.id: c for c in referenced_certs(snapshot, group.id)}
+    wanted |= {c.id: c for c in listed}
+    for cert in sorted(wanted.values(), key=lambda c: c.name):
+        if cert.purpose == "client_ca" and cert not in listed:
             files |= await _ca_files(cert, secrets)
             continue
         if secrets is None:
