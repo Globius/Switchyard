@@ -233,7 +233,8 @@ async def test_containers_are_off_until_a_system_administrator_enables_them(
     }
     deploy = f"/api/v1/tenants/acme/se-groups/{GROUP}/deploy"
 
-    assert (await c.get("/api/v1/me", headers=viewer)).json()["features"] == {"lxc_guests": False}
+    off = {"lxc_guests": False, "ip_list_feeds": [], "ip_list_geo": False}
+    assert (await c.get("/api/v1/me", headers=viewer)).json()["features"] == off
     refused = await c.post(deploy, json=body, headers=tenant_admin)
     assert refused.status_code == 403 and refused.json()["code"] == "lxc_disabled"
     assert "disabled" in refused.json()["detail"]
@@ -250,7 +251,10 @@ async def test_containers_are_off_until_a_system_administrator_enables_them(
 
     on = await c.patch("/api/v1/system/settings", json={"allow_lxc_guests": True}, headers=root)
     assert on.status_code == 200 and on.json()["allow_lxc_guests"] is True
-    assert (await c.get("/api/v1/me", headers=viewer)).json()["features"] == {"lxc_guests": True}
+    assert (await c.get("/api/v1/me", headers=viewer)).json()["features"] == {
+        **off,
+        "lxc_guests": True,
+    }
     accepted = await c.post(deploy, json=body, headers=tenant_admin)
     assert accepted.status_code == 202, accepted.text
     async with admin_session(w.db.admin) as s:

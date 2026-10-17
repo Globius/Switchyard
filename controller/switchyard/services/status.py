@@ -377,7 +377,12 @@ class StatusService:
             slot = EngineSlot(record.name, index, record.mgmt_ip or "0.0.0.0")  # noqa: S104
             try:
                 files = await engine_files(
-                    snapshot, group, slot, self._secrets, self._crowdsec_loader
+                    snapshot,
+                    group,
+                    slot,
+                    self._secrets,
+                    self._crowdsec_loader,
+                    rendered.files,
                 )
             except BundleError:
                 continue

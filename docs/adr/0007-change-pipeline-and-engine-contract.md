@@ -29,7 +29,7 @@ real API (`tests/integration/test_engine_contract.py`) showed behaviour the desi
 - **Commit after rollout.** Desired state is written only after the engines accepted it. If the
   commit loses an optimistic-lock race, engines are reverted. A brand-new SE group has no previous
   rendered config, so there is nothing to restore; the report says so.
-- **Job semantics.** A reverted or rejected apply is a *finished* job (`ok: false`), not a retry.
+- **Job semantics.** A reverted or rejected apply is not retried and fails the job (ADR 0223; it was a *finished* job with `ok: false`).
   Only infrastructure errors raise and retry with backoff.
 - **API** (`api/app.py`): bearer API tokens (hashed, expiring, role-scoped), RFC 9457 errors, ETag
   and `If-Match`, `?change_set=` draft reads with `draft_status`, `?apply=true` implicit change sets.

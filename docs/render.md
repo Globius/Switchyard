@@ -46,6 +46,9 @@ Plane API rewrites the config but keeps comments, so the fingerprint is how drif
 an SE runs. The crt-list sits beside the certificates because the Data Plane API keeps both in one
 directory; object names have no dots because the API rewrites dots in file names.
 
+Every certificate a crt-list names is put in the engine's agent bundle, whichever object referenced it; a crt-list line
+that matches no certificate of the tenant rejects the change set before any engine is touched (ADR 0223).
+
 Certificates and keys are **not** rendered. A `crt-list` line points to
 `/etc/switchyard/certs/<certificate name>.pem`, which the controller sends to the agent in the signed bundle (key material comes from OpenBao; see ADR 0010).
 

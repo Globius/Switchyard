@@ -101,8 +101,8 @@ class GroupResult(ApiModel):
 class ApplyJobResult(ApiModel):
     """Result of an ``apply_change_set`` job.
 
-    ``ok: false`` means the change set was rejected or reverted: the job *finished* and will not be
-    retried. Compare ``Job.retrying``.
+    A change set that is rejected or reverted fails the job (state ``dead``, no retry, the reason
+    in ``error``): ADR 0223. A succeeded job always has ``ok: true``. Compare ``Job.retrying``.
     """
 
     ok: bool
@@ -128,8 +128,8 @@ class Job(ApiModel):
     error: str | None = Field(None, description="Error of the latest failed attempt.")
     retrying: bool = Field(
         description="True while a failed attempt waits for its next try (state `queued`, "
-        "attempts > 0). A reverted or rejected apply is not retrying: it is `succeeded` with "
-        "`ok: false`."
+        "attempts > 0). A reverted or rejected apply is not retrying: it is `dead` "
+        "with the reason in `error`."
     )
     ok: bool | None = Field(
         None, description="For finished jobs that report one (apply): whether the work succeeded."

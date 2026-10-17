@@ -16,8 +16,8 @@ apply progress (ticket T5 in `docs/design/05-frontend-backend-tickets.md`).
    `skipped`. With several SE groups a stage keeps one entry (first start, last finish). The worker
    writes with the admin role, because the application role may not update jobs. Each attempt resets
    the stages; the log keeps every attempt.
-2. **Finished is not retrying (ADR 0007).** A reverted or rejected apply ends as `succeeded` with
-   `ok: false` and is never retried. `retrying` is true only while a failed attempt waits for its next
+2. **Failed is not retrying (ADR 0007, changed by ADR 0223).** A reverted or rejected apply ends as `dead`
+   with the reason in `error` and is never retried (it was `succeeded` with `ok: false` before ADR 0223). `retrying` is true only while a failed attempt waits for its next
    try (`queued` with `attempts > 0`). `ok` is copied from the result for kinds that report one.
 3. **Retry and cancel.** Both need the operator role, are audited (`job.retried`, `job.cancelled`) and
    are tenant-scoped. Retry accepts `dead` (or `failed`) jobs and gives them a fresh attempt budget.
