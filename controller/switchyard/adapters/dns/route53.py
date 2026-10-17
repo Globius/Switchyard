@@ -14,11 +14,12 @@ import datetime as dt
 import hashlib
 import hmac
 import time
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # types only; parsing is defusedxml
 from dataclasses import dataclass
 from urllib.parse import quote
 
 import httpx
+from defusedxml import ElementTree as SafeET
 
 from switchyard.adapters.dns.base import DnsError
 from switchyard.adapters.dns.zones import zone_candidates
@@ -173,7 +174,7 @@ class Route53:
             raise DnsError(f"STS AssumeRole: {exc}") from exc
         if response.status_code != 200:
             raise DnsError(f"STS AssumeRole: HTTP {response.status_code}: {_error(response)}")
-        root = ET.fromstring(response.text)  # noqa: S314 - AWS answered over TLS
+        root = SafeET.fromstring(response.text)
         ns = {"s": root.tag.partition("}")[0].strip("{")}
         node = root.find(".//s:Credentials", ns)
         if node is None:
@@ -209,7 +210,8 @@ class Route53:
             raise DnsError(
                 f"Route 53 {method} {path}: HTTP {response.status_code}: {_error(response)}"
             )
-        return ET.fromstring(response.text)  # noqa: S314 - AWS answered over TLS
+        root: ET.Element = SafeET.fromstring(response.text)
+        return root
 
     async def _zone_id(self, name: str) -> str:
         if self._zone:
@@ -303,8 +305,8 @@ def _xml(text: str) -> str:
 
 def _error(response: httpx.Response) -> str:
     try:
-        root = ET.fromstring(response.text)  # noqa: S314
+        root = SafeET.fromstring(response.text)
         message = root.findtext(".//{*}Message") or root.findtext(".//Message")
         return message or response.text[:200]
-    except ET.ParseError:
+    except (ET.ParseError, ValueError):  # ValueError: defusedxml refused a DTD or entity
         return response.text[:200]

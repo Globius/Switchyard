@@ -23,6 +23,7 @@ dependencies = [
   "signxml>=5.1.0",
   "dnspython>=2.9.0",
   "asyncssh>=2.24.1",
+  "defusedxml>=0.7.1",
 ]
 
 [project.scripts]
@@ -30,6 +31,7 @@ syctl = "switchyard.cli:app"
 
 [dependency-groups]
 dev = [
+  "types-defusedxml>=0.7.0",
   "pytest>=8.3",
   "pytest-asyncio>=0.24",
   "pytest-cov>=6.0",

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Snyk policy file. Every entry needs a reason and an expiry; review them when they lapse.
-# Policy: docs/security/snyk.md
+# Policy: docs/security/snyk.md. Code triage: docs/adr/0218-snyk-code-triage.md.
 version: v1.25.0
 ignore:
   SNYK-DEBIAN12-ZLIB-6008961:
@@ -14,3 +14,11 @@ ignore:
           Patroni and PostgreSQL never create ZIP archives. Revisit when Debian ships a fix.
         expires: 2027-01-16T00:00:00.000Z
         created: 2026-10-16T00:00:00.000Z
+exclude:
+  code:
+    # Test fixtures: dummy credentials, never used outside the test run.
+    - controller/tests/**
+    - agent/**/*_test.go
+    - provider/**/*_test.go
+    - ui/tests/**
+    - se-image/test/**

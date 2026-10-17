@@ -17,13 +17,13 @@ import io
 import os
 import ssl
 import tempfile
-import xml.etree.ElementTree as ET
 from collections.abc import Awaitable, Callable
 from pathlib import Path, PurePosixPath
 from typing import Protocol, cast
 
 import asyncssh
 import httpx
+from defusedxml import ElementTree as SafeET
 
 from switchyard.adapters.dns.route53 import AwsCredentials, sign
 from switchyard.adapters.secrets import SecretsReader
@@ -205,7 +205,7 @@ class S3Store:
             res = await self._call("GET", "", query=query)
             if res.status_code // 100 != 2:
                 raise BackupTargetError(f"S3 refused the listing (HTTP {res.status_code})")
-            root = ET.fromstring(res.text)  # noqa: S314 (the response of our own signed request)
+            root = SafeET.fromstring(res.text)
             ns = root.tag.partition("}")[0] + "}" if root.tag.startswith("{") else ""
             names += [PurePosixPath(k.text or "").name for k in root.iter(f"{ns}Key")]
             token = (
