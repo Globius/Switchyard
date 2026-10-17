@@ -126,7 +126,7 @@ The token is single use and expires after an hour. A VM answers "QEMU guest agen
 the script again. When the controller is on another machine than the one you run the script on, give it a copy of the
 controller's `secrets/ca.pem` and `dp_password` (`SECRETS_DIR=...`) and the address engines use (`HOST_ADDR=...`,
 `HTTPS_PORT=...`). `--vector-env FILE` also hands the engine its log-shipping settings (the five variables of
-[runbooks/telemetry.md](runbooks/telemetry.md)).
+[runbooks/telemetry.md](runbooks/telemetry.md), plus the optional `OTLP_LOGS_*` keys for a second sink).
 
 ## 9. Publish a first service
 

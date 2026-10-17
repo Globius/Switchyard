@@ -115,9 +115,21 @@ def run_vector(args: list[str], files: dict[str, str]) -> tuple[int, str]:
         container.remove(force=True)
 
 
+LOKI_SINK = """
+sinks:
+  loki:
+    type: loki
+    inputs: [parse, auth_parse, parse_waf]
+    endpoint: "${LOKI_URL}"
+    encoding: { codec: text }
+    labels: { tenant: "${TENANT_ID}", frontend: "{{ frontend }}" }
+"""
+
+
 def files() -> dict[str, str]:
     return {
         "cfg/vector.yaml": IMAGE_CONFIG.read_text("utf-8"),
+        "cfg/vector/sinks.yaml": LOKI_SINK,  # what sy-vector-sinks writes at start (ADR 0221)
         "cfg/vector/crowdsec.yaml": feed_text(),
         "cfg/tests.yaml": TESTS,
     }

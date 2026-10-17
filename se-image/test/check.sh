@@ -21,7 +21,15 @@ systemd-analyze verify /etc/systemd/system/sy-agent.service /etc/systemd/system/
   /etc/systemd/system/sy-agent-renew.service /etc/systemd/system/sy-agent-renew.timer 2>&1 | grep -v -E 'not executable|/usr/local/bin/sy-agent' || true
 dpkg -s frr-pythontools >/dev/null 2>&1 || fail "frr-pythontools missing (systemctl reload frr needs it)"
 command -v vector >/dev/null || fail "vector missing"
-VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION=true LOKI_URL=http://loki:3100 TENANT_ID=t TENANT_NAME=t SE_GROUP=g ENGINE=e vector validate --no-environment /etc/switchyard/vector.yaml   || fail "vector config invalid"
+# The sinks come from sy-vector-sinks (ADR 0221): validate the four combinations the way the unit does.
+[ -x /usr/local/sbin/sy-vector-sinks ] || fail "sy-vector-sinks"
+for sinks in "" "LOKI_URL=http://loki:3100" "OTLP_LOGS_URL=https://collector.example.org:4318"     "LOKI_URL=http://loki:3100 OTLP_LOGS_URL=https://collector.example.org:4318"; do
+  rm -rf /tmp/vsinks && mkdir /tmp/vsinks
+  # shellcheck disable=SC2086
+  env -u LOKI_URL -u OTLP_LOGS_URL $sinks TENANT_ID=t TENANT_NAME=t SE_GROUP=g ENGINE=e /usr/local/sbin/sy-vector-sinks /tmp/vsinks/sinks.yaml || fail "sy-vector-sinks ($sinks)"
+  # shellcheck disable=SC2086
+  env VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION=true TENANT_ID=t TENANT_NAME=t SE_GROUP=g ENGINE=e     vector validate --no-environment --config-dir /tmp/vsinks /etc/switchyard/vector.yaml || fail "vector config invalid ($sinks)"
+done
 # Things the first real hosts showed missing (ADR 0079): nftables enabled with a config that includes the managed files,
 # the Vector drop-in replacing the packaged validate step, and the IPv6 sysctls the services need.
 [ -f /etc/nftables.conf ] && grep -q 'include "/etc/switchyard/nftables/\*.nft"' /etc/nftables.conf || fail "nftables.conf"

@@ -25,6 +25,12 @@ write_files:
       TENANT_NAME=${tenant_name}
       SE_GROUP=${se_group}
       ENGINE=${engine}
+      # Optional second log sink (ADR 0221): OTLP/HTTP logs. Unset, only Loki is fed. Loki is optional too: leave
+      # LOKI_URL empty for an OTLP-only engine.
+      # OTLP_LOGS_URL=https://collector.example.org:4318
+      # OTLP_LOGS_HEADERS=Authorization: Bearer <token>
+      # OTLP_LOGS_INSECURE_SKIP_VERIFY=false
+      # OTLP_LOGS_CA_FILE=/etc/switchyard/otlp-ca.pem
 runcmd:
   - [systemctl, restart, sy-agent-enroll.service]
   - [systemctl, restart, vector.service]

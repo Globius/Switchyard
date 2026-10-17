@@ -159,3 +159,4 @@ Date: YYYY-MM-DD
 | [0216](0216-git-mirror-settings.md) | Git mirror settings in the controller, token as a secret reference | Accepted |
 | [0217](0217-se-image-download-retries.md) | Retry the GitHub downloads in the SE image build | Accepted |
 | [0218](0218-snyk-code-triage.md) | Snyk Code triage: fix real findings, ignore the rest with a reason | Accepted |
+| [0221](0221-optional-otlp-log-sink.md) | Optional OTLP log sink on engines, Loki optional | Accepted |

@@ -14,6 +14,11 @@
 # to use the engine's own system CA bundle, or FILE with the CA that signed that certificate. Not the agent CA.
 # --vector-env FILE is the engine's /etc/switchyard/vector.env (LOKI_URL, TENANT_ID, TENANT_NAME, SE_GROUP, ENGINE): the
 # cloud-init path writes it, and without it Vector does not run, so no access logs reach Loki (runbooks/telemetry.md).
+# Optional OTLP/HTTP log sink beside (or instead of) Loki, for example a FILE holding:
+#   TENANT_ID=t-acme  TENANT_NAME=acme  SE_GROUP=edge  ENGINE=engine-1
+#   OTLP_LOGS_URL=https://collector.example.org:4318
+#   OTLP_LOGS_HEADERS=Authorization: Bearer <token>        (never logged; "Name: value" pairs joined by ";")
+#   # LOKI_URL left out = no Loki sink; OTLP_LOGS_INSECURE_SKIP_VERIFY=true / OTLP_LOGS_CA_FILE=PEM path are optional.
 # Runs `pct`/`qm` on the Proxmox node through ssh; set NODE_SSH to override (default "ssh root@NODE", an IPv6 node
 # address needs no brackets). When the controller runs on another machine, point SECRETS_DIR at a copy of its `secrets/`
 # (ca.pem, dp_password) and set HOST_ADDR (and HTTPS_PORT) to the address the engines enroll to.

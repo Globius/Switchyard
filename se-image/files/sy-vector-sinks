@@ -1,0 +1,101 @@
+#!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Writes the Vector log sinks the engine's /etc/switchyard/vector.env asks for (ADR 0221). Vector cannot switch a
+# sink off by environment variable, so the unit runs this before validating and starting.
+#
+#   LOKI_URL                       Loki base URL; no Loki sink when unset
+#   OTLP_LOGS_URL                  OTLP/HTTP collector base URL (https://collector.example.org:4318); no OTLP sink when unset
+#   OTLP_LOGS_HEADERS              "Name: value" pairs separated by ";" (for example an Authorization header)
+#   OTLP_LOGS_INSECURE_SKIP_VERIFY true skips TLS verification (default false)
+#   OTLP_LOGS_CA_FILE              PEM bundle to trust for the collector
+#
+# Output: $1 (default /run/switchyard-vector/sinks.yaml), mode 0600 because it can hold the headers. Nothing here
+# prints a header value, and the script exits 1 with a message on a value it refuses.
+set -eu
+OUT=${1:-/run/switchyard-vector/sinks.yaml}
+umask 077
+
+# Values land in double-quoted YAML scalars: refuse anything that could break out of them or span lines.
+check() {
+  case $2 in
+    *'"'* | *'\'* | *'$'*) echo "sy-vector-sinks: $1 contains a character that is not allowed (quote, backslash, dollar)" >&2; exit 1 ;;
+  esac
+  [ "$(printf '%s' "$2" | wc -l)" -eq 0 ] || { echo "sy-vector-sinks: $1 must be one line" >&2; exit 1; }
+}
+for v in LOKI_URL OTLP_LOGS_URL OTLP_LOGS_HEADERS OTLP_LOGS_CA_FILE; do
+  eval "val=\${$v:-}"
+  check "$v" "$val"
+done
+
+# A sink buffer is per sink and bounded; Vector offers block or drop_newest, and a block would let one dead sink stall
+# the other, so both drop the newest event that does not fit. Drops count in buffer_discarded_events_total.
+buffer='    buffer:
+      type: memory
+      max_events: 10000
+      when_full: drop_newest'
+
+{
+  echo "# Written by sy-vector-sinks from /etc/switchyard/vector.env at every start. Do not edit."
+  echo "sinks:"
+  n=0
+  if [ -n "${LOKI_URL:-}" ]; then
+    n=$((n + 1))
+    cat <<YAML
+  loki:
+    type: loki
+    inputs: [parse, auth_parse, parse_waf]
+    endpoint: "${LOKI_URL}"
+    encoding: { codec: text }
+    labels:
+      tenant: "\${TENANT_ID}"
+      tenant_name: "\${TENANT_NAME}"
+      se_group: "\${SE_GROUP}"
+      engine: "\${ENGINE}"
+      frontend: "{{ frontend }}"
+$buffer
+YAML
+  fi
+  if [ -n "${OTLP_LOGS_URL:-}" ]; then
+    n=$((n + 1))
+    cat <<YAML
+  otlp:
+    type: http
+    inputs: [otlp_shape]
+    uri: "${OTLP_LOGS_URL%/}/v1/logs"
+    method: post
+    encoding: { codec: json }
+    framing: { method: newline_delimited }
+    # One OTLP request carries one log record: the JSON body is a single ExportLogsServiceRequest.
+    batch: { max_events: 1 }
+    compression: gzip
+    request:
+      headers:
+        Content-Type: "application/json"
+YAML
+    if [ -n "${OTLP_LOGS_HEADERS:-}" ]; then
+      old_ifs=$IFS; IFS=';'
+      # shellcheck disable=SC2086
+      set -- $OTLP_LOGS_HEADERS
+      IFS=$old_ifs
+      for pair in "$@"; do
+        name=$(printf '%s' "${pair%%:*}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        value=${pair#*:}; value=${value# }
+        case $name in '' | *[!A-Za-z0-9-]*) echo "sy-vector-sinks: OTLP_LOGS_HEADERS has a header name that is not valid" >&2; exit 1 ;; esac
+        [ "$value" != "$pair" ] || { echo "sy-vector-sinks: OTLP_LOGS_HEADERS entries are 'Name: value'" >&2; exit 1; }
+        printf '        %s: "%s"\n' "$name" "$value"
+      done
+    fi
+    echo "$buffer"
+    if [ -n "${OTLP_LOGS_CA_FILE:-}" ] || [ "${OTLP_LOGS_INSECURE_SKIP_VERIFY:-false}" = true ]; then
+      echo "    tls:"
+      [ -z "${OTLP_LOGS_CA_FILE:-}" ] || echo "      ca_file: \"${OTLP_LOGS_CA_FILE}\""
+      [ "${OTLP_LOGS_INSECURE_SKIP_VERIFY:-false}" != true ] || echo "      verify_certificate: false"
+    fi
+  fi
+  [ "$n" -gt 0 ] || echo "  {}  # neither LOKI_URL nor OTLP_LOGS_URL is set: no log sink, Vector only serves its own metrics"
+} > "$OUT.tmp"
+mv "$OUT.tmp" "$OUT"

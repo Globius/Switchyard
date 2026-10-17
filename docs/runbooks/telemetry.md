@@ -25,6 +25,44 @@ returns bracketed targets), provided Prometheus can route to them: with the quic
    ready (503 in the health check) and recovers on the unit's restart. In Grafana Explore, `{tenant_name="…"}` should show lines.
 4. UI shows another tenant's or no data: compare the `tenant` label on the SE's series with the tenant id.
 
+**Engine log sinks: Loki and OTLP ([adr/0221](../adr/0221-optional-otlp-log-sink.md)).** Vector on the engine ships HAProxy,
+Coraza and sy-auth logs to every sink whose URL is set in `/etc/switchyard/vector.env`; `sy-vector-sinks` writes the sinks
+at each start (`/run/switchyard-vector/sinks.yaml`, mode 0600).
+
+| Key | Meaning |
+| --- | --- |
+| `TENANT_ID`, `TENANT_NAME`, `SE_GROUP`, `ENGINE` | Required. Labels on Loki, resource attributes on OTLP |
+| `LOKI_URL` | Loki base URL. Unset: no Loki sink (the controller's log tail and p95 then see nothing from this engine) |
+| `OTLP_LOGS_URL` | OTLP/HTTP collector base URL, for example `https://collector.example.org:4318`; logs go to `/v1/logs`. Unset: no OTLP sink |
+| `OTLP_LOGS_HEADERS` | Optional. `Name: value` pairs joined by `;` (`Authorization: Bearer <token>`). Never logged |
+| `OTLP_LOGS_INSECURE_SKIP_VERIFY` | Optional, default `false`. `true` skips TLS verification (labs only) |
+| `OTLP_LOGS_CA_FILE` | Optional. PEM bundle trusted for the collector, a path on the engine |
+
+```sh
+# /etc/switchyard/vector.env: Loki and OTLP
+TENANT_ID=t-acme
+TENANT_NAME=acme
+SE_GROUP=edge
+ENGINE=engine-1
+LOKI_URL=http://loki.example.org:3100
+OTLP_LOGS_URL=https://collector.example.org:4318
+OTLP_LOGS_HEADERS=Authorization: Bearer <token>
+```
+
+Leave `LOKI_URL` out for an OTLP-only engine; with neither URL Vector runs with no log sink. Apply a change with
+`systemctl restart vector` on the engine (or `enroll-engine.sh --vector-env FILE`; cloud-init writes the file from
+`se-image/cloud-init/se-instance.yaml.tpl`, whose OTLP lines are commented examples). Values may not contain `"`, `\`
+or `$`, and a malformed header makes the unit fail at start with a `sy-vector-sinks:` message (without the value).
+
+Resource attributes on every OTLP record: `service.name` (`haproxy`, `coraza` or `sy-auth`), `tenant` (the id),
+`tenant_name`, `se_group`, `engine` and `frontend` (`vs_<service>`, `sy_auth` or `waf`); the body is the log line. One
+record goes out per request, so a high-volume engine sends many small requests.
+
+Each sink has its own 10 000-event memory buffer. When a sink's buffer is full, the newest events for that sink are
+discarded and the other sink is unaffected. Vector offers no drop-oldest policy (ADR 0221). Drops show on the engine at
+`curl -s http://127.0.0.1:9598/metrics | grep buffer_discarded_events_total` (`component_id="loki"` or `"otlp"`).
+Events that were never accepted by the collector (4xx/5xx after retries) show in `component_errors_total`.
+
 **Grafana behind the controller ([adr/0085](../adr/0085-grafana-behind-controller.md)).** Off until set up; "Open in Grafana" then opens it in a new tab, one organization per tenant, and the controller rewrites every query to the tenant.
 1. Grafana (this stack) must be reachable from the controller nodes and from nowhere else (`BIND` to the management address and a firewall). Set `GRAFANA_PROXY_WHITELIST` in `telemetry.env` to the controller addresses, IPv6 ones too if it reaches Grafana over IPv6 (otherwise Grafana answers 401 `auth-proxy.invalid-ip`) (the default, loopback, trusts nobody) and `GRAFANA_ROOT_URL` to `https://<ui address>/grafana/` (with the port if it is not 443); then `docker compose up -d grafana`.
 2. On every controller node set `SWITCHYARD_GRAFANA_INTERNAL_URL=http://<grafana host>:3000`, `SWITCHYARD_GRAFANA_ADMIN_PASSWORD` (the value of `GRAFANA_ADMIN_PASSWORD`), `SWITCHYARD_GRAFANA_DS_SECRET` (`openssl rand -hex 32`, identical on all nodes), `SWITCHYARD_GRAFANA_DS_URL=http://<this node or VIP>:8000/internal/ds` (the address *Grafana* uses; do not route `/internal/ds` through the public front) and the Prometheus and Loki URLs; restart the API.

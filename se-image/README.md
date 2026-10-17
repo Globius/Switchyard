@@ -8,6 +8,7 @@ Recipe for the Proxmox VM template that SE group deploys clone (`template_vmid`)
 | `provision.sh` | Idempotent installer: packages, HAProxy 3.2 (haproxy.debian.net), Data Plane API, `sy-agent`, units, sysctl |
 | `files/` | systemd units, sysctl, kernel modules, Data Plane API config, bootstrap `haproxy.cfg` |
 | `cloud-init/template-build.yaml` | User-data for the one-off build VM |
+| `files/sy-vector-sinks` | Writes the Loki and/or OTLP Vector sinks from `/etc/switchyard/vector.env` at start (ADR 0221) |
 | `cloud-init/se-instance.yaml.tpl` | Per-SE user-data: controller URL, one-time enrollment token, controller CA |
 | `tofu/` | OpenTofu (bpg/proxmox) for the build VM |
 | `test/` | Docker test: provisions Debian 13, checks versions and units, runs Data Plane API over mTLS |
