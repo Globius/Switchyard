@@ -74,7 +74,7 @@ async def test_failed_apply_fails_the_job_without_a_retry(pg_url: str) -> None:
         job_id = await w.service.apply(principal(), TENANT, detail.record.id)
         assert await worker.run_once()
         assert await scalar(w, "SELECT state FROM job WHERE id = :i", i=job_id) == "dead"
-        error = await scalar(w, "SELECT error FROM job WHERE id = :i", i=job_id)
+        error = await scalar(w, "SELECT last_error FROM job WHERE id = :i", i=job_id)
         assert "rejected" in str(error)
         assert await scalar(w, "SELECT attempts FROM job WHERE id = :i", i=job_id) == 1
         assert await scalar(w, "SELECT state FROM change_set") == "failed"
