@@ -149,6 +149,7 @@ group has a `nat` UDP service. Validation codes: `ipvs_port_mismatch`, `ipvs_dr_
 | Health monitor `http` | `option httpchk`, `http-check send meth <m> uri <path> [ver HTTP/1.1 hdr Host <h>]`, `http-check expect status <codes>` |
 | Health monitor `http` `expect_body`, `expect_header` | `http-check expect string <text>` or `http-check expect hdr name <H> [value <v>]`; one of `expect_status`, `expect_body`, `expect_header`; match text and header values may only use letters, digits and `._:/-` (ADR 0108) |
 | Health monitor `tcp` with `preset` | `option redis-check`, `option smtpchk`, `option ldap-check` or `option mysql-check` (ADR 0108) |
+| Health monitor `sni`, or a host route to the pool, on a pool with `tls` | `check-sni <name>` on each server line: the monitor's `sni`, else the first exact route host, else none (ADR 0222) |
 | Monitor `interval_s`, `rise`, `fall`, `timeout_s` | `default-server inter <i>s fall <f> rise <r>` and `timeout check <t>s` |
 | Pool with a monitor and `tls` | `check-ssl` on the servers |
 

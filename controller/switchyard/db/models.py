@@ -181,6 +181,7 @@ class HealthMonitorRow(TenantOwnedMixin, Base):
     http: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     udp: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     preset: Mapped[str | None] = mapped_column(Text)
+    sni: Mapped[str | None] = mapped_column(Text)
 
 
 class CertificateRow(TenantOwnedMixin, Base):

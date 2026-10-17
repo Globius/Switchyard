@@ -521,6 +521,17 @@ class _Renderer:
             ids.append(svc.default_pool_id)
         return list(dict.fromkeys(ids))
 
+    def _route_host(self, pool_id: UUID) -> str | None:
+        """First exact route host (sorted) that sends to the pool, or ``None`` (ADR 0222)."""
+        hosts = sorted(
+            r.match.host
+            for svc in self.snap.virtual_services
+            if svc.enabled
+            for r in svc.routes
+            if r.match.host and not r.match.host.startswith("*.") and pool_id in r.pool_ids
+        )
+        return hosts[0] if hosts else None
+
     def _backend_name(self, pool_id: UUID) -> str:
         return "pool_" + esc.ident(self.pools[pool_id].name)
 
@@ -1638,6 +1649,9 @@ class _Renderer:
                 parts.append(f"port {monitor.port}")
             if pool.tls:
                 parts.append("check-ssl")
+                sni = monitor.sni or self._route_host(pool.id)
+                if sni is not None:
+                    parts.append(f"check-sni {esc.hostname(sni)}")
             if pool.send_proxy is not None:
                 parts.append("check-send-proxy")
             if pool.passive_check is not None:

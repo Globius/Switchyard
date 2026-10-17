@@ -9,8 +9,8 @@ backend pool_billing
     http-check expect status 200,204,301,302,401
     timeout check 3s
     default-server inter 5s fall 3 rise 2
-    server 10-60-1-2-443 10.60.1.2:443 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100
-    server 10-60-1-3-443 10.60.1.3:443 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100
+    server 10-60-1-2-443 10.60.1.2:443 check check-ssl check-sni billing.svc.example.net ssl verify none sni req.hdr(host),field(1,:),lower weight 100
+    server 10-60-1-3-443 10.60.1.3:443 check check-ssl check-sni billing.svc.example.net ssl verify none sni req.hdr(host),field(1,:),lower weight 100
 
 ==> haproxy/haproxy.cfg (haproxy, lines 79-87)
 backend pool_headscale
@@ -32,7 +32,7 @@ backend pool_insurance
     http-check expect status 200,204,301,302,401
     timeout check 3s
     default-server inter 5s fall 3 rise 2
-    server 10-61-0-3-443 10.61.0.3:443 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100
+    server 10-61-0-3-443 10.61.0.3:443 check check-ssl check-sni example-insurance.example.org ssl verify none sni req.hdr(host),field(1,:),lower weight 100
 
 ==> haproxy/haproxy.cfg (haproxy, lines 99-107)
 backend pool_ipam
@@ -65,7 +65,7 @@ backend pool_matrix
     http-check expect status 200,204,301,302,401
     timeout check 3s
     default-server inter 5s fall 3 rise 2
-    server 10-61-0-3-443 10.61.0.3:443 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100
+    server 10-61-0-3-443 10.61.0.3:443 check check-ssl check-sni chat.files.example.org ssl verify none sni req.hdr(host),field(1,:),lower weight 100
 
 ==> haproxy/haproxy.cfg (haproxy, lines 129-137)
 backend pool_mealie
@@ -120,7 +120,7 @@ backend pool_rancher
     http-check expect status 200,204,301,302,401
     timeout check 3s
     default-server inter 5s fall 3 rise 2
-    server 10-60-0-5-10002 10.60.0.5:10002 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100
+    server 10-60-0-5-10002 10.60.0.5:10002 check check-ssl check-sni rancher.prod.corp.example.test ssl verify none sni req.hdr(host),field(1,:),lower weight 100
 
 ==> haproxy/haproxy.cfg (haproxy, lines 191-199)
 backend pool_ubiquiti
@@ -131,4 +131,4 @@ backend pool_ubiquiti
     http-check expect status 200,204,301,302,401
     timeout check 3s
     default-server inter 5s fall 3 rise 2
-    server 10-60-1-4-8080 10.60.1.4:8080 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100
+    server 10-60-1-4-8080 10.60.1.4:8080 check check-ssl check-sni uisp.svc.example.net ssl verify none sni req.hdr(host),field(1,:),lower weight 100
