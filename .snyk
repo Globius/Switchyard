@@ -1,5 +1,19 @@
-# Snyk policy. Every entry needs a reason. See docs/adr/0218-snyk-code-triage.md.
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Snyk policy file. Every entry needs a reason and an expiry; review them when they lapse.
+# Policy: docs/security/snyk.md. Code triage: docs/adr/0218-snyk-code-triage.md.
 version: v1.25.0
+ignore:
+  SNYK-DEBIAN12-ZLIB-6008961:
+    - '*':
+        reason: >-
+          CVE-2023-45853 (zlib MiniZip integer overflow in zipOpenNewFileInZip4_64). Debian 12 marks it
+          unfixed / no-DSA. The vulnerable minizip code is not built into the zlib1g runtime library, and
+          Patroni and PostgreSQL never create ZIP archives. Revisit when Debian ships a fix.
+        expires: 2027-01-16T00:00:00.000Z
+        created: 2026-10-16T00:00:00.000Z
 exclude:
   code:
     # Test fixtures: dummy credentials, never used outside the test run.
