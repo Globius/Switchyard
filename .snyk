@@ -14,6 +14,41 @@ ignore:
           Patroni and PostgreSQL never create ZIP archives. Revisit when Debian ships a fix.
         expires: 2027-01-16T00:00:00.000Z
         created: 2026-10-16T00:00:00.000Z
+  SNYK-GOLANG-GOOPENTELEMETRYIOOTELSDKTRACE-19883905:
+    - '*':
+        reason: >-
+          CVE-2026-81870 (Low, no fix). Indirect via grpc; neither the agent nor the provider configures a trace
+          exporter or serves a tracing endpoint. See docs/adr/0220-accept-otel-cve-2026-81870.md.
+        expires: 2027-01-16T00:00:00.000Z
+        created: 2026-10-17T00:00:00.000Z
+  SNYK-GOLANG-GOOPENTELEMETRYIOOTELEXPORTERSZIPKIN-19883906:
+    - '*':
+        reason: >-
+          CVE-2026-81870 (Low, no fix). Indirect via grpc; neither the agent nor the provider configures a trace
+          exporter or serves a tracing endpoint. See docs/adr/0220-accept-otel-cve-2026-81870.md.
+        expires: 2027-01-16T00:00:00.000Z
+        created: 2026-10-17T00:00:00.000Z
+  SNYK-GOLANG-GOOPENTELEMETRYIOOTELEXPORTERSOTLPOTLPTRACE-19883902:
+    - '*':
+        reason: >-
+          CVE-2026-81870 (Low, no fix). Indirect via grpc; neither the agent nor the provider configures a trace
+          exporter or serves a tracing endpoint. See docs/adr/0220-accept-otel-cve-2026-81870.md.
+        expires: 2027-01-16T00:00:00.000Z
+        created: 2026-10-17T00:00:00.000Z
+  SNYK-GOLANG-GOOPENTELEMETRYIOOTELEXPORTERSOTLPOTLPTRACEOTLPTRACEGRPC-19883903:
+    - '*':
+        reason: >-
+          CVE-2026-81870 (Low, no fix). Indirect via grpc; neither the agent nor the provider configures a trace
+          exporter or serves a tracing endpoint. See docs/adr/0220-accept-otel-cve-2026-81870.md.
+        expires: 2027-01-16T00:00:00.000Z
+        created: 2026-10-17T00:00:00.000Z
+  SNYK-GOLANG-GOOPENTELEMETRYIOOTELEXPORTERSOTLPOTLPTRACEOTLPTRACEHTTP-19883904:
+    - '*':
+        reason: >-
+          CVE-2026-81870 (Low, no fix). Indirect via grpc; neither the agent nor the provider configures a trace
+          exporter or serves a tracing endpoint. See docs/adr/0220-accept-otel-cve-2026-81870.md.
+        expires: 2027-01-16T00:00:00.000Z
+        created: 2026-10-17T00:00:00.000Z
 exclude:
   code:
     # Test fixtures: dummy credentials, never used outside the test run.
