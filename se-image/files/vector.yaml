@@ -1,7 +1,11 @@
-# Ships HAProxy access logs to Loki. Labels match controller/switchyard/adapters/telemetry.py:
+# Ships HAProxy, Coraza and sy-auth logs. Sources and transforms are here; the sinks (Loki and/or OTLP, each only
+# when its URL is set in /etc/switchyard/vector.env) are written at start by sy-vector-sinks into
+# /run/switchyard-vector/sinks.yaml (ADR 0221). Loki labels match controller/switchyard/adapters/telemetry.py:
 # `tenant` (id) and `frontend` (vs_<service>); tenant_name, se_group and engine are for dashboards.
 # Values come from /etc/switchyard/vector.env, written by cloud-init (se-instance.yaml.tpl).
 sources:
+  vector_metrics:
+    type: internal_metrics
   haproxy:
     type: journald
     include_units: [haproxy.service]
@@ -21,6 +25,7 @@ transforms:
     inputs: [auth]
     source: |
       .frontend = "sy_auth"
+      .sy_service = "sy-auth"
 
   parse:
     type: remap
@@ -30,6 +35,7 @@ transforms:
       parsed, err = parse_regex(msg, r'(?P<client>\S+):\d+ \[[^\]]+\] (?P<frontend>\S+) (?P<backend>[^/\s]+)/\S+ ')
       if err != null { abort }
       .frontend = parsed.frontend
+      .sy_service = "haproxy"
       .message = msg
   parse_waf:
     type: remap
@@ -38,16 +44,34 @@ transforms:
       msg = string!(.message)
       app, err = parse_regex(msg, r'"application":\s*"(?P<app>[a-z0-9_-]+)"')
       .frontend = if err == null { "vs_" + string!(app.app) } else { "waf" }
+      .sy_service = "coraza"
       .message = "waf " + msg
-sinks:
-  loki:
-    type: loki
+
+  # The OTLP/HTTP JSON shape of the same events (one log record per request; the sink batches one event).
+  # Resource attributes mirror the Loki labels; the environment is read at run time, not interpolated into VRL.
+  otlp_shape:
+    type: remap
     inputs: [parse, auth_parse, parse_waf]
-    endpoint: "${LOKI_URL}"
-    encoding: { codec: text }
-    labels:
-      tenant: "${TENANT_ID}"
-      tenant_name: "${TENANT_NAME}"
-      se_group: "${SE_GROUP}"
-      engine: "${ENGINE}"
-      frontend: "{{ frontend }}"
+    source: |
+      ts = to_unix_timestamp(now(), unit: "nanoseconds")
+      if exists(.timestamp) { ts = to_unix_timestamp(timestamp!(.timestamp), unit: "nanoseconds") }
+      attr = [
+        { "key": "service.name", "value": { "stringValue": string!(.sy_service) } },
+        { "key": "tenant", "value": { "stringValue": get_env_var!("TENANT_ID") } },
+        { "key": "tenant_name", "value": { "stringValue": get_env_var!("TENANT_NAME") } },
+        { "key": "se_group", "value": { "stringValue": get_env_var!("SE_GROUP") } },
+        { "key": "engine", "value": { "stringValue": get_env_var!("ENGINE") } },
+        { "key": "frontend", "value": { "stringValue": string!(.frontend) } },
+      ]
+      msg = string!(.message)
+      . = { "resourceLogs": [ { "resource": { "attributes": attr }, "scopeLogs": [ { "scope": { "name": "switchyard-vector" },
+        "logRecords": [ { "timeUnixNano": to_string(ts), "observedTimeUnixNano": to_string(ts), "severityNumber": 9,
+        "severityText": "INFO", "body": { "stringValue": msg } } ] } ] } ] }
+
+sinks:
+  # Vector's own counters, including the events each log sink's buffer discarded
+  # (buffer_discarded_events_total{component_id="loki"|"otlp"}). Loopback only.
+  internal_metrics:
+    type: prometheus_exporter
+    inputs: [vector_metrics]
+    address: "127.0.0.1:9598"
