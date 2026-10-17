@@ -151,3 +151,15 @@ func TestParseTableDirectReturnAndTunnel(t *testing.T) {
 		t.Fatalf("tunnel entry wrong: %+v", tun)
 	}
 }
+
+func TestParseTableRejectsOverflowingWeight(t *testing.T) {
+	in := "UDP  192.0.2.5:53 rr\n  -> 192.0.2.9:53    Masq    4294967296    0          0\n" +
+		"  -> 192.0.2.10:53   Masq    4294967295    0          0\n"
+	table := ParseTable([]byte(in), nil)
+	if e := table[key{"192.0.2.5", 53, "192.0.2.9", 53}]; e != nil && e.seenListing {
+		t.Fatalf("overflowing weight must be ignored, got %+v", e)
+	}
+	if e := table[key{"192.0.2.5", 53, "192.0.2.10", 53}]; e == nil || e.Weight != 4294967295 {
+		t.Fatalf("max uint32 weight must be kept, got %+v", e)
+	}
+}
