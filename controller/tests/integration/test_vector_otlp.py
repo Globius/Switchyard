@@ -211,7 +211,9 @@ def test_one_haproxy_line_reaches_both_sinks_with_the_expected_attributes(networ
 
         loki = next(r for r in requests if r["port"] == 3100)
         assert loki["path"] == "/loki/api/v1/push"
-        loki_body = bytes.fromhex(loki["body"])  # snappy-framed protobuf: the short label text stays readable
+        loki_body = bytes.fromhex(
+            loki["body"]
+        )  # snappy-framed protobuf: the short label text stays readable
         assert b"acme" in loki_body and b"vs_web" in loki_body
 
         otlp = next(r for r in requests if r["port"] == 4318)
