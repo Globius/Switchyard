@@ -41,6 +41,8 @@ export interface MonitorForm {
   } | null;
   /** A built-in protocol check for a tcp monitor (HAProxy's own, no custom commands). */
   preset?: "redis" | "smtp" | "ldap" | "mysql" | null;
+  /** Server name the check presents to a TLS pool (check-sni). */
+  sni?: string | null;
   udp: { payload_hex: string | null; require_reply: boolean } | null;
 }
 
@@ -83,6 +85,7 @@ export function toForm(m: Monitor): MonitorForm {
         }
       : null,
     preset: m.preset ?? null,
+    sni: m.sni ?? null,
     udp: m.udp
       ? { payload_hex: m.udp.payload_hex ?? null, require_reply: m.udp.require_reply ?? false }
       : null,
@@ -253,6 +256,7 @@ function MonitorSheet({
             : null,
         udp: udp ? (f.udp ?? { payload_hex: null, require_reply: false }) : null,
         preset: f.type === "tcp" ? (f.preset ?? null) : null,
+        sni: f.type === "udp" ? null : f.sni?.trim() || null,
       };
       if (monitor === "new") await save.mutateAsync({ action: "create", body });
       else
@@ -556,6 +560,24 @@ function MonitorSheet({
             <span className="block text-xs font-normal text-muted-foreground">
               {t(
                 "HAProxy's built-in check for the protocol; the member must answer it, not only accept the connection.",
+              )}
+            </span>
+          </label>
+        )}
+        {f.type !== "udp" && (
+          <label className="block space-y-1.5 text-sm font-medium">
+            {t("TLS server name (SNI)")}
+            <input
+              aria-label={t("TLS server name (SNI)")}
+              placeholder="app.example.org"
+              className={INPUT}
+              disabled={!write.allowed}
+              value={f.sni ?? ""}
+              onChange={(e) => set({ sni: e.target.value || null })}
+            />
+            <span className="block text-xs font-normal text-muted-foreground">
+              {t(
+                "Sent when a pool checks its members over TLS. Empty uses the host of a route to the pool.",
               )}
             </span>
           </label>

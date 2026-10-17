@@ -11206,7 +11206,7 @@
       },
       "HealthMonitor": {
         "additionalProperties": false,
-        "description": "Active health check, shareable across pools.\n\nAttributes:\n    type: ``tcp`` connect check, ``http`` request check or ``udp`` probe (UDP services only).\n    port: Port to check. Required when pool members have no port of their own; otherwise\n        members are checked on their service port.\n    interval_s: Seconds between checks.\n    timeout_s: Seconds before a check fails.\n    rise: Consecutive successes to mark a server up.\n    fall: Consecutive failures to mark a server down.\n    http: Request details; required for ``http`` and forbidden for ``tcp`` and ``udp``.\n    udp: Optional probe details; only valid for ``udp``.\n    preset: Protocol-aware check for a ``tcp`` monitor: ``redis``, ``smtp``, ``ldap`` or\n        ``mysql``. Without one a ``tcp`` monitor only connects.",
+        "description": "Active health check, shareable across pools.\n\nAttributes:\n    type: ``tcp`` connect check, ``http`` request check or ``udp`` probe (UDP services only).\n    port: Port to check. Required when pool members have no port of their own; otherwise\n        members are checked on their service port.\n    interval_s: Seconds between checks.\n    timeout_s: Seconds before a check fails.\n    rise: Consecutive successes to mark a server up.\n    fall: Consecutive failures to mark a server down.\n    http: Request details; required for ``http`` and forbidden for ``tcp`` and ``udp``.\n    udp: Optional probe details; only valid for ``udp``.\n    preset: Protocol-aware check for a ``tcp`` monitor: ``redis``, ``smtp``, ``ldap`` or\n        ``mysql``. Without one a ``tcp`` monitor only connects.\n    sni: TLS server name the check presents when the pool uses TLS to its members\n        (HAProxy ``check-sni``, ADR 0222). Without it the check uses the exact host of a\n        route that sends to the pool, and without such a route it sends no server name.\n        Not valid on a ``udp`` monitor.",
         "properties": {
           "fall": {
             "default": 3,
@@ -11275,6 +11275,17 @@
             "minimum": 1.0,
             "title": "Rise",
             "type": "integer"
+          },
+          "sni": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sni"
           },
           "tenant_id": {
             "format": "uuid",
@@ -11382,6 +11393,17 @@
             "minimum": 1.0,
             "title": "Rise",
             "type": "integer"
+          },
+          "sni": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sni"
           },
           "timeout_s": {
             "default": 3,
@@ -11495,6 +11517,17 @@
               }
             ],
             "title": "Rise"
+          },
+          "sni": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sni"
           },
           "timeout_s": {
             "anyOf": [
@@ -11614,6 +11647,17 @@
             "minimum": 1.0,
             "title": "Rise",
             "type": "integer"
+          },
+          "sni": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sni"
           },
           "tenant_id": {
             "format": "uuid",

@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from pydantic import ValidationError
 
 from switchyard.domain.errors import DomainValidationError
 from switchyard.domain.loader import snapshot_from_mapping, symbolic_uuid
@@ -336,6 +337,31 @@ class TestBackends:
         data["pools"][0]["members"] = [{"address": "2001:db8::10", "port": 8080}]
         assert "server 2001-db8--10-8080 ipv6@2001:db8::10:8080 weight 100" in cfg(data)
 
+    def _sni_data(self, **monitor: Any) -> dict[str, Any]:
+        data = base_data()
+        data["health_monitors"] = [
+            {"id": "hm", "tenant_id": "t-acme", "name": "h", "type": "tcp", **monitor}
+        ]
+        data["pools"][0].update(health_monitor_id="hm", tls=True)
+        return data
+
+    def test_check_sni_uses_the_monitor_sni_over_the_route_host(self) -> None:
+        text = cfg(self._sni_data(sni="backend.example.org"))
+        assert "check check-ssl check-sni backend.example.org ssl" in text
+
+    def test_check_sni_falls_back_to_the_route_host(self) -> None:
+        data = self._sni_data()
+        assert "check check-ssl check-sni app.example.test ssl" in cfg(data)
+
+    def test_no_check_sni_without_tls_or_a_name(self) -> None:
+        data = self._sni_data(sni="backend.example.org")
+        data["pools"][0]["tls"] = False
+        assert "check-sni" not in cfg(data)
+
+    def test_udp_monitor_rejects_sni(self) -> None:
+        with pytest.raises(ValidationError, match="sni is not valid"):
+            snapshot_from_mapping(self._sni_data(type="udp", sni="backend.example.org"))
+
     def test_http_monitor_and_tls_server_options(self) -> None:
         data = base_data()
         data["health_monitors"] = [
@@ -359,7 +385,7 @@ class TestBackends:
         assert "default-server inter 7s fall 5 rise 4" in text
         assert "timeout check 2s" in text
         assert (
-            "server 10-20-0-11-8080 10.20.0.11:8080 check check-ssl "
+            "server 10-20-0-11-8080 10.20.0.11:8080 check check-ssl check-sni app.example.test "
             "ssl verify required ca-file /etc/ssl/certs/ca-certificates.crt "
             "sni req.hdr(host),field(1,:),lower weight 100"
         ) in text

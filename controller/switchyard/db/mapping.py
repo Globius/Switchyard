@@ -111,6 +111,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 http=hm.http.model_dump(mode="json") if hm.http else None,
                 udp=hm.udp.model_dump(mode="json") if hm.udp else None,
                 preset=hm.preset,
+                sni=hm.sni,
             )
         )
     for c in snapshot.certificates:
@@ -430,6 +431,7 @@ def rows_to_snapshot(
                 "http": hm.http,
                 "udp": hm.udp,
                 "preset": hm.preset,
+                "sni": hm.sni,
             }
             for hm in health_monitors
         ],

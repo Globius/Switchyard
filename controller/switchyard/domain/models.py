@@ -1218,6 +1218,10 @@ class HealthMonitor(TenantOwned):
         udp: Optional probe details; only valid for ``udp``.
         preset: Protocol-aware check for a ``tcp`` monitor: ``redis``, ``smtp``, ``ldap`` or
             ``mysql``. Without one a ``tcp`` monitor only connects.
+        sni: TLS server name the check presents when the pool uses TLS to its members
+            (HAProxy ``check-sni``, ADR 0222). Without it the check uses the exact host of a
+            route that sends to the pool, and without such a route it sends no server name.
+            Not valid on a ``udp`` monitor.
     """
 
     type: MonitorType
@@ -1229,9 +1233,12 @@ class HealthMonitor(TenantOwned):
     http: HttpCheck | None = None
     udp: UdpCheck | None = None
     preset: TcpPreset | None = None
+    sni: Hostname | None = None
 
     @model_validator(mode="after")
     def _http(self) -> Self:
+        if self.sni is not None and self.type is MonitorType.UDP:
+            raise ValueError("sni is not valid on a udp monitor")
         if self.preset is not None and self.type is not MonitorType.TCP:
             raise ValueError("preset is only valid on a tcp monitor")
         if self.type is MonitorType.HTTP and self.http is None:

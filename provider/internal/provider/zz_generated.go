@@ -218,7 +218,7 @@ var Definitions = []Definition{
 		Slug:      "health-monitors",
 		Doc:       "",
 		Resource:  true,
-		PatchKeys: []string{"fall", "http", "interval_s", "name", "port", "preset", "rise", "timeout_s", "type", "udp"},
+		PatchKeys: []string{"fall", "http", "interval_s", "name", "port", "preset", "rise", "sni", "timeout_s", "type", "udp"},
 		Attrs: []Attr{
 			{Name: "fall", Kind: KindInt},
 			{Name: "http", Kind: KindObject, Doc: "HTTP health check request and expectation.", Attrs: []Attr{
@@ -237,6 +237,7 @@ var Definitions = []Definition{
 			{Name: "port", Kind: KindInt},
 			{Name: "preset", Kind: KindString, Enum: []string{"redis", "smtp", "ldap", "mysql"}},
 			{Name: "rise", Kind: KindInt},
+			{Name: "sni", Kind: KindString},
 			{Name: "timeout_s", Kind: KindInt},
 			{Name: "type", Kind: KindString, Required: true, Doc: "Health monitor kind.", Enum: []string{"tcp", "http", "udp"}},
 			{Name: "udp", Kind: KindObject, Doc: "UDP health probe (Keepalived ``UDP_CHECK``), sent to the member's check port.", Attrs: []Attr{

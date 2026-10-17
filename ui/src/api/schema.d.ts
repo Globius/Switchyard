@@ -10467,6 +10467,10 @@ export interface components {
          *         udp: Optional probe details; only valid for ``udp``.
          *         preset: Protocol-aware check for a ``tcp`` monitor: ``redis``, ``smtp``, ``ldap`` or
          *             ``mysql``. Without one a ``tcp`` monitor only connects.
+         *         sni: TLS server name the check presents when the pool uses TLS to its members
+         *             (HAProxy ``check-sni``, ADR 0222). Without it the check uses the exact host of a
+         *             route that sends to the pool, and without such a route it sends no server name.
+         *             Not valid on a ``udp`` monitor.
          */
         HealthMonitor: {
             /**
@@ -10496,6 +10500,8 @@ export interface components {
              * @default 2
              */
             rise: number;
+            /** Sni */
+            sni?: string | null;
             /**
              * Tenant Id
              * Format: uuid
@@ -10538,6 +10544,8 @@ export interface components {
              * @default 2
              */
             rise: number;
+            /** Sni */
+            sni?: string | null;
             /**
              * Timeout S
              * @default 3
@@ -10561,6 +10569,8 @@ export interface components {
             preset?: ("redis" | "smtp" | "ldap" | "mysql") | null;
             /** Rise */
             rise?: number | null;
+            /** Sni */
+            sni?: string | null;
             /** Timeout S */
             timeout_s?: number | null;
             type?: components["schemas"]["MonitorType"] | null;
@@ -10605,6 +10615,8 @@ export interface components {
              * @default 2
              */
             rise: number;
+            /** Sni */
+            sni?: string | null;
             /**
              * Tenant Id
              * Format: uuid
