@@ -1,6 +1,6 @@
 # Switchyard controller: one image, two entrypoints (`syctl serve`, `syctl worker`).
 # Build from the repository root: docker build -f deploy/controller/Dockerfile -t switchyard-controller .
-FROM python:3.12-alpine@sha256:1b668429b3511ab407d8e00648891631b0b1a4d7e15e3ca70f38ab5b91ad4ab4 AS build
+FROM python:3.14-alpine@sha256:f6a589d43c42b9e7f7dc67a12d37132491f362859a5d750607710cc56da3bc72 AS build
 # uv from PyPI, not from ghcr.io: ghcr.io has no IPv6, so an IPv6-only build host could not fetch it.
 RUN pip install --no-cache-dir "uv==0.12.23"
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
@@ -10,7 +10,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY controller/switchyard ./switchyard
 RUN uv sync --frozen --no-dev --no-editable
 
-FROM python:3.12-alpine@sha256:1b668429b3511ab407d8e00648891631b0b1a4d7e15e3ca70f38ab5b91ad4ab4
+FROM python:3.14-alpine@sha256:f6a589d43c42b9e7f7dc67a12d37132491f362859a5d750607710cc56da3bc72
 RUN addgroup -S -g 10001 switchyard \
  && adduser -S -D -H -h /nonexistent -s /sbin/nologin -u 10001 -G switchyard switchyard
 COPY --from=build /app/.venv /app/.venv
