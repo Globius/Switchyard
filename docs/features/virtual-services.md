@@ -40,5 +40,12 @@ routes:
 except SNI routes on [passthrough ports](tls.md). A weighted draw is per request, not per client: add
 [persistence](persistence.md) when a client must stay on one side.
 
+**Editing in the UI.** **Add route** (on the Overview tab or in Settings) appends a route and scrolls to it. Next to
+every pool picker (route pool, split pool, default pool) **New pool…** opens the normal pool form in a dialog; saving
+adds the pool to your draft and selects it, and nothing you typed on the page is lost. Next to **Certificates**,
+**Import certificate…** and **Request certificate…** open the import and request forms the same way. An imported
+certificate is selected at once; a requested one is selected when its issue job has finished and it shows in the list.
+The selections are still unsaved fields until you **Save to draft**.
+
 **Decisions:** [0006](../adr/0006-http-routing-semantics.md), [0101](../adr/0101-route-match-model.md),
 [0119](../adr/0119-weighted-pool-routes.md). Rendering: [render guide](../render.md).

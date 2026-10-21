@@ -150,14 +150,17 @@ function useServices(tenant: string, changeSet?: string) {
   });
 }
 
-function PoolSheet({
+/** Create or edit a pool in a side sheet. `onSaved` receives the id once the op is in the draft. */
+export function PoolSheet({
   tenant,
   pool,
   onClose,
+  onSaved,
 }: {
   tenant: string;
   pool: PoolRead | "new";
   onClose: () => void;
+  onSaved?: (id: string) => void;
 }) {
   const monitors = useMonitors(tenant);
   const certs = useCertificates(tenant);
@@ -179,9 +182,13 @@ function PoolSheet({
     setProblem(null);
     setErrors({});
     try {
-      if (pool === "new")
-        await save.mutateAsync({ action: "create", body: { ...f, members: f.members } });
-      else
+      if (pool === "new") {
+        const id = await save.mutateAsync({
+          action: "create",
+          body: { ...f, members: f.members },
+        });
+        onSaved?.(id);
+      } else
         await save.mutateAsync({
           action: "update",
           id: pool.id,
