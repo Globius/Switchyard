@@ -118,7 +118,10 @@ function CredentialSheet({
         );
       return unwrap(
         await api.PATCH("/api/v1/tenants/{t}/dns-providers/{provider}", {
-          params: { path: { t: tenant, provider: cred.id } },
+          params: {
+            path: { t: tenant, provider: cred.id },
+            header: { "if-match": String(cred.version) },
+          },
           body: {
             zones,
             enabled,
@@ -151,7 +154,10 @@ function CredentialSheet({
     mutationFn: async () =>
       unwrap(
         await api.DELETE("/api/v1/tenants/{t}/dns-providers/{provider}", {
-          params: { path: { t: tenant, provider: cred!.id } },
+          params: {
+            path: { t: tenant, provider: cred!.id },
+            header: { "if-match": String(cred!.version) },
+          },
         }),
       ),
     onSuccess: () => {
