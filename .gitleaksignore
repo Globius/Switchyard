@@ -65,3 +65,4 @@ e53281c2285502d645e31e53c9c9a89e37822992:docs/api/openapi.json:private-key:10462
 f9da54cb6de9cff76d9c4b5e619fccdf9e7d8291:controller/switchyard/services/sessions.py:generic-api-key:246
 fa3f84e7980185ffbddbc874ad3003453c265521:controller/switchyard/domain/validators.py:private-key:609
 fa3f84e7980185ffbddbc874ad3003453c265521:controller/tests/unit/render/test_tokens.py:private-key:98
+b65e23b9cfa3f9d3ea698949395725a92ac9a370:ui/tests/vs-settings.test.tsx:private-key:563

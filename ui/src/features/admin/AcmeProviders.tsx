@@ -216,7 +216,10 @@ function ProviderSheet({
       if (f.enabled !== provider.enabled) patch.enabled = f.enabled;
       return unwrap(
         await api.PATCH("/api/v1/acme-providers/{provider}", {
-          params: { path: { provider: provider.id } },
+          params: {
+            path: { provider: provider.id },
+            header: { "if-match": String(provider.version) },
+          },
           body: patch,
         }),
       );
@@ -246,7 +249,10 @@ function ProviderSheet({
     mutationFn: async () =>
       unwrap(
         await api.DELETE("/api/v1/acme-providers/{provider}", {
-          params: { path: { provider: provider!.id } },
+          params: {
+            path: { provider: provider!.id },
+            header: { "if-match": String(provider!.version) },
+          },
         }),
       ),
     onSuccess: () => {
