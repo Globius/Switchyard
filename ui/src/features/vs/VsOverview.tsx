@@ -197,7 +197,11 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
                 className={v.routes.length > 1 ? undefined : "ml-auto"}
                 asChild
               >
-                <Link to={settings} params={{ tenant, id }} search={{ field: "routes" }}>
+                <Link
+                  to={settings}
+                  params={{ tenant, id }}
+                  search={{ field: "routes", add: "route" }}
+                >
                   {t("Add route")}
                 </Link>
               </Button>

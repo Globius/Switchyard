@@ -189,10 +189,13 @@ export function RequestCertificate({
   tenant,
   onClose,
   onDone,
+  onIssued,
 }: {
   tenant: string;
   onClose: () => void;
   onDone: () => void;
+  /** Called with the requested name once the issue job is queued. */
+  onIssued?: (name: string) => void;
 }) {
   const [source, setSource] = useState<"acme" | "cloudflare_origin">("acme");
   const [name, setName] = useState("");
@@ -274,6 +277,7 @@ export function RequestCertificate({
       );
       setRun(r.job_id);
       onDone();
+      onIssued?.(name);
     } catch (e) {
       setProblem(e);
     } finally {

@@ -5,7 +5,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { emptyMatch, ExtraMatch } from "@/features/policies/MatchEditor";
 import { Combobox } from "@/components/ui/combobox";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { DropdownMenu } from "radix-ui";
 import { ApiError, api, unwrap } from "@/api/client";
 import { useCan } from "@/auth/session";
@@ -23,6 +23,9 @@ import { useDraft } from "@/features/shell/draft";
 import { chipsToLabels, labelChips, validateLabelChip } from "@/lib/labels";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { PoolSheet } from "@/features/pools/Pools";
+import { ImportSheet } from "@/features/certificates/Certificates";
+import { RequestCertificate } from "@/features/certificates/RequestCertificate";
 import { usePools, useVs } from "./detail-queries";
 import { useCertificates, useSeGroups } from "./queries";
 import {
@@ -365,7 +368,17 @@ function PortsSheet({
 }
 
 /** Edit every field of a virtual service; Save adds an update op to your draft. */
-export function VsSettings({ tenant, id, focus }: { tenant: string; id: string; focus?: string }) {
+export function VsSettings({
+  tenant,
+  id,
+  focus,
+  addRoute,
+}: {
+  tenant: string;
+  id: string;
+  focus?: string;
+  addRoute?: boolean;
+}) {
   const { draft } = useDraft(tenant);
   const vs = useVs(tenant, id, draft?.id);
   const live = useVs(tenant, id);
@@ -383,6 +396,7 @@ export function VsSettings({ tenant, id, focus }: { tenant: string; id: string; 
       draftId={draft?.id}
       onReload={() => setGeneration((g) => g + 1)}
       focus={focus}
+      addRoute={addRoute}
     />
   );
 }
@@ -396,6 +410,7 @@ function SettingsForm({
   draftId,
   onReload,
   focus,
+  addRoute,
 }: {
   tenant: string;
   id: string;
@@ -405,8 +420,9 @@ function SettingsForm({
   draftId: string | undefined;
   onReload: () => void;
   focus?: string;
+  addRoute?: boolean;
 }) {
-  const pools = usePools(tenant);
+  const pools = usePools(tenant, draftId);
   const certs = useCertificates(tenant, draftId);
   const groups = useSeGroups(tenant);
   const policies = usePolicySets(tenant);
@@ -426,9 +442,66 @@ function SettingsForm({
   const [portsOpen, setPortsOpen] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
+  /** Index of a route to scroll to once it has rendered. */
+  const revealRoute = useRef<number | null>(null);
+  /** Where a pool created in the dialog goes. `null` when the dialog is closed. */
+  const [newPool, setNewPool] = useState<((poolId: string) => void) | null>(null);
+  const [certDialog, setCertDialog] = useState<"import" | "issue" | null>(null);
+  /** Name of a certificate being issued; it is selected once it shows up in the list. */
+  const [awaitedCert, setAwaitedCert] = useState<string | null>(null);
+
+  const appendRoute = () => {
+    const at = form.routes.length;
+    setForm((f) => ({
+      ...f,
+      routes: [
+        ...f.routes,
+        {
+          order: f.routes.length + 1,
+          match: emptyMatch(),
+          pool_id: null,
+          pools: [],
+          fallback_pool_ids: [],
+          redirect: null,
+        },
+      ],
+    }));
+    revealRoute.current = at;
+  };
+
+  const addedFromLink = useRef(false);
   useEffect(() => {
-    if (focus) focusField(focus);
-  }, [focus]);
+    if (addRoute && !addedFromLink.current) {
+      addedFromLink.current = true;
+      appendRoute();
+    } else if (focus) focusField(focus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus, addRoute]);
+
+  const routeCount = form.routes.length;
+  useEffect(() => {
+    if (revealRoute.current === null || routeCount <= revealRoute.current) return;
+    focusField(`routes.${revealRoute.current}`);
+    revealRoute.current = null;
+  }, [routeCount]);
+
+  useEffect(() => {
+    if (!awaitedCert) return;
+    const hit = certs.data?.items.find((c) => c.name === awaitedCert);
+    if (hit) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- adopting an externally created certificate
+      setForm((f) =>
+        f.certificate_ids.includes(hit.id)
+          ? f
+          : { ...f, certificate_ids: [...f.certificate_ids, hit.id] },
+      );
+      setAwaitedCert(null);
+      return;
+    }
+    // An issued certificate appears when its job has finished: keep looking.
+    const timer = setInterval(() => void qc.invalidateQueries({ queryKey: ["t", tenant] }), 4000);
+    return () => clearInterval(timer);
+  }, [awaitedCert, certs.data, qc, tenant]);
 
   const patch = useMemo(() => buildPatch(base, form), [form, base]);
   const dirty = Object.keys(patch).length > 0;
@@ -831,6 +904,26 @@ function SettingsForm({
                 emptyMessage={(q) => t("No certificate named “{q}”.", { q })}
                 placeholder={t("Add certificate")}
               />
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={disabled}
+                  onClick={() => setCertDialog("import")}
+                >
+                  {t("Import certificate…")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={disabled}
+                  onClick={() => setCertDialog("issue")}
+                >
+                  {t("Request certificate…")}
+                </Button>
+              </div>
             </Field>
           )}
           <Field
@@ -870,19 +963,7 @@ function SettingsForm({
               variant="outline"
               size="sm"
               disabled={disabled}
-              onClick={() =>
-                set("routes", [
-                  ...form.routes,
-                  {
-                    order: form.routes.length + 1,
-                    match: emptyMatch(),
-                    pool_id: null,
-                    pools: [],
-                    fallback_pool_ids: [],
-                    redirect: null,
-                  },
-                ])
-              }
+              onClick={appendRoute}
             >
               {t("Add route")}
             </Button>
@@ -1050,6 +1131,23 @@ function SettingsForm({
                                           label: p.name,
                                         }))}
                                       />
+                                      <NewPoolButton
+                                        label={t("New pool for route {n} split pool {k}", {
+                                          n: i + 1,
+                                          k: k + 1,
+                                        })}
+                                        disabled={disabled}
+                                        onClick={() =>
+                                          setNewPool(
+                                            () => (pid: string) =>
+                                              upd({
+                                                pools: (r.pools ?? []).map((x, j) =>
+                                                  j === k ? { ...x, pool_id: pid } : x,
+                                                ),
+                                              }),
+                                          )
+                                        }
+                                      />
                                     </div>
                                     <input
                                       aria-label={t("Route {n} split weight {k}", {
@@ -1119,6 +1217,13 @@ function SettingsForm({
                                   value={r.pool_id ?? ""}
                                   onChange={(v) => upd({ pool_id: v || null })}
                                   options={poolOptions.map((p) => ({ value: p.id, label: p.name }))}
+                                />
+                                <NewPoolButton
+                                  label={t("New pool for route {n}", { n: i + 1 })}
+                                  disabled={disabled}
+                                  onClick={() =>
+                                    setNewPool(() => (pid: string) => upd({ pool_id: pid }))
+                                  }
                                 />
                                 {r.pool_id && (
                                   <p className="text-xs font-medium text-muted-foreground">
@@ -1237,6 +1342,11 @@ function SettingsForm({
                   { value: "", label: t("None") },
                   ...poolOptions.map((p) => ({ value: p.id, label: p.name })),
                 ]}
+              />
+              <NewPoolButton
+                label={t("New pool for default pool")}
+                disabled={disabled}
+                onClick={() => setNewPool(() => (pid: string) => set("default_pool_id", pid))}
               />
               <p className="text-xs text-muted-foreground">{t("Used when no route matches.")}</p>
             </Field>
@@ -1504,6 +1614,35 @@ function SettingsForm({
           onClose={() => setPortsOpen(false)}
         />
       )}
+      {newPool && (
+        <PoolSheet
+          tenant={tenant}
+          pool="new"
+          onClose={() => setNewPool(null)}
+          onSaved={(pid) => {
+            newPool(pid);
+            void qc.invalidateQueries({ queryKey: ["t", tenant, "pools"] });
+          }}
+        />
+      )}
+      {certDialog === "import" && (
+        <ImportSheet
+          tenant={tenant}
+          onClose={() => setCertDialog(null)}
+          onCreated={(cid) => {
+            set("certificate_ids", [...form.certificate_ids.filter((x) => x !== cid), cid]);
+            void qc.invalidateQueries({ queryKey: ["t", tenant, "certificates"] });
+          }}
+        />
+      )}
+      {certDialog === "issue" && (
+        <RequestCertificate
+          tenant={tenant}
+          onClose={() => setCertDialog(null)}
+          onDone={() => void qc.invalidateQueries({ queryKey: ["t", tenant] })}
+          onIssued={setAwaitedCert}
+        />
+      )}
     </form>
   );
 }
@@ -1550,5 +1689,29 @@ export function SplitBar({ weights }: { weights: number[] }) {
             })}
       </p>
     </div>
+  );
+}
+
+/** Opens the "new pool" dialog from a pool picker. */
+function NewPoolButton({
+  onClick,
+  disabled,
+  label,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  label: string;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {t("New pool…")}
+    </Button>
   );
 }

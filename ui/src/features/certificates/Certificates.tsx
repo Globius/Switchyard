@@ -205,13 +205,16 @@ function ImportCaSheet({ tenant, onClose }: { tenant: string; onClose: () => voi
   );
 }
 
-function ImportSheet({
+/** Import a certificate and key. `onCreated` receives the new certificate's id. */
+export function ImportSheet({
   tenant,
   onClose,
+  onCreated,
   replace,
 }: {
   tenant: string;
   onClose: () => void;
+  onCreated?: (id: string) => void;
   replace?: { id: string; name: string };
 }) {
   const ensure = useEnsureDraft(tenant);
@@ -244,13 +247,15 @@ function ImportSheet({
             body: material,
           }),
         );
-      else
-        unwrap(
+      else {
+        const r = unwrap(
           await api.POST("/api/v1/tenants/{t}/certificates/import", {
             params: { path: { t: tenant }, query: { change_set: cs } },
             body: { name, ...material },
           }),
         );
+        if (r.object_id) onCreated?.(r.object_id);
+      }
       setKey("");
       setPassword("");
       await qc.invalidateQueries({ queryKey: ["t", tenant] });
