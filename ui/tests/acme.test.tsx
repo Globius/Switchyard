@@ -149,10 +149,14 @@ const server = setupServer(
     return HttpResponse.json(PROVIDER({ name: "le" }), { status: 201 });
   }),
   http.patch("*/api/v1/acme-providers/:id", async ({ request }) => {
+    if (!request.headers.get("if-match"))
+      return HttpResponse.json({ status: 428, title: "Precondition required" }, { status: 428 });
     patched = (await request.json()) as Record<string, unknown>;
     return HttpResponse.json(PROVIDER());
   }),
-  http.delete("*/api/v1/acme-providers/:id", () => {
+  http.delete("*/api/v1/acme-providers/:id", ({ request }) => {
+    if (!request.headers.get("if-match"))
+      return HttpResponse.json({ status: 428, title: "Precondition required" }, { status: 428 });
     removed = true;
     return new HttpResponse(null, { status: 204 });
   }),
@@ -175,10 +179,14 @@ const server = setupServer(
     return HttpResponse.json({ ...body, id: "d9" }, { status: 201 });
   }),
   http.patch("*/api/v1/tenants/acme/dns-providers/:id", async ({ request }) => {
+    if (!request.headers.get("if-match"))
+      return HttpResponse.json({ status: 428, title: "Precondition required" }, { status: 428 });
     patched = (await request.json()) as Record<string, unknown>;
     return HttpResponse.json(creds[0]);
   }),
-  http.delete("*/api/v1/tenants/acme/dns-providers/:id", () => {
+  http.delete("*/api/v1/tenants/acme/dns-providers/:id", ({ request }) => {
+    if (!request.headers.get("if-match"))
+      return HttpResponse.json({ status: 428, title: "Precondition required" }, { status: 428 });
     removed = true;
     return new HttpResponse(null, { status: 204 });
   }),

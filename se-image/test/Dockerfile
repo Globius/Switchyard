@@ -3,7 +3,7 @@
 # CI passes REGISTRY (the Dependency Proxy prefix, ending in /) so Docker Hub pulls are cached.
 # The two GitHub downloads retry (curl exit 35 seen on CI runners, ADR 0217); provision.sh still verifies the pinned SHA-256.
 ARG REGISTRY=
-FROM ${REGISTRY}golang:1.26 AS agent
+FROM ${REGISTRY}golang:1.26.10 AS agent
 WORKDIR /src
 COPY agent/ .
 RUN CGO_ENABLED=0 go build -o /sy-agent ./cmd/sy-agent
@@ -18,7 +18,7 @@ FROM ${REGISTRY}debian:trixie AS crowdsec
 COPY se-image/versions.env /versions.env
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates  && . /versions.env && curl -fsSL -o /c.tgz "https://github.com/crowdsecurity/cs-haproxy-spoa-bouncer/releases/download/$CROWDSEC_SPOA_VERSION/crowdsec-spoa-bouncer-linux-amd64.tgz"  && echo "$CROWDSEC_SPOA_SHA256_LINUX_AMD64  /c.tgz" | sha256sum -c -  && tar -xzf /c.tgz --strip-components=1 "crowdsec-spoa-bouncer-$CROWDSEC_SPOA_VERSION/crowdsec-spoa-bouncer" -C /
 
-FROM ${REGISTRY}golang:1.26 AS waf
+FROM ${REGISTRY}golang:1.26.10 AS waf
 COPY se-image/versions.env /versions.env
 RUN . /versions.env && GOBIN=/out CGO_ENABLED=0 go install "github.com/corazawaf/coraza-spoa@$CORAZA_SPOA_VERSION"  && curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o /crs.tgz "https://github.com/coreruleset/coreruleset/archive/refs/tags/v$CRS_VERSION.tar.gz"
 

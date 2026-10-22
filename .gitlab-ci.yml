@@ -111,7 +111,7 @@ openapi-breaking:
 # se-image/test/check.sh (units, sysctls, the auth sidecar slot, Data Plane API over mTLS).
 agent:
   stage: check
-  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/golang:1.26
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/golang:1.26.10
   script:
     - cd agent
     - test -z "$(gofmt -l .)"
@@ -141,7 +141,7 @@ ui:
 # The device posture agent (ADR 0196): standard library only, builds for the three desktop systems.
 posture-agent:
   stage: check
-  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/golang:1.26
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/golang:1.26.10
   script:
     - cd posture-agent
     - test -z "$(gofmt -l .)"
@@ -161,7 +161,7 @@ audit-python:
 
 audit-go:
   stage: check
-  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/golang:1.26
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/golang:1.26.10
   script:
     - go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
     - for d in agent posture-agent provider; do (cd $d && "$(go env GOPATH)/bin/govulncheck" ./...); done
