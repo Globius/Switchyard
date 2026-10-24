@@ -1591,10 +1591,17 @@ class _Renderer:
             ...             algorithm=dm.Algorithm.HDR, hash_key="X-Cache-Key")
             >>> _Renderer._balance(p)
             'balance hdr(X-Cache-Key)'
+
+        HAProxy spells the keys differently: ``hdr(<name>)`` in parentheses, ``url_param <name>``
+        with a space. ``balance url_param(<name>)`` is rejected by 3.2 with "balance only supports
+        ... 'hdr(name)'", so the parenthesised form never reaches a config.
         """
-        if pool.algorithm in (dm.Algorithm.HDR, dm.Algorithm.URL_PARAM):
-            key = esc.hash_key(_need(pool.hash_key, f"{pool.algorithm.value} hash key"))
-            return f"balance {pool.algorithm.value}({key})"
+        if pool.algorithm is dm.Algorithm.HDR:
+            key = esc.hash_key(_need(pool.hash_key, "hdr hash key"))
+            return f"balance hdr({key})"
+        if pool.algorithm is dm.Algorithm.URL_PARAM:
+            key = esc.hash_key(_need(pool.hash_key, "url_param hash key"))
+            return f"balance url_param {key}"
         return f"balance {pool.algorithm.value}"
 
     @staticmethod
