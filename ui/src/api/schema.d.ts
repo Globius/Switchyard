@@ -5991,9 +5991,12 @@ export interface components {
         /**
          * Algorithm
          * @description Pool load-balancing algorithm.
+         *
+         *     ``uri``, ``hdr`` and ``url_param`` hash a request attribute instead of counting connections, so
+         *     a pool of caches or shards keeps one key on one member (ADR 0224); each needs ``Pool.hash_key``.
          * @enum {string}
          */
-        Algorithm: "roundrobin" | "leastconn" | "source" | "random";
+        Algorithm: "roundrobin" | "leastconn" | "source" | "random" | "uri" | "hdr" | "url_param";
         /**
          * AllowListPolicySet
          * @description Source networks: the published Cloudflare ranges, a country list or a reputation feed.
@@ -12912,6 +12915,9 @@ export interface components {
          *
          *     Attributes:
          *         algorithm: Load-balancing algorithm.
+         *         hash_key: Header name (``hdr``) or URL parameter name (``url_param``) whose value picks the
+         *             member; ``uri`` hashes the path and needs none, and the counting algorithms reject one.
+         *             Required by the three hash algorithms (ADR 0224).
          *         persistence: Optional persistence profile.
          *         health_monitor_id: Optional shared health monitor.
          *         tls: Connect to members over TLS.
@@ -12945,6 +12951,8 @@ export interface components {
             /** Client Certificate Id */
             client_certificate_id?: string | null;
             discovery?: components["schemas"]["PoolDiscovery"] | null;
+            /** Hash Key */
+            hash_key?: string | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /**
@@ -13006,6 +13014,8 @@ export interface components {
             /** Client Certificate Id */
             client_certificate_id?: string | null;
             discovery?: components["schemas"]["PoolDiscovery"] | null;
+            /** Hash Key */
+            hash_key?: string | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /** Labels */
@@ -13131,6 +13141,8 @@ export interface components {
             /** Client Certificate Id */
             client_certificate_id?: string | null;
             discovery?: components["schemas"]["PoolDiscovery"] | null;
+            /** Hash Key */
+            hash_key?: string | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /** Labels */
@@ -13178,6 +13190,8 @@ export interface components {
             discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
             draft_status: components["schemas"]["DraftStatus"];
+            /** Hash Key */
+            hash_key?: string | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /**
@@ -21464,7 +21478,8 @@ export interface operations {
                      *       "pool_forbidden": [
                      *         "tls",
                      *         "tls_verify",
-                     *         "persistence"
+                     *         "persistence",
+                     *         "hash_key"
                      *       ],
                      *       "port_forbidden": [
                      *         "tls",

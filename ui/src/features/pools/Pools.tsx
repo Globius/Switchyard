@@ -33,6 +33,7 @@ type PoolDiscovery = NonNullable<PoolRead["discovery"]>;
 export interface PoolForm {
   name: string;
   algorithm: PoolRead["algorithm"];
+  hash_key: string | null;
   health_monitor_id: string | null;
   tls: boolean;
   tls_verify: boolean;
@@ -60,12 +61,19 @@ const ALGO: Record<string, string> = {
   leastconn: "Least connections",
   source: "Source hash",
   random: "Random",
+  uri: "Request path hash (uri)",
+  hdr: "Request header hash (hdr)",
+  url_param: "Query parameter hash (url_param)",
 };
+
+/** The algorithms that need a `hash_key`: the header name or the URL parameter (ADR 0224). */
+const HASHED: string[] = ["hdr", "url_param"];
 
 export function emptyPool(): PoolForm {
   return {
     name: "",
     algorithm: "roundrobin",
+    hash_key: null,
     health_monitor_id: null,
     tls: false,
     tls_verify: false,
@@ -86,6 +94,7 @@ export function toForm(p: PoolRead): PoolForm {
   return {
     name: p.name,
     algorithm: p.algorithm,
+    hash_key: p.hash_key ?? null,
     health_monitor_id: p.health_monitor_id ?? null,
     tls: p.tls,
     tls_verify: p.tls_verify,
@@ -269,7 +278,11 @@ export function PoolSheet({
               className={INPUT}
               disabled={!write.allowed}
               value={f.algorithm}
-              onChange={(e) => set({ algorithm: e.target.value as PoolForm["algorithm"] })}
+              onChange={(e) => {
+                const algorithm = e.target.value as PoolForm["algorithm"];
+                // A key on an algorithm that ignores it is a field error: drop it on the way out.
+                set({ algorithm, hash_key: HASHED.includes(algorithm) ? f.hash_key : null });
+              }}
             >
               {Object.entries(ALGO).map(([k, v]) => (
                 <option key={k} value={k}>
@@ -278,6 +291,27 @@ export function PoolSheet({
               ))}
             </select>
           </label>
+          {HASHED.includes(f.algorithm) && (
+            <label className="block space-y-1.5 text-sm font-medium">
+              {f.algorithm === "hdr" ? t("Header name") : t("Query parameter")}
+              <input
+                aria-label={t("Hash key")}
+                className={INPUT}
+                disabled={!write.allowed}
+                placeholder="X-Cache-Key"
+                value={f.hash_key ?? ""}
+                onChange={(e) => set({ hash_key: e.target.value || null })}
+              />
+              <span className="block text-xs font-normal text-muted-foreground">
+                {t("Requests without it fall back to round robin.")}
+              </span>
+              {errors.hash_key && (
+                <span role="alert" className="block text-xs font-normal text-status-down">
+                  {errors.hash_key}
+                </span>
+              )}
+            </label>
+          )}
           <div className="space-y-1.5 text-sm font-medium sm:col-span-2">
             {t("Labels")}
             <ChipInput

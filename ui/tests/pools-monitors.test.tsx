@@ -267,6 +267,20 @@ describe("pools", () => {
     );
   });
 
+  it("sets a hash key when the algorithm hashes a request attribute", async () => {
+    renderAt("/t/acme/pools");
+    await userEvent.click(await screen.findByRole("button", { name: "api-v2" }));
+    const algo = await screen.findByLabelText("Algorithm");
+    await waitFor(() => expect(algo).toBeEnabled());
+    expect(screen.queryByLabelText("Hash key")).not.toBeInTheDocument();
+    await userEvent.selectOptions(algo, "hdr");
+    await userEvent.type(screen.getByLabelText("Hash key"), "X-Cache-Key");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() =>
+      expect(posted?.ops[0]?.body).toEqual({ algorithm: "hdr", hash_key: "X-Cache-Key" }),
+    );
+  });
+
   it("sets a passive check and slow start on a pool that has a health monitor", async () => {
     renderAt("/t/acme/pools");
     await userEvent.click(await screen.findByRole("button", { name: "api-v2" }));
