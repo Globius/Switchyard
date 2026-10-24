@@ -1,4 +1,4 @@
-==> haproxy/haproxy.cfg (haproxy, lines 179-189)
+==> haproxy/haproxy.cfg (haproxy, lines 181-191)
 backend pool_rke-nodes
     mode tcp
     balance roundrobin

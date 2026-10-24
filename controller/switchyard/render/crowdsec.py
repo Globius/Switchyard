@@ -129,15 +129,17 @@ def frontend_lines(policy: dm.CrowdSecPolicySet) -> tuple[list[str], list[str]]:
     ``ban`` verdict is refused with 403. A ``captcha`` verdict is not enforced. With ``fail_mode``
     ``closed`` a request is refused (503) when the bouncer did not answer in time.
 
+    The request id the bouncer receives is the one ``defaults`` sets
+    (``unique-id-format %[uuid()]``), so this returns no format line of its own.
+
     Example:
         >>> o, r = frontend_lines(dm.CrowdSecPolicySet.model_construct(
         ...     mode="block", fail_mode="open", timeout_ms=100, allow_cidrs=(), excluded_paths=(),
         ... ))
-        >>> o[1].startswith("filter spoe engine crowdsec"), r[-1].endswith("-m str ban }")
+        >>> o[0].startswith("filter spoe engine crowdsec"), r[-1].endswith("-m str ban }")
         (True, True)
     """
     options = [
-        "unique-id-format %[uuid()]",
         f"filter spoe engine crowdsec config {BASE_DIR}/lists/crowdsec.spoe",
     ]
     skips: list[str] = []

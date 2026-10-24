@@ -9,6 +9,10 @@ groups:
         expr: switchyard_change_sets{state="failed"} > 0
         for: 10m
         annotations: { summary: "Change sets are in the failed state" }
+      - alert: EngineDrifted
+        expr: switchyard_engines_drifted > 0
+        for: 15m
+        annotations: { summary: "An engine's running configuration drifted" }
       - alert: EngineUnreachable
         expr: up{job=~"se-haproxy|se-node"} == 0
         for: 5m

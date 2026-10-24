@@ -1,4 +1,4 @@
-==> haproxy/haproxy.cfg (haproxy, lines 47-55)
+==> haproxy/haproxy.cfg (haproxy, lines 49-57)
 backend pool_ubiquiti
     mode http
     balance roundrobin

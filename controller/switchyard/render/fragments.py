@@ -234,7 +234,7 @@ def rendered_fragments(
         ... })
         >>> [f] = rendered_fragments(snap, ObjectType.POOL, UUID(symbolic_uuid("p")))
         >>> f.file, f.range
-        ('haproxy/haproxy.cfg', (37, 40))
+        ('haproxy/haproxy.cfg', (38, 41))
     """
     if object_type not in RENDERED_TYPES:
         raise ValueError(f"{object_type.value} has no rendered HAProxy text")

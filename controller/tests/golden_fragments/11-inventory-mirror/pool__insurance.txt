@@ -1,4 +1,4 @@
-==> haproxy/haproxy.cfg (haproxy, lines 89-97)
+==> haproxy/haproxy.cfg (haproxy, lines 91-99)
 backend pool_insurance
     mode http
     balance roundrobin

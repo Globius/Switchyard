@@ -94,6 +94,12 @@ schema). Every value is documented in `deploy/helm/switchyard/values.yaml`. Othe
 (any `SWITCHYARD_*` setting, [controller-settings.md](controller-settings.md)), `clusterDomain` (nginx needs the full service
 name; default `cluster.local`), and `api.replicas`, `worker.replicas`, `proxy.replicas`.
 
+With the Prometheus Operator installed, `monitoring.serviceMonitor.enabled` renders a `ServiceMonitor` that scrapes the
+API Service's `/metrics` with the metrics token, and `monitoring.prometheusRule.enabled` renders a `PrometheusRule` with
+the controller alerts of `deploy/telemetry/prometheus/rules.yml` (stale status poll, failed change sets, drifted engines).
+Both are off by default; their labels must match your Prometheus's selectors, and an off-cluster Prometheus can use
+`GET /api/v1/discovery/prometheus` instead ([operating.md](operating.md)).
+
 ## First sign-in and the first engine
 
 Create an administrator token and the break-glass administrator as in [quickstart.md](quickstart.md), with the token made in the

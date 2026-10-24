@@ -115,6 +115,30 @@ ingress:
   tlsSecretName: ""
 
 podDisruptionBudget: {enabled: true}
+
+# Prometheus Operator objects (ADR 0061). Off by default: they need the operator's CRDs, and the chart renders nothing
+# without them. The ServiceMonitor scrapes the API Service's /metrics with the scrape token; the PrometheusRule holds
+# the controller alerts of deploy/telemetry/prometheus/rules.yml, per tenant through the `tenant` label.
+monitoring:
+  serviceMonitor:
+    enabled: false
+    # Empty means the release namespace.
+    namespace: ""
+    # Extra labels for the operator's serviceMonitorSelector (for example release: kube-prometheus-stack).
+    labels: {}
+    interval: 30s
+    scrapeTimeout: 10s
+    # Secret holding the token the controller reads as SWITCHYARD_METRICS_TOKEN. Empty uses secrets.existingSecret.
+    bearerTokenSecret: {existingSecret: "", key: metrics-token}
+  prometheusRule:
+    enabled: false
+    namespace: ""
+    # Extra labels for the operator's ruleSelector.
+    labels: {}
+    # Alert when the newest engine status poll of a tenant is older than this, for alertFor.
+    statusAgeSeconds: 300
+    alertFor: 5m
+
 # Extra /etc/hosts entries for the API and worker pods (for example a name for a Proxmox host).
 hostAliases: []
 podAnnotations: {}

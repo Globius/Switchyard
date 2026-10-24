@@ -1,0 +1,61 @@
+render:
+  se_group: seg-edge
+tenants:
+- id: t-acme
+  name: acme
+networks:
+- id: net-lb
+  tenant_id: t-acme
+  name: lb
+  cidr: 192.0.2.0/24
+  gateway: 192.0.2.1
+- id: net-be
+  tenant_id: t-acme
+  name: backend
+  cidr: 10.20.0.0/16
+se_groups:
+- id: seg-edge
+  tenant_id: t-acme
+  name: edge
+  ha_mode: vrrp
+  networks:
+  - network_id: net-lb
+    role: vip
+  - network_id: net-be
+    role: backend
+certificates:
+- id: c-shop
+  tenant_id: t-acme
+  name: shop-example-test
+  source: cloudflare_origin
+  sans:
+  - shop.example.test
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/shop-example-test
+pools:
+- id: p-shop
+  tenant_id: t-acme
+  name: shop
+  members:
+  - address: 10.20.3.11
+    port: 8080
+  - address: 10.20.3.12
+    port: 8080
+virtual_services:
+# HTTP frontend with TLS: the access log line carries the SNI and the host, and the defaults set the
+# single request id / log-format pair the Vector parser reads (see docs/render.md).
+- id: v-shop
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: shop
+  protocol: http
+  vip: 192.0.2.30
+  ports:
+  - port: 443
+    tls: true
+    http2: true
+  - port: 80
+    https_redirect_port: 443
+  certificate_ids:
+  - c-shop
+  default_pool_id: p-shop

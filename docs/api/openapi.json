@@ -82,6 +82,18 @@
             "title": "Frontend",
             "type": "string"
           },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Host the request asked for (first Host header field, lowercased).",
+            "title": "Host"
+          },
           "method": {
             "anyOf": [
               {
@@ -109,13 +121,73 @@
             "title": "Raw",
             "type": "string"
           },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HAProxy's unique id for the request (`%ID`), generated on the engine with no controller involvement; `None` for a line from an engine that still logs the default httplog.",
+            "title": "Request Id"
+          },
+          "retries": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Retries before the server answered (HAProxy `%rc`).",
+            "title": "Retries"
+          },
           "server": {
             "title": "Server",
             "type": "string"
           },
+          "sni": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "TLS SNI of the connection, if any.",
+            "title": "Sni"
+          },
           "status": {
             "title": "Status",
             "type": "integer"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Address of the server the request was sent to.",
+            "title": "Upstream"
+          },
+          "upstream_port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Port of the server the request was sent to.",
+            "title": "Upstream Port"
           },
           "waf": {
             "default": false,

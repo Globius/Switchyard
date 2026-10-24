@@ -110,8 +110,10 @@ Both are audited. Progress is read by polling. See ADR 0016.
 
 The UI's charts and log tail read Prometheus and Loki through the controller, which adds the tenant to every
 query. The telemetry pipeline must provide: Prometheus series from each SE's HAProxy exporter with a `tenant`
-label (tenant id) and HAProxy's `proxy="vs_<service name>"`; Loki lines from the SE's HAProxy `httplog` with the
-labels `tenant` and `frontend="vs_<service name>"`. Set `SWITCHYARD_PROMETHEUS_URL` (and `SWITCHYARD_LOKI_URL`).
+label (tenant id) and HAProxy's `proxy="vs_<service name>"`; Loki lines from the SE's HAProxy access log with the
+labels `tenant` and `frontend="vs_<service name>"`. The lines carry a request id, the SNI and host, the upstream
+address and port, retries, status, bytes and timings ([render.md](render.md#access-log)); those stay fields of the
+event, not labels. Set `SWITCHYARD_PROMETHEUS_URL` (and `SWITCHYARD_LOKI_URL`).
 Without them the metrics and log routes answer `available: false` and the UI shows "no data source". The
 pipeline itself (Prometheus, Loki, Grafana, and the Vector log shipper on the SEs) is `deploy/telemetry/`; see ADR 0052
 and `docs/runbooks/telemetry.md`.
@@ -121,7 +123,14 @@ and `docs/runbooks/telemetry.md`.
 `GET /metrics` (Prometheus text format, outside `/api/v1`) reports the job queue by kind and state, the run time of
 finished jobs (`switchyard_job_duration_seconds_count`/`_sum`), change sets by state (`failed` are apply failures),
 engines by reachability, engines with drift, drift findings and the age of the newest status poll
-(`switchyard_status_age_seconds`, alert when it grows). Values come from the database, so every replica answers alike.
+(`switchyard_status_age_seconds`, alert when it grows), plus one `switchyard_virtual_services` series per virtual
+service. Values come from the database, so every replica answers alike.
+
+Every one of those series carries `tenant` (the tenant id; `system` for jobs that belong to no tenant) and the
+per-service series also carries the service's own name, so a per-tenant query returns that tenant's series and
+`switchyard_virtual_services` joins to the objects it owns. The labels are bounded by the configuration, not by the
+traffic: `tenant` comes from the tenant table, the rest from domain enums and the virtual-service table, and
+per-request values (request id, host, SNI, upstream) never become labels — they live in the access log line.
 
 `GET /api/v1/discovery/prometheus?exporter=haproxy|node&port=` is a Prometheus HTTP service-discovery list: one group
 per enabled engine with a management address, labelled `tenant` (id), `tenant_name`, `se_group`, `engine` and `vs`

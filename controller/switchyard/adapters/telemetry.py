@@ -8,8 +8,10 @@ The contract with the telemetry pipeline (documented in ``docs/operating.md``):
 
 - Prometheus scrapes each SE's HAProxy exporter with the labels ``tenant`` (tenant id) and the
   built-in ``proxy`` label (``vs_<service name>``).
-- Loki holds the SE's HAProxy ``httplog`` lines with the labels ``tenant`` and ``frontend``
-  (``vs_<service name>``).
+- Loki holds the SE's HAProxy access-log lines with the labels ``tenant`` and ``frontend``
+  (``vs_<service name>``). Each line carries HAProxy's own request id, the TLS SNI and the ``Host``,
+  the upstream address and port, the retries, status, bytes and timings (``docs/render.md``);
+  :func:`parse_httplog` reads them into :class:`~switchyard.domain.telemetry.AccessLogEntry`.
 
 Every query is built here with the tenant label as the first matcher and the service name
 validated as a safe identifier, so a caller can never read another tenant's data.
@@ -89,17 +91,45 @@ class Telemetry(Protocol):
 
 # -- HAProxy httplog ------------------------------------------------------------------------------
 
-#: ``<client>:<port> [<date>] <frontend> <backend>/<server> Tq/Tw/Tc/Tr/Tt <status> <bytes> ...
-#: "<METHOD> <uri> <HTTP/x>"`` (HAProxy's default ``option httplog``).
+#: ``<client>:<port> [<date>] <frontend> <backend>/<server> Tq/Tw/Tc/Tr/Tt <status> <bytes> ...``
+#: followed by the labelled fields the rendered ``log-format`` adds
+#: (:data:`switchyard.render.haproxy.LOG_FORMAT`) and ``"<METHOD> <uri> <HTTP/x>"``.
+#: The labelled block is optional, so a line from an engine that still runs HAProxy's default
+#: ``option httplog`` parses exactly as before (the extra fields stay ``None``).
 _HTTPLOG = re.compile(
     r"(?P<client>\S+):\d+ \[(?P<date>[^\]]+)\] (?P<frontend>\S+) (?P<backend>[^/\s]+)/"
     r"(?P<server>\S+) (?P<tq>-?\d+)/(?P<tw>-?\d+)/(?P<tc>-?\d+)/(?P<tr>-?\d+)/(?P<tt>\+?-?\d+) "
-    r"(?P<status>\d{3}) (?P<bytes>\d+) .*?(?:\"(?P<method>[A-Z]+) (?P<uri>\S*)[^\"]*\")?\s*$"
+    r"(?P<status>\d{3}) (?P<bytes>\d+)"
+    r"(?: request_id=(?P<request_id>\S+) sni=(?P<sni>\"(?:[^\"\\]|\\.)*\"|-)"
+    r" host=(?P<host>\"(?:[^\"\\]|\\.)*\"|-) upstream=(?P<upstream>\S*)"
+    r" upstream_port=(?P<upstream_port>-?\d*) retries=(?P<retries>\d+))?"
+    r".*?(?:\"(?P<method>[A-Z]+) (?P<uri>\S*)[^\"]*\")?\s*$"
 )
 
 
 #: The WAF verdict HAProxy captures before the request line: ``{deny}`` or ``{drop}``.
 _WAF_CAPTURE = re.compile(r"\{(?P<action>deny|drop)\} \"")
+
+#: Escapes HAProxy applies inside ``%{+Q}``: a backslash before a quote or another backslash.
+_QUOTED_ESCAPE = re.compile(r"\\([\"\\])")
+
+
+def _unquote(value: str | None) -> str | None:
+    """Undo ``%{+Q}`` quoting of a log field; ``None`` and the ``-`` placeholder become ``None``."""
+    if value is None:
+        return None
+    if value == "-" or value == '""':
+        return None
+    if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
+        return _QUOTED_ESCAPE.sub(r"\1", value[1:-1])
+    return value
+
+
+def _number(value: str | None) -> int | None:
+    """A numeric field of the labelled block, ``None`` when HAProxy logged ``-`` or nothing."""
+    if value in (None, "", "-"):
+        return None
+    return int(value)
 
 
 def parse_httplog(line: str, fallback: datetime | None = None) -> AccessLogEntry | None:
@@ -116,6 +146,14 @@ def parse_httplog(line: str, fallback: datetime | None = None) -> AccessLogEntry
         ... )
         >>> (blocked.waf, blocked.waf_action)
         (True, 'deny')
+        >>> full = parse_httplog(
+        ...     '192.0.2.7:51514 [10/Oct/2026:08:30:00.123] vs_shop pool_web/web-1 '
+        ...     '0/0/1/12/13 200 512 request_id=6f5b0f7e-6e0a-4a4f-9d2b-2b6d2f9a1c33 '
+        ...     'sni="shop.example.test" host="shop.example.test" upstream=10.20.3.11 '
+        ...     'upstream_port=8080 retries=1 ---- 1/1/0/0 0/0 "GET /a HTTP/1.1"'
+        ... )
+        >>> (full.sni, full.host, full.upstream, full.upstream_port, full.retries)
+        ('shop.example.test', 'shop.example.test', '10.20.3.11', 8080, 1)
     """
     m = _HTTPLOG.search(line)
     if m is None:
@@ -137,6 +175,12 @@ def parse_httplog(line: str, fallback: datetime | None = None) -> AccessLogEntry
         status=int(m["status"]),
         bytes=int(m["bytes"]),
         duration_ms=int(m["tt"].lstrip("+")),
+        request_id=m["request_id"],
+        sni=_unquote(m["sni"]),
+        host=_unquote(m["host"]),
+        upstream=_unquote(m["upstream"]),
+        upstream_port=_number(m["upstream_port"]),
+        retries=_number(m["retries"]),
         method=m["method"],
         path=m["uri"],
         waf=waf_action is not None,

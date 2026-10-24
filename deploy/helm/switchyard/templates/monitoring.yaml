@@ -1,0 +1,73 @@
+# Prometheus Operator objects for the controller (ADR 0061): a ServiceMonitor that scrapes the API
+# Service's /metrics, and the alert rules the off-cluster stack in deploy/telemetry ships with.
+# Both are off by default because they need the operator's CRDs; values.yaml documents the switches.
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "sy.name" . }}
+  {{- with .Values.monitoring.serviceMonitor.namespace }}
+  namespace: {{ . }}
+  {{- end }}
+  labels:
+    {{- include "sy.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels: {{- include "sy.selector" (dict "Release" .Release "component" "api") | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /metrics
+      scheme: http
+      interval: {{ .Values.monitoring.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout }}
+      {{- $secret := .Values.monitoring.serviceMonitor.bearerTokenSecret.existingSecret | default .Values.secrets.existingSecret }}
+      {{- with $secret }}
+      # The token the controller reads as SWITCHYARD_METRICS_TOKEN: /metrics accepts it and nothing else.
+      bearerTokenSecret:
+        name: {{ . }}
+        key: {{ $.Values.monitoring.serviceMonitor.bearerTokenSecret.key }}
+      {{- end }}
+{{- end }}
+{{- if .Values.monitoring.prometheusRule.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "sy.name" . }}
+  {{- with .Values.monitoring.prometheusRule.namespace }}
+  namespace: {{ . }}
+  {{- end }}
+  labels:
+    {{- include "sy.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: switchyard
+      rules:
+        - alert: ControllerStatusPollStale
+          expr: switchyard_status_age_seconds > {{ .Values.monitoring.prometheusRule.statusAgeSeconds }}
+          for: {{ .Values.monitoring.prometheusRule.alertFor }}
+          labels: {severity: warning}
+          annotations:
+            summary: "Engine status has not been polled for {{ .Values.monitoring.prometheusRule.statusAgeSeconds }}s"
+            description: "The newest status poll of tenant {{`{{ $labels.tenant }}`}} is stale: the controller cannot reach the engines, or its poller is down."
+        - alert: ApplyFailures
+          expr: switchyard_change_sets{state="failed"} > 0
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: "Change sets are in the failed state"
+            description: "Tenant {{`{{ $labels.tenant }}`}} has {{`{{ $value }}`}} change set(s) whose apply failed."
+        - alert: EngineDrifted
+          expr: switchyard_engines_drifted > 0
+          for: 15m
+          labels: {severity: info}
+          annotations:
+            summary: "An engine's running configuration drifted"
+            description: "Tenant {{`{{ $labels.tenant }}`}} has {{`{{ $value }}`}} engine(s) whose running config no longer matches the rendered one. Drift is reported, never corrected."
+{{- end }}

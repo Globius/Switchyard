@@ -803,6 +803,8 @@ class TestInjection:
             "ssl-default-server-options",
             "option",
             "retries",
+            "unique-id-format",
+            "log-format",
             "timeout",
             "mode",
             "bind",

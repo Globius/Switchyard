@@ -5,6 +5,7 @@ frontend vs_{{ f.name }}
 {% endfor %}
     option {{ "httplog" if f.mode == "http" else "tcplog" }}
 {% if f.mode == "http" %}
+    log-format "{{ log_format }}"
     option forwardfor
 {% if f.tarpit_s %}
     timeout tarpit {{ f.tarpit_s }}s
