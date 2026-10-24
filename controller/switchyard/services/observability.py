@@ -115,6 +115,10 @@ class MetricRows:
     job_seconds: tuple[tuple[UUID | None, str, str, int, float], ...] = ()
     change_sets: tuple[tuple[UUID, str, int], ...] = ()
     engines: tuple[EngineSample, ...] = ()
+    #: Tenants that own at least one engine row, whether or not it has been polled yet. Without
+    #: this a tenant whose engines have never reported would expose no reachability series at all,
+    #: which reads as "no engines" to an alerting rule.
+    engine_tenants: tuple[UUID, ...] = ()
     services: tuple[ServiceSample, ...] = ()
 
 
@@ -218,7 +222,8 @@ def metric_families(rows: MetricRows, *, now: datetime, version: str) -> list[Fa
         age.add(max(0.0, (now - observed_at).total_seconds()), tenant=owner)
     # Both reachability values for every tenant that has an engine, so a query does not have to
     # distinguish "no unreachable engine" from "no engine".
-    for owner in sorted(set(reachable) | set(unreachable)):
+    owners = set(reachable) | set(unreachable) | {str(t) for t in rows.engine_tenants}
+    for owner in sorted(owners):
         engines.add(reachable.get(owner, 0), tenant=owner, reachable="true")
         engines.add(unreachable.get(owner, 0), tenant=owner, reachable="false")
 
@@ -318,12 +323,19 @@ async def collect_metrics(db: Databases, *, now: datetime | None = None) -> list
                 )
             ).all()
         ]
+        engine_tenants = tuple(
+            tenant
+            for (tenant,) in (
+                await session.execute(select(ServiceEngineRow.tenant_id).distinct())
+            ).all()
+        )
     return metric_families(
         MetricRows(
             jobs=tuple(jobs),
             job_seconds=tuple(job_seconds),
             change_sets=tuple(change_sets),
             engines=tuple(engines),
+            engine_tenants=engine_tenants,
             services=tuple(services),
         ),
         now=now,
