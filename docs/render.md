@@ -122,7 +122,7 @@ group has a `nat` UDP service. Validation codes: `ipvs_port_mismatch`, `ipvs_dr_
 | Service `deny_list_id` | HTTP: `http-request deny deny_status 403 if { src -f <dir>/lists/<name>.cidr }` after the client address is restored; TCP: `tcp-request session reject if { src -f ... }` |
 | Service `restore_client_ip_header` | trust flag, `set-src hdr(<H>)` if trusted, `del-header <H>` if not (see below) |
 | Pool `name`, `algorithm` | `backend pool_<name>`, `balance <algorithm>` |
-| Pool `algorithm` `uri`, `hdr`, `url_param` | `balance uri`, `balance hdr(<hash_key>)` or `balance url_param(<hash_key>)`; `hash-type` stays at HAProxy's default, and the pool must be used by `http` services only (ADR 0224) |
+| Pool `algorithm` `uri`, `hdr`, `url_param` | `balance uri`, `balance hdr(<hash_key>)` or `balance url_param <hash_key>` (note the space: HAProxy rejects `url_param(<name>)`); `hash-type` stays at HAProxy's default, and the pool must be used by `http` services only (ADR 0224) |
 | Pool `persistence` `source_ip` | `stick-table type ipv6 size <n> expire <t>s` and `stick on src` |
 | Pool `persistence` `http_cookie` | `cookie <name> insert indirect nocache [maxlife <t>s] [secure] [httponly]` (or `rewrite`, `prefix`) and `cookie m<12 hex>` on every server: an opaque hash of the pool and member ids, never the server name or address (ADR 0105) |
 | Pool `persistence` `header`, `uri` | `stick-table type string len 128 size <n> expire <t>s` and `stick on req.hdr(<H>)`, `stick on path` or `stick on url_param(<p>)` (ADR 0105); `http` pools only |

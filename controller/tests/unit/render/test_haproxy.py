@@ -580,7 +580,7 @@ class TestBalance:
             ("random", None, "balance random"),
             ("uri", None, "balance uri"),
             ("hdr", "X-Cache-Key", "balance hdr(X-Cache-Key)"),
-            ("url_param", "tenant_id", "balance url_param(tenant_id)"),
+            ("url_param", "tenant_id", "balance url_param tenant_id"),
         ],
     )
     def test_balance_line(self, algorithm: str, key: str | None, line: str) -> None:

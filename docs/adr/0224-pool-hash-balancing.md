@@ -21,7 +21,14 @@ it asks for).
 
 1. **Three new `Algorithm` values**: `uri`, `hdr` and `url_param` — HAProxy's names, so the enum value
    is what follows `balance`. They render `balance uri`, `balance hdr(<name>)` and
-   `balance url_param(<name>)`; the existing algorithms keep `balance <algorithm>` unchanged.
+   `balance url_param <name>`; the existing algorithms keep `balance <algorithm>` unchanged.
+
+   *Correction (2026-10-24, same day, no decision changed):* this record first said
+   `balance url_param(<name>)`. HAProxy's `balance` directive is asymmetric — `hdr` takes its key in
+   parentheses, `url_param` takes it as a separate word — and 3.2 answers
+   `balance only supports ... 'hdr(name)' ...` for the parenthesised form. The renderer, the golden
+   case and the tests now use `balance url_param <name>`, verified with `haproxy -c` 3.2.25. The
+   decision (which algorithms, one `hash_key` field, no `hash-type` knob) is unchanged.
 2. **One key field, `Pool.hash_key`** (a header name or a URL parameter name, 1-64 characters of
    `A-Z a-z 0-9 _ . -`). One field rather than one per algorithm because a pool uses exactly one
    algorithm, and `uri` "knows" its key (the path). `domain/validators.py:validate_hash_key` is the
