@@ -1998,6 +1998,10 @@ class DnsProviderTypeRead(ApiModel):
         description="The provider finds the zone of a name itself; `zones` then only chooses "
         "between credentials."
     )
+    supports_address_records: bool = Field(
+        description="The provider publishes `A`/`AAAA` records for a virtual service's `dns` "
+        "block. False means such a record is reported as `error` and nothing is written."
+    )
 
 
 class DnsProviderIn(ApiModel):

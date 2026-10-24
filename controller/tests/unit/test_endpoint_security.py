@@ -64,7 +64,7 @@ async def test_clients_connect_to_the_checked_address_not_rebound_dns(
     elif consumer == "powerdns":
         dns = PowerDns(url, "test-key", "example.test")
         try:
-            assert await dns._values("_acme-challenge.example.test") == (60, [])
+            assert await dns._rrset("_acme-challenge.example.test", "TXT") == (60, [])
         finally:
             await dns.close()
     else:

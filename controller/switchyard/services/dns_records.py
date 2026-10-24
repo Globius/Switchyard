@@ -5,11 +5,12 @@
 """Publish a virtual service's VIP as DNS address records (ADR 0193).
 
 A virtual service with a ``dns`` block lists host names. :class:`DnsRecordSync` makes each name
-resolve to the service's VIP through the tenant's DNS credential (Cloudflare supports address
-records; other provider types report ``error``). The ``dns_record`` table remembers what the
-controller created: it changes or deletes only those records, so a record someone else made is
-never overwritten (a name with a foreign record of another value is reported as ``error``). When a
-service is disabled, deleted, loses a name or changes VIP, the records follow. The scheduled job
+resolve to the service's VIP through the tenant's DNS credential (Cloudflare, RFC 2136 and
+PowerDNS publish address records; Route 53, Azure DNS and Google Cloud DNS report ``error``). The
+``dns_record`` table remembers what the controller created: it changes or deletes only those
+records, so a record someone else made is never overwritten (a name with a foreign record of
+another value is reported as ``error``). When a service is disabled, deleted, loses a name or
+changes VIP, the records follow. The scheduled job
 and ``POST /tenants/{t}/dns-records/sync`` run the same code.
 """
 
@@ -171,7 +172,8 @@ class DnsRecordSync:
             found = await resolvers[credential].resolve(hostname)
             if not supports_addresses(found):
                 raise DnsError(
-                    "this DNS credential type cannot publish address records (only Cloudflare can)"
+                    "this DNS credential type cannot publish address records "
+                    "(Cloudflare, RFC 2136 and PowerDNS can)"
                 )
             return found
 

@@ -9338,6 +9338,11 @@ export interface components {
             /** Label */
             label: string;
             /**
+             * Supports Address Records
+             * @description The provider publishes `A`/`AAAA` records for a virtual service's `dns` block. False means such a record is reported as `error` and nothing is written.
+             */
+            supports_address_records: boolean;
+            /**
              * Supports Zone Discovery
              * @description The provider finds the zone of a name itself; `zones` then only chooses between credentials.
              */
@@ -19607,6 +19612,7 @@ export interface operations {
                      *           }
                      *         ],
                      *         "label": "Cloudflare",
+                     *         "supports_address_records": true,
                      *         "supports_zone_discovery": true,
                      *         "type": "cloudflare"
                      *       }

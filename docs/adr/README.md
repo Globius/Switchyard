@@ -164,3 +164,4 @@ Date: YYYY-MM-DD
 | [0223](0223-crt-list-certificates-and-failed-apply-jobs.md) | Bundle every certificate a crt-list names; a failed change set fails its job | Accepted |
 | [0224](0224-pool-hash-balancing.md) | Hash-based balancing: `balance uri`, `hdr(name)` and `url_param(name)`, one `hash_key` field | Accepted |
 | [0225](0225-rate-limit-path-key.md) | Per-URL rate-limit key: path counters, normalisation, table bounds | Accepted |
+| [0226](0226-address-records-on-rfc2136-and-powerdns.md) | Address records for a virtual service on RFC 2136 and PowerDNS | Accepted |
