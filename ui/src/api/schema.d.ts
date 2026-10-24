@@ -5117,6 +5117,11 @@ export interface components {
             duration_ms: number;
             /** Frontend */
             frontend: string;
+            /**
+             * Host
+             * @description Host the request asked for (first Host header field, lowercased).
+             */
+            host?: string | null;
             /** Method */
             method?: string | null;
             /** Path */
@@ -5126,10 +5131,35 @@ export interface components {
              * @description The log line as stored.
              */
             raw: string;
+            /**
+             * Request Id
+             * @description HAProxy's unique id for the request (`%ID`), generated on the engine with no controller involvement; `None` for a line from an engine that still logs the default httplog.
+             */
+            request_id?: string | null;
+            /**
+             * Retries
+             * @description Retries before the server answered (HAProxy `%rc`).
+             */
+            retries?: number | null;
             /** Server */
             server: string;
+            /**
+             * Sni
+             * @description TLS SNI of the connection, if any.
+             */
+            sni?: string | null;
             /** Status */
             status: number;
+            /**
+             * Upstream
+             * @description Address of the server the request was sent to.
+             */
+            upstream?: string | null;
+            /**
+             * Upstream Port
+             * @description Port of the server the request was sent to.
+             */
+            upstream_port?: number | null;
             /**
              * Waf
              * @description The web application firewall refused or dropped this request (the line carries its verdict).
