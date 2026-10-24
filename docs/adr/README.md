@@ -162,3 +162,4 @@ Date: YYYY-MM-DD
 | [0221](0221-optional-otlp-log-sink.md) | Optional OTLP log sink on engines, Loki optional | Accepted |
 | [0222](0222-health-check-sni.md) | Server name on health checks to TLS pools | Accepted |
 | [0223](0223-crt-list-certificates-and-failed-apply-jobs.md) | Bundle every certificate a crt-list names; a failed change set fails its job | Accepted |
+| [0224](0224-pool-hash-balancing.md) | Hash-based balancing: `balance uri`, `hdr(name)` and `url_param(name)`, one `hash_key` field | Accepted |
