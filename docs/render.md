@@ -291,7 +291,7 @@ diff viewer has both sides. See ADR 0015.
 | Check | Where |
 | --- | --- |
 | Domain rules (references, VIP placement, collisions, SAN coverage) | `switchyard.domain.snapshot.validate_snapshot`, run before every render |
-| Exact output | `controller/tests/golden/<case>/input.yaml` → `expected/`; 18 cases |
+| Exact output | `controller/tests/golden/<case>/input.yaml` → `expected/`; 37 cases |
 | `haproxy -c` in `haproxy:3.2` | `tests/integration/test_golden_haproxy.py`, every golden case, no warnings allowed |
 | Real requests through rendered config | `tests/integration/test_haproxy_behavior.py` (routing, headers, client IP), `tests/integration/test_haproxy_policies.py` (match model, rewrites, fixed responses, error pages) |
 | Determinism and input-order independence | `tests/unit/render/test_haproxy.py` |
