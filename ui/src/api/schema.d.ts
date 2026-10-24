@@ -14184,7 +14184,7 @@ export interface components {
         };
         /**
          * RateLimitRule
-         * @description Limit how often one client (or one key) may use the service; excess requests get ``action``.
+         * @description Limit how often one client, one key, or one request path may use the service.
          *
          *     Exactly one of ``max_requests`` (per ``period_s``) and ``max_concurrent`` (requests in
          *     flight) is set. Each rule keeps its own counter table of ``table_size`` entries.
@@ -14192,14 +14192,20 @@ export interface components {
          *     Attributes:
          *         match: Requests this rule counts and limits; empty counts every request. Use a path in
          *             the match for a per-path limit (a login page, an API prefix).
-         *         key: What the counters are kept per: ``client_ip`` or the value of ``header_name``
-         *             (an API key header; requests without the header are not counted).
+         *         key: What the counters are kept per: ``client_ip``, the value of ``header_name`` (an API
+         *             key header; requests without the header are not counted), or ``path`` (one counter for
+         *             the normalised request path, shared by every client; ADR 0225).
+         *         header_name: Header whose value is the key; set with ``key: header`` and only then. A rule
+         *             with ``key: header`` and no header is reported at ``rules.<n>.header_name``.
          *         max_requests: Requests allowed per ``period_s`` before the action applies.
          *         period_s: Length of the window for ``max_requests``.
          *         max_concurrent: Requests allowed at the same time.
          *         action: ``deny`` answers ``deny_status``; ``tarpit`` holds the request ``tarpit_s``
          *             seconds, then answers 429; ``silent_drop`` closes the connection without an answer.
          *         table_size: Number of keys the table holds; the oldest are evicted when it is full.
+         *         entry_ttl_s: Seconds a counter survives without an update (1 to 86400). Default: the
+         *             larger of ``period_s`` and 60 s, or 60 s for a concurrent limit. Never shorter than
+         *             ``period_s``.
          */
         RateLimitRule: {
             /**
@@ -14214,6 +14220,8 @@ export interface components {
              * @enum {integer}
              */
             deny_status: 403 | 429 | 503;
+            /** Entry Ttl S */
+            entry_ttl_s?: number | null;
             /** Header Name */
             header_name?: string | null;
             /**
@@ -14221,7 +14229,7 @@ export interface components {
              * @default client_ip
              * @enum {string}
              */
-            key: "client_ip" | "header";
+            key: "client_ip" | "header" | "path";
             /**
              * @default {
              *       "headers": [],

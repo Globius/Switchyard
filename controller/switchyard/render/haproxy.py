@@ -912,20 +912,25 @@ class _Renderer:
             if rule.key == "header":
                 key = f"req.hdr({esc.header_name(_need(rule.header_name, 'header name'))})"
                 table_type = "string len 64"
+            elif rule.key == "path":
+                # The path as sent, query string excluded, so /api?x=1 and /api?y=2 share a
+                # counter and /API does not (ADR 0225). HAProxy truncates to the declared length.
+                key = "path"
+                table_type = "string len 128"
             else:
                 key = "src"
                 table_type = "ipv6"
             if rule.max_requests is not None:
                 store = f"http_req_rate({rule.period_s}s)"
                 check = f"{{ sc_http_req_rate({slot},{table}) gt {rule.max_requests} }}"
-                expire = max(rule.period_s, 60)
+                expire = rule.entry_ttl_s or max(rule.period_s, 60)
                 retry = f" hdr Retry-After {rule.period_s}"
             else:
                 store = "conn_cur"
                 check = (
                     f"{{ sc_conn_cur({slot},{table}) gt {_need(rule.max_concurrent, 'limit')} }}"
                 )
-                expire = 60
+                expire = rule.entry_ttl_s or 60
                 retry = ""
             self.limit_backends.append(
                 {

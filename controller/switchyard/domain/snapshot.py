@@ -1192,6 +1192,14 @@ def _check_rate_limits(
                 f"this one has {len(rules)}",
             )
         )
+    if any(r.key == "path" for _, _, r in rules) and s.protocol is not Protocol.HTTP:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "path_key_needs_http",
+                "a rate-limit key of path needs an http service",
+            )
+        )
     if sum(r.table_size for _, _, r in rules) > MAX_TABLE_ENTRIES_PER_SERVICE:
         problems.append(
             Problem(

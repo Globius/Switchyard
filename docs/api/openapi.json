@@ -19459,7 +19459,7 @@
       },
       "RateLimitRule": {
         "additionalProperties": false,
-        "description": "Limit how often one client (or one key) may use the service; excess requests get ``action``.\n\nExactly one of ``max_requests`` (per ``period_s``) and ``max_concurrent`` (requests in\nflight) is set. Each rule keeps its own counter table of ``table_size`` entries.\n\nAttributes:\n    match: Requests this rule counts and limits; empty counts every request. Use a path in\n        the match for a per-path limit (a login page, an API prefix).\n    key: What the counters are kept per: ``client_ip`` or the value of ``header_name``\n        (an API key header; requests without the header are not counted).\n    max_requests: Requests allowed per ``period_s`` before the action applies.\n    period_s: Length of the window for ``max_requests``.\n    max_concurrent: Requests allowed at the same time.\n    action: ``deny`` answers ``deny_status``; ``tarpit`` holds the request ``tarpit_s``\n        seconds, then answers 429; ``silent_drop`` closes the connection without an answer.\n    table_size: Number of keys the table holds; the oldest are evicted when it is full.",
+        "description": "Limit how often one client, one key, or one request path may use the service.\n\nExactly one of ``max_requests`` (per ``period_s``) and ``max_concurrent`` (requests in\nflight) is set. Each rule keeps its own counter table of ``table_size`` entries.\n\nAttributes:\n    match: Requests this rule counts and limits; empty counts every request. Use a path in\n        the match for a per-path limit (a login page, an API prefix).\n    key: What the counters are kept per: ``client_ip``, the value of ``header_name`` (an API\n        key header; requests without the header are not counted), or ``path`` (one counter for\n        the normalised request path, shared by every client; ADR 0225).\n    header_name: Header whose value is the key; set with ``key: header`` and only then. A rule\n        with ``key: header`` and no header is reported at ``rules.<n>.header_name``.\n    max_requests: Requests allowed per ``period_s`` before the action applies.\n    period_s: Length of the window for ``max_requests``.\n    max_concurrent: Requests allowed at the same time.\n    action: ``deny`` answers ``deny_status``; ``tarpit`` holds the request ``tarpit_s``\n        seconds, then answers 429; ``silent_drop`` closes the connection without an answer.\n    table_size: Number of keys the table holds; the oldest are evicted when it is full.\n    entry_ttl_s: Seconds a counter survives without an update (1 to 86400). Default: the\n        larger of ``period_s`` and 60 s, or 60 s for a concurrent limit. Never shorter than\n        ``period_s``.",
         "properties": {
           "action": {
             "default": "deny",
@@ -19481,6 +19481,19 @@
             "title": "Deny Status",
             "type": "integer"
           },
+          "entry_ttl_s": {
+            "anyOf": [
+              {
+                "maximum": 86400.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Ttl S"
+          },
           "header_name": {
             "anyOf": [
               {
@@ -19496,7 +19509,8 @@
             "default": "client_ip",
             "enum": [
               "client_ip",
-              "header"
+              "header",
+              "path"
             ],
             "title": "Key",
             "type": "string"
