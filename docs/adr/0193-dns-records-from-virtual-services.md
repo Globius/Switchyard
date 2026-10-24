@@ -25,7 +25,8 @@ name, the same rule as ACME).
   retried by the next run and shown on the record.
 - One name belongs to one service (`dns_name_taken`).
 - Only Cloudflare supports address records in this change. Other credential types report `error` ("cannot publish address
-  records"); adding a provider means implementing `upsert_address` and `delete_address` (`adapters/dns/base.py`).
+  records"); adding a provider means implementing `upsert_address` and `delete_address` (`adapters/dns/base.py`). RFC 2136
+  and PowerDNS now do this too: see [ADR 0226](0226-address-records-on-rfc2136-and-powerdns.md).
 - Defaults chosen without asking: the job runs only when the secrets backend is OpenBao (the credentials live there), a
   `proxied` record uses Cloudflare's automatic TTL, and the UI form is left to the UI work (API and CLI first).
 

@@ -11,7 +11,9 @@ in OpenBao; PostgreSQL holds only a reference.
 - Import: `POST .../certificates/import` with the PEM or a `.p12` and its password.
 - Issue: `POST .../certificates/issue/check` (preflight: names, DNS provider, challenge), then `POST .../certificates/issue`.
   ACME accounts are `acme-providers` (system-wide, with presets); DNS credentials are per-tenant `dns-providers`
-  (Cloudflare, Route 53, Azure, Google, RFC 2136, PowerDNS).
+  (Cloudflare, Route 53, Azure, Google, RFC 2136, PowerDNS). Every one of the six publishes the TXT records DNS-01 needs;
+  the *address* records a virtual service's `dns` block asks for are published by Cloudflare, RFC 2136 and PowerDNS only
+  (see [DNS records from a virtual service](../dns-records.md)).
 - Renewal is automatic for issued certificates, `renew_before_days` (default 30) before expiry; `POST .../{certificate}/renew`
   forces one, and `GET .../certificate-renewals` shows the history.
 - `POST .../{certificate}/replace` swaps the material under the same object, so every service using it follows.

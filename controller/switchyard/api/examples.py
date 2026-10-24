@@ -1141,6 +1141,7 @@ DNS_PROVIDER_TYPES = [
         "type": "cloudflare",
         "label": "Cloudflare",
         "supports_zone_discovery": True,
+        "supports_address_records": True,
         "fields": [
             {
                 "key": "api_token",

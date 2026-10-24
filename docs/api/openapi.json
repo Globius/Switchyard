@@ -9038,6 +9038,11 @@
             "title": "Label",
             "type": "string"
           },
+          "supports_address_records": {
+            "description": "The provider publishes `A`/`AAAA` records for a virtual service's `dns` block. False means such a record is reported as `error` and nothing is written.",
+            "title": "Supports Address Records",
+            "type": "boolean"
+          },
           "supports_zone_discovery": {
             "description": "The provider finds the zone of a name itself; `zones` then only chooses between credentials.",
             "title": "Supports Zone Discovery",
@@ -9052,7 +9057,8 @@
           "type",
           "label",
           "fields",
-          "supports_zone_discovery"
+          "supports_zone_discovery",
+          "supports_address_records"
         ],
         "title": "DnsProviderTypeRead",
         "type": "object"
@@ -29953,6 +29959,7 @@
                       }
                     ],
                     "label": "Cloudflare",
+                    "supports_address_records": true,
                     "supports_zone_discovery": true,
                     "type": "cloudflare"
                   }

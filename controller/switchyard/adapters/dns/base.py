@@ -16,10 +16,13 @@ backend and are never returned.
 
 import ipaddress
 import os
+import re
 import socket
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
+
+from switchyard.adapters.dns.zones import in_zone
 
 
 class DnsError(Exception):
@@ -45,7 +48,9 @@ class DnsProvider(Protocol):
 class AddressRecords(Protocol):
     """Providers that can also publish ``A``/``AAAA`` records for a virtual service (ADR 0193).
 
-    Only Cloudflare implements it so far. :func:`supports_addresses` tells them apart.
+    Cloudflare, RFC 2136 and PowerDNS implement it; Route 53, Azure DNS and Google Cloud DNS do not
+    yet (they publish TXT records only). :func:`supports_addresses` tells them apart and
+    ``ProviderType.supports_address_records`` declares the same in the catalogue.
     """
 
     async def upsert_address(
@@ -109,12 +114,16 @@ class ProviderType:
         fields: The form.
         supports_zone_discovery: The provider finds the zone of a name itself, so ``zones`` on the
             credential is only used to choose between credentials.
+        supports_address_records: The provider publishes ``A``/``AAAA`` records for a virtual
+            service (ADR 0193). False means a ``dns`` block on a virtual service that resolves to
+            this credential type is reported as ``error`` and nothing is written.
     """
 
     type: str
     label: str
     fields: tuple[Field, ...]
     supports_zone_discovery: bool
+    supports_address_records: bool = False
 
 
 _ALGORITHMS = ("hmac-sha256", "hmac-sha384", "hmac-sha512")
@@ -135,6 +144,7 @@ CATALOGUE: dict[str, ProviderType] = {
                 ),
             ),
             True,
+            supports_address_records=True,
         ),
         ProviderType(
             "route53",
@@ -223,6 +233,7 @@ CATALOGUE: dict[str, ProviderType] = {
                 ),
             ),
             False,
+            supports_address_records=True,
         ),
         ProviderType(
             "powerdns",
@@ -234,6 +245,7 @@ CATALOGUE: dict[str, ProviderType] = {
                 Field("api_key", "API key", secret=True),
             ),
             False,
+            supports_address_records=True,
         ),
     )
 }
@@ -242,6 +254,83 @@ CATALOGUE: dict[str, ProviderType] = {
 def types() -> list[ProviderType]:
     """The provider types in a stable order."""
     return list(CATALOGUE.values())
+
+
+_LABEL = re.compile(r"(?!-)[a-z0-9_-]{1,63}(?<!-)")
+
+
+def check_dns_name(value: str, what: str = "name") -> str:
+    """Validate a DNS name and return it lower-cased and without the trailing dot.
+
+    Labels are 1-63 characters of letters, digits, ``-`` and ``_`` (``_`` so service records such as
+    ``_https.example.test`` pass), never starting or ending with ``-``.
+
+    Example:
+        >>> check_dns_name("App.Example.Test.")
+        'app.example.test'
+        >>> check_dns_name("app..test")
+        Traceback (most recent call last):
+            ...
+        ValueError: name: invalid label ''
+    """
+    text = value.strip().lower().strip(".")
+    if not text or len(text) > 253:
+        raise ValueError(f"{what} must be a DNS name of 1-253 characters")
+    for label in text.split("."):
+        if not _LABEL.fullmatch(label):
+            raise ValueError(f"{what}: invalid label {label!r}")
+    return text
+
+
+def check_zone_name(zone: str) -> str:
+    """Validate a zone from a credential's settings and return it normalised.
+
+    A credential names the one zone it writes to, so it must be a concrete name, not a wildcard.
+
+    Example:
+        >>> check_zone_name("Example.Test.")
+        'example.test'
+        >>> check_zone_name("*.example.test")
+        Traceback (most recent call last):
+            ...
+        ValueError: zone must not be a wildcard
+    """
+    if zone.strip().startswith("*"):
+        raise ValueError("zone must not be a wildcard")
+    return check_dns_name(zone, "zone")
+
+
+def address_target(name: str, address: str, zone: str) -> tuple[str, str, str]:
+    """Check one ``A``/``AAAA`` record for a provider that serves ``zone``.
+
+    Central rule for the providers that publish virtual-service records: the name is normalised,
+    must be an exact name inside the zone, and the value must be an IP literal.
+
+    Returns:
+        The name (lower-case, no trailing dot), ``A`` or ``AAAA``, and the address as a literal.
+
+    Raises:
+        DnsError: The name is outside the zone or not a host name, or the value is not an address.
+
+    Example:
+        >>> address_target("App.Example.Test", "192.0.2.20", "example.test")
+        ('app.example.test', 'A', '192.0.2.20')
+        >>> address_target("app.other.test", "192.0.2.20", "example.test")
+        Traceback (most recent call last):
+            ...
+        switchyard.adapters.dns.base.DnsError: app.other.test is not inside the zone example.test
+    """
+    try:
+        clean = check_dns_name(name)
+    except ValueError as exc:
+        raise DnsError(str(exc)) from exc
+    if not in_zone(clean, zone):
+        raise DnsError(f"{clean} is not inside the zone {zone.strip('.')}")
+    try:
+        literal = ipaddress.ip_address(address.strip())
+    except ValueError as exc:
+        raise DnsError(f"{address!r} is not an IP address") from exc
+    return clean, "AAAA" if literal.version == 6 else "A", str(literal)
 
 
 def check_settings(
@@ -285,6 +374,11 @@ def check_settings(
             problems[f"config.{key}"] = "required"
         elif field.options and value and value not in field.options:
             problems[f"config.{key}"] = f"must be one of {', '.join(field.options)}"
+        elif key == "zone" and value:
+            try:
+                check_zone_name(str(value))
+            except ValueError as exc:
+                problems[f"config.{key}"] = str(exc)
     if secrets_required:
         for key, field in secret.items():
             if field.required and not str(credentials.get(key) or "").strip():
