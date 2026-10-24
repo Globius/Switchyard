@@ -26,6 +26,7 @@ from uuid import UUID
 
 from switchyard.domain import models as dm
 from switchyard.domain.snapshot import Snapshot, ensure_valid
+from switchyard.render import apischema
 from switchyard.render import escape as esc
 
 #: Where the Coraza SPOA listens on every engine (loopback only; never reachable from a network).
@@ -148,7 +149,11 @@ def backend_lines() -> list[str]:
 
 
 def render_waf_files(snapshot: Snapshot, se_group_id: UUID) -> dict[str, str]:
-    """The Coraza agent configuration of a group (``coraza/config.yaml``), or nothing.
+    """The Coraza agent files of a group (``coraza/config.yaml`` plus generated body schemas).
+
+    An API schema with a body adds one JSON Schema document per operation under
+    ``coraza/schemas/`` (ADR 0228); the directives block of the service names them by absolute
+    path, so both always ship together.
 
     Raises:
         switchyard.domain.errors.DomainValidationError: If the snapshot is not valid.
@@ -171,6 +176,7 @@ def render_waf_files(snapshot: Snapshot, se_group_id: UUID) -> dict[str, str]:
         "log_format: json",
         "applications:",
     ]
+    files: dict[str, str] = {}
     for name, policy in apps:
         lines += [
             f"  - name: {name}",
@@ -179,18 +185,24 @@ def render_waf_files(snapshot: Snapshot, se_group_id: UUID) -> dict[str, str]:
             "    log_format: json",
             "    transaction_ttl_ms: 60000",
             "    directives: |",
-            *[f"      {line}" for line in directives(policy)],
+            *[f"      {line}" for line in directives(name, policy)],
         ]
-    return {"coraza/config.yaml": "\n".join(lines) + "\n"}
+        if policy.api is not None:
+            files.update(apischema.body_files(name, policy.api))
+    files["coraza/config.yaml"] = "\n".join(lines) + "\n"
+    return files
 
 
-def directives(policy: dm.WafPolicySet) -> list[str]:
-    """The Coraza directives of one policy: pinned CRS, paranoia, thresholds, disabled rules.
+def directives(service: str, policy: dm.WafPolicySet) -> list[str]:
+    """The Coraza directives of one policy: pinned CRS, paranoia, thresholds, API body rules.
+
+    The CRS includes come first, so the generated API body rules (ADR 0228) run after the
+    negative model and only for the operations that declare a body.
 
     Example:
-        >>> d = directives(dm.WafPolicySet.model_construct(
+        >>> d = directives("web", dm.WafPolicySet.model_construct(
         ...     mode="detect", crs_version="4.8.0", paranoia_level=2, inbound_threshold=5,
-        ...     outbound_threshold=4, disabled_rule_ids=(920350,),
+        ...     outbound_threshold=4, disabled_rule_ids=(920350,), api=None,
         ... ))
         >>> d[1], d[-1]
         ('SecRuleEngine DetectionOnly', 'SecRuleRemoveById 920350')
@@ -213,4 +225,6 @@ def directives(policy: dm.WafPolicySet) -> list[str]:
         f"Include {CRS_ROOT}/{version}/rules/*.conf",
     ]
     lines += [f"SecRuleRemoveById {int(rule_id)}" for rule_id in sorted(policy.disabled_rule_ids)]
+    if policy.api is not None:
+        lines += apischema.body_directives(service, policy.api)
     return lines

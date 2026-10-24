@@ -1743,6 +1743,18 @@ CRS_VERSIONS = ("4.8.0",)
 
 #: Value types an API schema can require of a query or path parameter (ADR 0197).
 ApiParamKind = Literal["string", "integer", "number", "boolean", "uuid", "enum"]
+#: JSON types a body property may have (ADR 0228). ``object`` nests; ``array`` holds scalars.
+ApiBodyKind = Literal["string", "integer", "number", "boolean", "uuid", "enum", "object", "array"]
+#: Types an array element may have; an array of objects is not representable on purpose.
+ApiBodyItemKind = Literal["string", "integer", "number", "boolean", "uuid"]
+#: Deepest object nesting of a body schema; the body object itself is depth 1 (ADR 0228).
+API_BODY_MAX_DEPTH = 3
+#: Most properties a body schema may declare across every level.
+API_BODY_MAX_PROPERTIES = 64
+#: Most operations of one schema that may carry a body schema (each renders one Coraza file).
+API_BODY_MAX_OPERATIONS = 64
+#: Body property names are JSON member names the renderer can embed without escaping.
+API_BODY_NAME = r"^[A-Za-z_][A-Za-z0-9_]{0,63}$"
 _PATH_TEMPLATE = r"^(/([A-Za-z0-9._~-]{1,64}|\{[A-Za-z_][A-Za-z0-9_]{0,31}\})){1,16}$"
 API_METHODS = ("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
 
@@ -1776,6 +1788,101 @@ class ApiParam(Model):
         return self
 
 
+class ApiBodyProperty(Model):
+    """One JSON member of a request body schema (ADR 0228).
+
+    Attributes:
+        name: JSON member name: a letter or ``_``, then letters, digits and ``_``.
+        kind: ``string`` (up to ``max_length`` characters), ``integer``, ``number``,
+            ``boolean``, ``uuid``, ``enum`` (one of ``values``), ``object`` (nested
+            ``properties``) or ``array`` (``items`` of one scalar type).
+        required: The member must be present in the body.
+        values: The allowed values of an ``enum``.
+        max_length: Longest accepted ``string`` (also the element type of a string array).
+        max_items: Longest accepted ``array``.
+        items: Element type of an ``array``.
+        properties: Members of an ``object``.
+        additional_properties: Accept members an ``object`` does not list.
+    """
+
+    name: Annotated[str, Field(pattern=API_BODY_NAME)]
+    kind: ApiBodyKind = "string"
+    required: bool = False
+    values: tuple[Annotated[str, Field(pattern=r"^[A-Za-z0-9._~-]{1,64}$")], ...] = Field(
+        default=(), max_length=32
+    )
+    max_length: int = Field(default=256, ge=1, le=4096)
+    max_items: int | None = Field(default=None, ge=1, le=1000)
+    items: ApiBodyItemKind | None = None
+    properties: tuple["ApiBodyProperty", ...] = Field(default=(), max_length=32)
+    additional_properties: bool = False
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if (self.kind == "enum") != bool(self.values):
+            raise ValueError("values go with kind enum, and only with it")
+        if len(set(self.values)) != len(self.values):
+            raise ValueError("enum values must be unique")
+        if (self.kind == "array") != (self.items is not None):
+            raise ValueError("items go with kind array, and only with it")
+        if self.max_items is not None and self.kind != "array":
+            raise ValueError("max_items goes with kind array, and only with it")
+        if (self.kind == "object") != bool(self.properties):
+            raise ValueError("properties go with kind object, and only with it")
+        names = [p.name for p in self.properties]
+        if len(set(names)) != len(names):
+            raise ValueError("property names must be unique within an object")
+        return self
+
+
+def _count_properties(properties: tuple[ApiBodyProperty, ...], level: int) -> int:
+    """Count a body schema's properties and refuse one nested deeper than the cap.
+
+    Raises:
+        ValueError: If a property sits at a ``level`` deeper than ``API_BODY_MAX_DEPTH``.
+    """
+    if level > API_BODY_MAX_DEPTH:
+        raise ValueError(f"a body schema nests at most {API_BODY_MAX_DEPTH} objects deep")
+    total = 0
+    for prop in properties:
+        total += 1
+        if prop.properties:
+            total += _count_properties(prop.properties, level + 1)
+    return total
+
+
+class ApiBody(Model):
+    """The JSON body of one operation, as a closed tree of typed members (ADR 0228).
+
+    This is not a JSON Schema document and user text never becomes one: the tree is a fixed,
+    bounded shape, and :mod:`switchyard.render.apischema` turns it into the document Coraza
+    validates against.
+
+    Attributes:
+        properties: The members of the body object (1 to 32 here; at most
+            ``API_BODY_MAX_PROPERTIES`` across all levels, ``API_BODY_MAX_DEPTH`` levels deep).
+        additional_properties: Accept members the schema does not list.
+
+    Example:
+        >>> body = ApiBody(properties=(ApiBodyProperty(name="sku", required=True),))
+        >>> body.properties[0].kind
+        'string'
+    """
+
+    properties: tuple[ApiBodyProperty, ...] = Field(min_length=1, max_length=32)
+    additional_properties: bool = False
+
+    @model_validator(mode="after")
+    def _bounded(self) -> Self:
+        names = [p.name for p in self.properties]
+        if len(set(names)) != len(names):
+            raise ValueError("property names must be unique within an object")
+        total = _count_properties(self.properties, 1)
+        if total > API_BODY_MAX_PROPERTIES:
+            raise ValueError(f"a body schema has at most {API_BODY_MAX_PROPERTIES} properties")
+        return self
+
+
 class ApiOperation(Model):
     """One request the API accepts: a method and a path template (ADR 0197).
 
@@ -1788,6 +1895,8 @@ class ApiOperation(Model):
         content_types: Media types a request body may have (empty: no check).
         max_body_bytes: Largest ``Content-Length``; a chunked body is refused when this is set
             (empty: the schema default).
+        body: The JSON body the operation accepts (ADR 0228). Needs ``application/json`` among
+            ``content_types``: it is checked against a schema Coraza only runs for JSON.
     """
 
     method: Literal["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
@@ -1796,6 +1905,7 @@ class ApiOperation(Model):
     query: tuple[ApiParam, ...] = Field(default=(), max_length=32)
     content_types: tuple[MediaType, ...] = Field(default=(), max_length=8)
     max_body_bytes: int | None = Field(default=None, ge=0, le=1_073_741_824)
+    body: ApiBody | None = None
 
     @property
     def placeholders(self) -> tuple[str, ...]:
@@ -1817,6 +1927,8 @@ class ApiOperation(Model):
             raise ValueError("query parameter names must be unique")
         if len(set(self.content_types)) != len(self.content_types):
             raise ValueError("content_types must be unique")
+        if self.body is not None and "application/json" not in self.content_types:
+            raise ValueError("a body schema needs application/json among content_types")
         return self
 
 
@@ -1836,6 +1948,8 @@ class ApiSchema(Model):
             unknown operations.
         allow_unknown_query: Accept query parameters the operation does not list.
         max_body_bytes: Default largest body for operations that set none.
+
+    At most ``API_BODY_MAX_OPERATIONS`` operations may carry a body schema (ADR 0228).
     """
 
     mode: Literal["detect", "block"] = "detect"
@@ -1847,12 +1961,18 @@ class ApiSchema(Model):
     @model_validator(mode="after")
     def _unique(self) -> Self:
         seen = set()
+        bodies = 0
         for op in self.operations:
             # {a} and {b} in the same position are the same template
             shape = (op.method, re.sub(r"\{[A-Za-z0-9_]+\}", "{}", op.path))
             if shape in seen:
                 raise ValueError(f"operation {op.method} {op.path} is listed twice")
             seen.add(shape)
+            bodies += 1 if op.body is not None else 0
+        if bodies > API_BODY_MAX_OPERATIONS:
+            raise ValueError(
+                f"at most {API_BODY_MAX_OPERATIONS} operations may carry a body schema"
+            )
         return self
 
 
@@ -1905,6 +2025,16 @@ class WafPolicySet(TenantOwned):
             raise ValueError("disabled_rule_ids must be unique")
         if len(set(self.excluded_paths)) != len(self.excluded_paths):
             raise ValueError("excluded_paths must be unique")
+        if self.api is not None and any(op.body is not None for op in self.api.operations):
+            if not self.inspect_body:
+                raise ValueError(
+                    "a body schema needs inspect_body: the WAF never sees the body otherwise"
+                )
+            if self.api.mode == "block" and self.mode != "block":
+                raise ValueError(
+                    "a body schema in block mode needs the WAF in block mode: Coraza runs in "
+                    "DetectionOnly while the WAF only detects"
+                )
         return self
 
 

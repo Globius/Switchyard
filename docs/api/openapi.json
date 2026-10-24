@@ -2430,10 +2430,143 @@
         "title": "AllowListPolicySetRead",
         "type": "object"
       },
+      "ApiBody": {
+        "additionalProperties": false,
+        "description": "The JSON body of one operation, as a closed tree of typed members (ADR 0228).\n\nThis is not a JSON Schema document and user text never becomes one: the tree is a fixed,\nbounded shape, and :mod:`switchyard.render.apischema` turns it into the document Coraza\nvalidates against.\n\nAttributes:\n    properties: The members of the body object (1 to 32 here; at most\n        ``API_BODY_MAX_PROPERTIES`` across all levels, ``API_BODY_MAX_DEPTH`` levels deep).\n    additional_properties: Accept members the schema does not list.\n\nExample:\n    >>> body = ApiBody(properties=(ApiBodyProperty(name=\"sku\", required=True),))\n    >>> body.properties[0].kind\n    'string'",
+        "properties": {
+          "additional_properties": {
+            "default": false,
+            "title": "Additional Properties",
+            "type": "boolean"
+          },
+          "properties": {
+            "items": {
+              "$ref": "#/components/schemas/ApiBodyProperty"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Properties",
+            "type": "array"
+          }
+        },
+        "required": [
+          "properties"
+        ],
+        "title": "ApiBody",
+        "type": "object"
+      },
+      "ApiBodyProperty": {
+        "additionalProperties": false,
+        "description": "One JSON member of a request body schema (ADR 0228).\n\nAttributes:\n    name: JSON member name: a letter or ``_``, then letters, digits and ``_``.\n    kind: ``string`` (up to ``max_length`` characters), ``integer``, ``number``,\n        ``boolean``, ``uuid``, ``enum`` (one of ``values``), ``object`` (nested\n        ``properties``) or ``array`` (``items`` of one scalar type).\n    required: The member must be present in the body.\n    values: The allowed values of an ``enum``.\n    max_length: Longest accepted ``string`` (also the element type of a string array).\n    max_items: Longest accepted ``array``.\n    items: Element type of an ``array``.\n    properties: Members of an ``object``.\n    additional_properties: Accept members an ``object`` does not list.",
+        "properties": {
+          "additional_properties": {
+            "default": false,
+            "title": "Additional Properties",
+            "type": "boolean"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "enum": [
+                  "string",
+                  "integer",
+                  "number",
+                  "boolean",
+                  "uuid"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
+          },
+          "kind": {
+            "default": "string",
+            "enum": [
+              "string",
+              "integer",
+              "number",
+              "boolean",
+              "uuid",
+              "enum",
+              "object",
+              "array"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_items": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Items"
+          },
+          "max_length": {
+            "default": 256,
+            "maximum": 4096.0,
+            "minimum": 1.0,
+            "title": "Max Length",
+            "type": "integer"
+          },
+          "name": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$",
+            "title": "Name",
+            "type": "string"
+          },
+          "properties": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ApiBodyProperty"
+            },
+            "maxItems": 32,
+            "title": "Properties",
+            "type": "array"
+          },
+          "required": {
+            "default": false,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "values": {
+            "default": [],
+            "items": {
+              "pattern": "^[A-Za-z0-9._~-]{1,64}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ApiBodyProperty",
+        "type": "object"
+      },
       "ApiOperation": {
         "additionalProperties": false,
-        "description": "One request the API accepts: a method and a path template (ADR 0197).\n\nAttributes:\n    method: HTTP method.\n    path: Path template such as ``/pets/{id}``; each ``{name}`` is a path parameter.\n    path_params: Types of the ``{name}`` parts (default: any non-empty segment without ``/``).\n    query: The query parameters the operation accepts; any other one is a violation unless the\n        schema allows unknown ones.\n    content_types: Media types a request body may have (empty: no check).\n    max_body_bytes: Largest ``Content-Length``; a chunked body is refused when this is set\n        (empty: the schema default).",
+        "description": "One request the API accepts: a method and a path template (ADR 0197).\n\nAttributes:\n    method: HTTP method.\n    path: Path template such as ``/pets/{id}``; each ``{name}`` is a path parameter.\n    path_params: Types of the ``{name}`` parts (default: any non-empty segment without ``/``).\n    query: The query parameters the operation accepts; any other one is a violation unless the\n        schema allows unknown ones.\n    content_types: Media types a request body may have (empty: no check).\n    max_body_bytes: Largest ``Content-Length``; a chunked body is refused when this is set\n        (empty: the schema default).\n    body: The JSON body the operation accepts (ADR 0228). Needs ``application/json`` among\n        ``content_types``: it is checked against a schema Coraza only runs for JSON.",
         "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "content_types": {
             "default": [],
             "items": {
@@ -2552,7 +2685,7 @@
       },
       "ApiSchema": {
         "additionalProperties": false,
-        "description": "The requests an API accepts, as a positive security model for the WAF (ADR 0197).\n\nA request is checked in HAProxy before the WAF sees it: its method and path must match an\noperation, its query string may contain only that operation's parameters with values of the\nright type, its body type and size must fit. Everything else is a violation.\n\nAttributes:\n    mode: ``detect`` records the violation in the access log and lets the request through;\n        ``block`` refuses it (404 unknown path, 405 wrong method, 400 bad parameters, 411 or\n        413 body size, 415 body type).\n    operations: The accepted operations (at most 500).\n    base_path: Prefix of every operation (for example ``/v1``); requests outside it are\n        unknown operations.\n    allow_unknown_query: Accept query parameters the operation does not list.\n    max_body_bytes: Default largest body for operations that set none.",
+        "description": "The requests an API accepts, as a positive security model for the WAF (ADR 0197).\n\nA request is checked in HAProxy before the WAF sees it: its method and path must match an\noperation, its query string may contain only that operation's parameters with values of the\nright type, its body type and size must fit. Everything else is a violation.\n\nAttributes:\n    mode: ``detect`` records the violation in the access log and lets the request through;\n        ``block`` refuses it (404 unknown path, 405 wrong method, 400 bad parameters, 411 or\n        413 body size, 415 body type).\n    operations: The accepted operations (at most 500).\n    base_path: Prefix of every operation (for example ``/v1``); requests outside it are\n        unknown operations.\n    allow_unknown_query: Accept query parameters the operation does not list.\n    max_body_bytes: Default largest body for operations that set none.\n\nAt most ``API_BODY_MAX_OPERATIONS`` operations may carry a body schema (ADR 0228).",
         "properties": {
           "allow_unknown_query": {
             "default": false,

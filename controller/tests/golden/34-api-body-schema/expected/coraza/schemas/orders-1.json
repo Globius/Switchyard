@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ref"
+  ],
+  "properties": {
+    "ref": {
+      "type": "string",
+      "maxLength": 32
+    },
+    "total": {
+      "type": "number"
+    }
+  }
+}

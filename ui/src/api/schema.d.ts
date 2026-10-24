@@ -6149,6 +6149,89 @@ export interface components {
             version: number;
         };
         /**
+         * ApiBody
+         * @description The JSON body of one operation, as a closed tree of typed members (ADR 0228).
+         *
+         *     This is not a JSON Schema document and user text never becomes one: the tree is a fixed,
+         *     bounded shape, and :mod:`switchyard.render.apischema` turns it into the document Coraza
+         *     validates against.
+         *
+         *     Attributes:
+         *         properties: The members of the body object (1 to 32 here; at most
+         *             ``API_BODY_MAX_PROPERTIES`` across all levels, ``API_BODY_MAX_DEPTH`` levels deep).
+         *         additional_properties: Accept members the schema does not list.
+         *
+         *     Example:
+         *         >>> body = ApiBody(properties=(ApiBodyProperty(name="sku", required=True),))
+         *         >>> body.properties[0].kind
+         *         'string'
+         */
+        ApiBody: {
+            /**
+             * Additional Properties
+             * @default false
+             */
+            additional_properties: boolean;
+            /** Properties */
+            properties: components["schemas"]["ApiBodyProperty"][];
+        };
+        /**
+         * ApiBodyProperty
+         * @description One JSON member of a request body schema (ADR 0228).
+         *
+         *     Attributes:
+         *         name: JSON member name: a letter or ``_``, then letters, digits and ``_``.
+         *         kind: ``string`` (up to ``max_length`` characters), ``integer``, ``number``,
+         *             ``boolean``, ``uuid``, ``enum`` (one of ``values``), ``object`` (nested
+         *             ``properties``) or ``array`` (``items`` of one scalar type).
+         *         required: The member must be present in the body.
+         *         values: The allowed values of an ``enum``.
+         *         max_length: Longest accepted ``string`` (also the element type of a string array).
+         *         max_items: Longest accepted ``array``.
+         *         items: Element type of an ``array``.
+         *         properties: Members of an ``object``.
+         *         additional_properties: Accept members an ``object`` does not list.
+         */
+        ApiBodyProperty: {
+            /**
+             * Additional Properties
+             * @default false
+             */
+            additional_properties: boolean;
+            /** Items */
+            items?: ("string" | "integer" | "number" | "boolean" | "uuid") | null;
+            /**
+             * Kind
+             * @default string
+             * @enum {string}
+             */
+            kind: "string" | "integer" | "number" | "boolean" | "uuid" | "enum" | "object" | "array";
+            /** Max Items */
+            max_items?: number | null;
+            /**
+             * Max Length
+             * @default 256
+             */
+            max_length: number;
+            /** Name */
+            name: string;
+            /**
+             * Properties
+             * @default []
+             */
+            properties: components["schemas"]["ApiBodyProperty"][];
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /**
+             * Values
+             * @default []
+             */
+            values: string[];
+        };
+        /**
          * ApiOperation
          * @description One request the API accepts: a method and a path template (ADR 0197).
          *
@@ -6161,8 +6244,11 @@ export interface components {
          *         content_types: Media types a request body may have (empty: no check).
          *         max_body_bytes: Largest ``Content-Length``; a chunked body is refused when this is set
          *             (empty: the schema default).
+         *         body: The JSON body the operation accepts (ADR 0228). Needs ``application/json`` among
+         *             ``content_types``: it is checked against a schema Coraza only runs for JSON.
          */
         ApiOperation: {
+            body?: components["schemas"]["ApiBody"] | null;
             /**
              * Content Types
              * @default []
@@ -6242,6 +6328,8 @@ export interface components {
          *             unknown operations.
          *         allow_unknown_query: Accept query parameters the operation does not list.
          *         max_body_bytes: Default largest body for operations that set none.
+         *
+         *     At most ``API_BODY_MAX_OPERATIONS`` operations may carry a body schema (ADR 0228).
          */
         ApiSchema: {
             /**
