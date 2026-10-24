@@ -1,0 +1,2 @@
+echo-plain.example.test pool_grpc-h2c
+echo.example.test pool_grpc-h2
