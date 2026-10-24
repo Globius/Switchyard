@@ -16,9 +16,9 @@ from pydantic import ValidationError
 
 from switchyard.domain.errors import DomainValidationError
 from switchyard.domain.loader import snapshot_from_mapping, symbolic_uuid
-from switchyard.domain.models import RedirectAction, RouteMatch
+from switchyard.domain.models import Algorithm, Pool, RedirectAction, RouteMatch
 from switchyard.render.escape import RenderError
-from switchyard.render.haproxy import render_haproxy
+from switchyard.render.haproxy import _Renderer, render_haproxy
 from tests.factories import base_data
 
 GROUP = uuid.UUID(symbolic_uuid("seg-1"))
@@ -566,6 +566,48 @@ def golden_like() -> dict[str, Any]:
         {"match": {"path_prefix": "/x"}, "redirect": {"location": "/y"}}
     )
     return data
+
+
+class TestBalance:
+    """Hash-based balancing: exactly one ``balance`` line per algorithm (ADR 0224)."""
+
+    @pytest.mark.parametrize(
+        ("algorithm", "key", "line"),
+        [
+            ("roundrobin", None, "balance roundrobin"),
+            ("leastconn", None, "balance leastconn"),
+            ("source", None, "balance source"),
+            ("random", None, "balance random"),
+            ("uri", None, "balance uri"),
+            ("hdr", "X-Cache-Key", "balance hdr(X-Cache-Key)"),
+            ("url_param", "tenant_id", "balance url_param(tenant_id)"),
+        ],
+    )
+    def test_balance_line(self, algorithm: str, key: str | None, line: str) -> None:
+        data = base_data()
+        data["pools"][0].update(algorithm=algorithm, hash_key=key)
+        text = cfg(data)
+        assert line in lines(text)
+        # hash-type stays at HAProxy's default, so it is never written (ADR 0224).
+        assert "hash-type" not in text
+
+    def test_a_hash_algorithm_without_a_key_fails_the_render(self) -> None:
+        pool = Pool(
+            tenant_id=uuid.UUID(int=2), id=uuid.UUID(int=1), name="cache", algorithm=Algorithm.HDR
+        )
+        with pytest.raises(RenderError, match="hdr hash key"):
+            _Renderer._balance(pool)
+
+    def test_an_unsafe_key_fails_the_render(self) -> None:
+        pool = Pool(
+            tenant_id=uuid.UUID(int=2),
+            id=uuid.UUID(int=1),
+            name="cache",
+            algorithm=Algorithm.URL_PARAM,
+        )
+        unsafe = pool.model_copy(update={"hash_key": "x y"})
+        with pytest.raises(RenderError, match="unsafe hash key"):
+            _Renderer._balance(unsafe)
 
 
 class TestInjection:

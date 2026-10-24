@@ -1,0 +1,3 @@
+cache.example.test pool_cache
+index.example.test pool_index
+shards.example.test pool_tenant-shard

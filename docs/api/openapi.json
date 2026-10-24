@@ -1982,12 +1982,15 @@
         "type": "object"
       },
       "Algorithm": {
-        "description": "Pool load-balancing algorithm.",
+        "description": "Pool load-balancing algorithm.\n\n``uri``, ``hdr`` and ``url_param`` hash a request attribute instead of counting connections, so\na pool of caches or shards keeps one key on one member (ADR 0224); each needs ``Pool.hash_key``.",
         "enum": [
           "roundrobin",
           "leastconn",
           "source",
-          "random"
+          "random",
+          "uri",
+          "hdr",
+          "url_param"
         ],
         "title": "Algorithm",
         "type": "string"
@@ -16628,7 +16631,7 @@
       },
       "Pool": {
         "additionalProperties": false,
-        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    backend_protocol: How HAProxy speaks to the members (``http`` pools only): ``http1``,\n        ``h2`` (HTTP/2 negotiated over TLS, needs ``tls``) or ``h2c`` (HTTP/2 without TLS,\n        needs no ``tls``). gRPC backends need one of the HTTP/2 kinds (ADR 0116).\n    tunnel_timeout_s: Idle time of an upgraded connection (WebSocket) or a long HTTP/2\n        stream (gRPC) before HAProxy closes it (``timeout tunnel``; ADR 0116). ``None``\n        keeps the default of one hour.\n    send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.\n    client_certificate_id: Server certificate HAProxy presents to members (backend\n        mutual TLS). Needs ``tls``.\n    discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.\n    members: Backend servers, unique by name. With ``discovery`` the job owns this list.\n    labels: Free key/value tags for finding the pool (``?label=``; ADR 0198). Never rendered.",
+        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    hash_key: Header name (``hdr``) or URL parameter name (``url_param``) whose value picks the\n        member; ``uri`` hashes the path and needs none, and the counting algorithms reject one.\n        Required by the three hash algorithms (ADR 0224).\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    backend_protocol: How HAProxy speaks to the members (``http`` pools only): ``http1``,\n        ``h2`` (HTTP/2 negotiated over TLS, needs ``tls``) or ``h2c`` (HTTP/2 without TLS,\n        needs no ``tls``). gRPC backends need one of the HTTP/2 kinds (ADR 0116).\n    tunnel_timeout_s: Idle time of an upgraded connection (WebSocket) or a long HTTP/2\n        stream (gRPC) before HAProxy closes it (``timeout tunnel``; ADR 0116). ``None``\n        keeps the default of one hour.\n    send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.\n    client_certificate_id: Server certificate HAProxy presents to members (backend\n        mutual TLS). Needs ``tls``.\n    discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.\n    members: Backend servers, unique by name. With ``discovery`` the job owns this list.\n    labels: Free key/value tags for finding the pool (``?label=``; ADR 0198). Never rendered.",
         "properties": {
           "algorithm": {
             "$ref": "#/components/schemas/Algorithm",
@@ -16665,6 +16668,17 @@
                 "type": "null"
               }
             ]
+          },
+          "hash_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hash Key"
           },
           "health_monitor_id": {
             "anyOf": [
@@ -16854,6 +16868,17 @@
                 "type": "null"
               }
             ]
+          },
+          "hash_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hash Key"
           },
           "health_monitor_id": {
             "anyOf": [
@@ -17179,6 +17204,17 @@
               }
             ]
           },
+          "hash_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hash Key"
+          },
           "health_monitor_id": {
             "anyOf": [
               {
@@ -17387,6 +17423,17 @@
           "draft_status": {
             "$ref": "#/components/schemas/DraftStatus",
             "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "hash_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hash Key"
           },
           "health_monitor_id": {
             "anyOf": [
@@ -32610,7 +32657,8 @@
                   "pool_forbidden": [
                     "tls",
                     "tls_verify",
-                    "persistence"
+                    "persistence",
+                    "hash_key"
                   ],
                   "port_forbidden": [
                     "tls",
