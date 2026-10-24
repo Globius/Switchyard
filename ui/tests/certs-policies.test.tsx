@@ -1099,6 +1099,35 @@ describe("rate limit policies", () => {
     expect(rule).not.toHaveProperty("period_s");
     expect(rule).not.toHaveProperty("deny_status");
   });
+
+  it("counts per request path with its own table lifetime", async () => {
+    renderAt("/t/acme/policies");
+    const n = await screen.findByRole("button", { name: "New rate limit" });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "per-url");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 key"), "path");
+    expect(screen.queryByLabelText("Rule 1 key header")).toBeNull();
+    await userEvent.click(screen.getByText("Advanced"));
+    await userEvent.clear(screen.getByLabelText("Rule 1 entry ttl"));
+    await userEvent.type(screen.getByLabelText("Rule 1 entry ttl"), "300");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "rate_limit",
+      rules: [
+        {
+          key: "path",
+          max_requests: 100,
+          period_s: 10,
+          table_size: 10000,
+          entry_ttl_s: 300,
+        },
+      ],
+    });
+    const rule = (posted!.ops[0]!.body as { rules: Record<string, unknown>[] }).rules[0]!;
+    expect(rule).not.toHaveProperty("header_name");
+  });
 });
 
 describe("security policies", () => {

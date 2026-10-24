@@ -103,6 +103,7 @@ export function newLimitRule(): LimitRule {
     max_concurrent: null,
     period_s: 10,
     table_size: 10000,
+    entry_ttl_s: null,
     action: "deny",
     deny_status: 429,
     tarpit_s: 5,
@@ -118,6 +119,7 @@ export function cleanLimit(r: LimitRule): LimitRule {
     action: r.action,
   };
   if (r.key === "header") out.header_name = r.header_name;
+  if (r.entry_ttl_s != null) out.entry_ttl_s = r.entry_ttl_s;
   if (r.max_concurrent != null) out.max_concurrent = r.max_concurrent;
   else {
     out.max_requests = r.max_requests;
@@ -703,7 +705,7 @@ export function RulePolicySheet({
           <section className="space-y-3">
             <p className="text-xs text-muted-foreground">
               {t(
-                "Each rule counts the requests that match it, per client or per header value, and limits how often they may come. Use a path in the match for a per-path limit, such as a login page.",
+                "Each rule counts the requests that match it, per client, per header value or per request path, and limits how often they may come. A path key is one ceiling for the whole service on this engine, shared by every client.",
               )}
             </p>
             {limits.map((r, i) => {
@@ -732,6 +734,7 @@ export function RulePolicySheet({
                       >
                         <option value="client_ip">{t("Client address")}</option>
                         <option value="header">{t("Header value")}</option>
+                        <option value="path">{t("Request path (per URL)")}</option>
                       </select>
                     </label>
                     {r.key === "header" && (
@@ -822,20 +825,39 @@ export function RulePolicySheet({
                       <summary className="cursor-pointer text-sm font-medium">
                         {t("Advanced")}
                       </summary>
-                      <label>
-                        <span className="mb-1.5 block text-sm font-medium">
-                          {t("Tracked keys")}
-                        </span>
-                        <input
-                          aria-label={`Rule ${i + 1} table size`}
-                          type="number"
-                          min={1}
-                          className={INPUT}
-                          disabled={dis}
-                          value={r.table_size ?? 10000}
-                          onChange={(e) => upd({ table_size: Number(e.target.value) })}
-                        />
-                      </label>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label>
+                          <span className="mb-1.5 block text-sm font-medium">
+                            {t("Tracked keys")}
+                          </span>
+                          <input
+                            aria-label={`Rule ${i + 1} table size`}
+                            type="number"
+                            min={1}
+                            className={INPUT}
+                            disabled={dis}
+                            value={r.table_size ?? 10000}
+                            onChange={(e) => upd({ table_size: Number(e.target.value) })}
+                          />
+                        </label>
+                        <label>
+                          <span className="mb-1.5 block text-sm font-medium">
+                            {t("Entry lifetime, seconds (optional)")}
+                          </span>
+                          <input
+                            aria-label={`Rule ${i + 1} entry ttl`}
+                            type="number"
+                            min={1}
+                            max={86400}
+                            className={INPUT}
+                            disabled={dis}
+                            value={r.entry_ttl_s ?? ""}
+                            onChange={(e) =>
+                              upd({ entry_ttl_s: e.target.value ? Number(e.target.value) : null })
+                            }
+                          />
+                        </label>
+                      </div>
                     </details>
                   </div>
                   <div className="grid gap-3 md:grid-cols-3">

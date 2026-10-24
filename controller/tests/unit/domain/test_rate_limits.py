@@ -60,6 +60,30 @@ class TestRule:
         with pytest.raises(ValidationError):
             RateLimitRule(max_requests=1, key="header", header_name="X A")
 
+    def test_missing_header_fails_on_the_header_name_field(self) -> None:
+        with pytest.raises(ValidationError) as raised:
+            RateLimitPolicySet(
+                id=uuid.UUID(int=1),
+                tenant_id=uuid.UUID(int=2),
+                name="lim",
+                rules=({"max_requests": 1, "key": "header"},),
+            )
+        assert raised.value.errors()[0]["loc"] == ("rules", 0, "header_name")
+
+    def test_path_key_rejects_a_header_name(self) -> None:
+        assert RateLimitRule(max_requests=1, key="path")
+        with pytest.raises(ValidationError, match="header_name"):
+            RateLimitRule(max_requests=1, key="path", header_name="X-Api-Key")
+
+    def test_entry_ttl_bounds(self) -> None:
+        assert RateLimitRule(max_requests=5, period_s=60, entry_ttl_s=120).entry_ttl_s == 120
+        assert RateLimitRule(max_concurrent=2, entry_ttl_s=1)
+        with pytest.raises(ValidationError, match="entry_ttl_s"):
+            RateLimitRule(max_requests=5, period_s=60, entry_ttl_s=30)
+        for bad in (0, 86_401):
+            with pytest.raises(ValidationError):
+                RateLimitRule(max_requests=5, entry_ttl_s=bad)
+
     @pytest.mark.parametrize(
         "bad",
         [
@@ -97,6 +121,20 @@ class TestSnapshot:
             {"max_requests": 9, "action": "tarpit", "tarpit_s": 4},
         )
         assert codes(data_with(mixed)) == ["tarpit_conflict"]
+
+    def test_path_key_is_rejected_off_http(self) -> None:
+        data = data_with(limits({"max_requests": 5, "key": "path"}))
+        service = data["virtual_services"][0]
+        service["protocol"] = "udp"
+        service["ports"] = [{"port": 53}]
+        service["routes"] = []
+        service["certificate_ids"] = []
+        service["default_pool_id"] = "pool-web"
+        assert "path_key_needs_http" in codes(data)
+
+    def test_a_path_table_counts_against_the_budget(self) -> None:
+        big = limits(*[{"max_requests": 5, "key": "path", "table_size": 1_000_000}] * 3)
+        assert codes(data_with(big)) == ["stick_table_too_large"]
 
     def test_quota_key(self) -> None:
         assert validate_quotas({STICK_TABLE_QUOTA: 100}) == {STICK_TABLE_QUOTA: 100}
@@ -136,6 +174,27 @@ class TestRender:
             "backend rl_web_lim_2\n    stick-table type ipv6 size 10000 expire 60s store conn_cur"
             in text
         )
+
+    def test_path_key_renders_a_path_table_and_track_line(self) -> None:
+        text = cfg(data_with(limits({"max_requests": 5, "key": "path"})))
+        assert (
+            "backend rl_web_lim_1\n"
+            "    stick-table type string len 128 size 10000 expire 60s store http_req_rate(10s)"
+            in text
+        )
+        assert "http-request track-sc0 path table rl_web_lim_1" in text
+        assert "{ sc_http_req_rate(0,rl_web_lim_1) gt 5 }" in text
+
+    def test_entry_ttl_overrides_the_derived_expiry(self) -> None:
+        text = cfg(data_with(limits({"max_requests": 5, "period_s": 10, "entry_ttl_s": 300})))
+        assert "size 10000 expire 300s store http_req_rate(10s)" in text
+
+    def test_path_rule_keeps_its_place_in_the_track_order(self) -> None:
+        data = data_with(limits({"max_requests": 5}, {"max_requests": 7, "key": "path"}))
+        text = cfg(data)
+        assert "track-sc0 src table rl_web_lim_1" in text
+        assert "track-sc1 path table rl_web_lim_2" in text
+        assert text.index("track-sc0 src") < text.index("track-sc1 path")
 
     def test_hostile_header_key_is_refused_by_the_renderer(self) -> None:
         snap = snapshot_from_mapping(

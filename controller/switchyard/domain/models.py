@@ -23,10 +23,18 @@ import enum
 import ipaddress
 import re
 from datetime import datetime
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
 
 from switchyard.domain import validators as v
@@ -1609,7 +1617,7 @@ class ErrorPagesPolicySet(TenantOwned):
 
 
 class RateLimitRule(Model):
-    """Limit how often one client (or one key) may use the service; excess requests get ``action``.
+    """Limit how often one client, one key, or one request path may use the service.
 
     Exactly one of ``max_requests`` (per ``period_s``) and ``max_concurrent`` (requests in
     flight) is set. Each rule keeps its own counter table of ``table_size`` entries.
@@ -1617,19 +1625,25 @@ class RateLimitRule(Model):
     Attributes:
         match: Requests this rule counts and limits; empty counts every request. Use a path in
             the match for a per-path limit (a login page, an API prefix).
-        key: What the counters are kept per: ``client_ip`` or the value of ``header_name``
-            (an API key header; requests without the header are not counted).
+        key: What the counters are kept per: ``client_ip``, the value of ``header_name`` (an API
+            key header; requests without the header are not counted), or ``path`` (one counter for
+            the normalised request path, shared by every client; ADR 0225).
+        header_name: Header whose value is the key; set with ``key: header`` and only then. A rule
+            with ``key: header`` and no header is reported at ``rules.<n>.header_name``.
         max_requests: Requests allowed per ``period_s`` before the action applies.
         period_s: Length of the window for ``max_requests``.
         max_concurrent: Requests allowed at the same time.
         action: ``deny`` answers ``deny_status``; ``tarpit`` holds the request ``tarpit_s``
             seconds, then answers 429; ``silent_drop`` closes the connection without an answer.
         table_size: Number of keys the table holds; the oldest are evicted when it is full.
+        entry_ttl_s: Seconds a counter survives without an update (1 to 86400). Default: the
+            larger of ``period_s`` and 60 s, or 60 s for a concurrent limit. Never shorter than
+            ``period_s``.
     """
 
     match: RouteMatch = RouteMatch()
-    key: Literal["client_ip", "header"] = "client_ip"
-    header_name: HeaderName | None = None
+    key: Literal["client_ip", "header", "path"] = "client_ip"
+    header_name: HeaderName | None = Field(default=None, validate_default=True)
     max_requests: int | None = Field(default=None, ge=1, le=1_000_000)
     period_s: Literal[1, 10, 60, 300, 3600] = 10
     max_concurrent: int | None = Field(default=None, ge=1, le=100_000)
@@ -1637,13 +1651,33 @@ class RateLimitRule(Model):
     deny_status: Literal[403, 429, 503] = 429
     tarpit_s: int = Field(default=5, ge=1, le=30)
     table_size: int = Field(default=10_000, ge=100, le=1_000_000)
+    entry_ttl_s: int | None = Field(default=None, ge=1, le=86_400)
+
+    @field_validator("header_name")
+    @classmethod
+    def _header_name_matches_the_key(cls, value: HeaderName | None, info: ValidationInfo) -> Any:
+        """``header_name`` accompanies ``key: header`` and no other key.
+
+        Raising here (rather than in the model validator) puts the error on the field it is
+        about, so the API reports ``rules.<n>.header_name``.
+        """
+        key = info.data.get("key", "client_ip")
+        if key == "header" and value is None:
+            raise ValueError("header_name is required when key is header")
+        if key != "header" and value is not None:
+            raise ValueError("header_name goes with key header, and only with it")
+        return value
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
         if (self.max_requests is None) == (self.max_concurrent is None):
             raise ValueError("set exactly one of max_requests and max_concurrent")
-        if (self.key == "header") != (self.header_name is not None):
-            raise ValueError("header_name goes with key header, and only with it")
+        if (
+            self.entry_ttl_s is not None
+            and self.max_requests is not None
+            and self.entry_ttl_s < self.period_s
+        ):
+            raise ValueError("entry_ttl_s must be at least period_s, or the counter resets early")
         return self
 
 
