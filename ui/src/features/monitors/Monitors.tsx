@@ -266,10 +266,7 @@ function MonitorSheet({
             ? (f.http ?? { method: "GET", path: "/", host: null, expect_status: [200] })
             : null,
         udp: udp ? (f.udp ?? { payload_hex: null, require_reply: false }) : null,
-        grpc:
-          f.type === "grpc"
-            ? (f.grpc ?? { service: "", expect_status: [200] })
-            : null,
+        grpc: f.type === "grpc" ? (f.grpc ?? { service: "", expect_status: [200] }) : null,
         preset: f.type === "tcp" ? (f.preset ?? null) : null,
         sni: f.type === "udp" ? null : f.sni?.trim() || null,
       };
