@@ -219,9 +219,13 @@ var Definitions = []Definition{
 		Slug:      "health-monitors",
 		Doc:       "",
 		Resource:  true,
-		PatchKeys: []string{"fall", "http", "interval_s", "name", "port", "preset", "rise", "sni", "timeout_s", "type", "udp"},
+		PatchKeys: []string{"fall", "grpc", "http", "interval_s", "name", "port", "preset", "rise", "sni", "timeout_s", "type", "udp"},
 		Attrs: []Attr{
 			{Name: "fall", Kind: KindInt},
+			{Name: "grpc", Kind: KindObject, Doc: "Probe of a gRPC server's standard health method over HTTP/2 (ADR 0227).", Attrs: []Attr{
+				{Name: "expect_status", Kind: KindList, Elem: &Attr{Kind: KindInt}},
+				{Name: "service", Kind: KindString},
+			}},
 			{Name: "http", Kind: KindObject, Doc: "HTTP health check request and expectation.", Attrs: []Attr{
 				{Name: "expect_body", Kind: KindString},
 				{Name: "expect_body_regex", Kind: KindString},
@@ -242,7 +246,7 @@ var Definitions = []Definition{
 			{Name: "rise", Kind: KindInt},
 			{Name: "sni", Kind: KindString},
 			{Name: "timeout_s", Kind: KindInt},
-			{Name: "type", Kind: KindString, Required: true, Doc: "Health monitor kind.", Enum: []string{"tcp", "http", "udp"}},
+			{Name: "type", Kind: KindString, Required: true, Doc: "Health monitor kind.", Enum: []string{"tcp", "http", "udp", "grpc"}},
 			{Name: "udp", Kind: KindObject, Doc: "UDP health probe (Keepalived ``UDP_CHECK``), sent to the member's check port.", Attrs: []Attr{
 				{Name: "payload_hex", Kind: KindString},
 				{Name: "require_reply", Kind: KindBool},
@@ -585,8 +589,9 @@ var Definitions = []Definition{
 			{Name: "rules", Kind: KindList, Required: true, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
 				{Name: "action", Kind: KindString, Enum: []string{"deny", "tarpit", "silent_drop"}},
 				{Name: "deny_status", Kind: KindString, Enum: []string{"403", "429", "503"}},
+				{Name: "entry_ttl_s", Kind: KindInt},
 				{Name: "header_name", Kind: KindString},
-				{Name: "key", Kind: KindString, Enum: []string{"client_ip", "header"}},
+				{Name: "key", Kind: KindString, Enum: []string{"client_ip", "header", "path"}},
 				{Name: "match", Kind: KindObject, Doc: "Request match shared by routes and policy rules; every condition given must hold (AND).", Attrs: []Attr{
 					{Name: "headers", Kind: KindList, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
 						{Name: "name", Kind: KindString, Required: true},

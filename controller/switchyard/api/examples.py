@@ -122,6 +122,7 @@ OBJECTS: dict[str, dict[str, Any]] = {
             "expect_body": None,
             "expect_body_regex": None,
         },
+        "grpc": None,
         **_OWNED,
         **_DRAFT,
     },

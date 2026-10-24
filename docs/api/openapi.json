@@ -10980,6 +10980,30 @@
         "title": "GroupResult",
         "type": "object"
       },
+      "GrpcCheck": {
+        "additionalProperties": false,
+        "description": "Probe of a gRPC server's standard health method over HTTP/2 (ADR 0227).\n\nHAProxy cannot put a gRPC request on the wire from a health check: its config strings are\nNUL-terminated and a gRPC frame starts with a 0x00 compression flag, and the check engine\ncannot read ``grpc-status`` from trailers. The probe is therefore an HTTP/2 ``POST`` to\n``/grpc.health.v1.Health/Check`` that accepts the member on the HTTP status the whole exchange\nended with, which proves the port speaks HTTP/2 and dispatches the health handler.\n\nAttributes:\n    service: gRPC service name the check is for (``[A-Za-z0-9_.-]``, at most 128 characters;\n        empty means overall server health). The engine cannot name a service in the request, so\n        the name travels in the check's ``comment`` and shows up in a member's last-check text.\n    expect_status: HTTP status codes that mean healthy; at least one, 200 by default.\n\nExample:\n    >>> GrpcCheck(service=\"acme.echo.Health\").expect_status\n    (200,)",
+        "properties": {
+          "expect_status": {
+            "default": [
+              200
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Expect Status",
+            "type": "array"
+          },
+          "service": {
+            "default": "",
+            "pattern": "^[A-Za-z0-9_.-]{0,128}$",
+            "title": "Service",
+            "type": "string"
+          }
+        },
+        "title": "GrpcCheck",
+        "type": "object"
+      },
       "GslbDsRead": {
         "additionalProperties": false,
         "description": "DNSSEC state of a zone.",
@@ -11215,7 +11239,7 @@
       },
       "HealthMonitor": {
         "additionalProperties": false,
-        "description": "Active health check, shareable across pools.\n\nAttributes:\n    type: ``tcp`` connect check, ``http`` request check or ``udp`` probe (UDP services only).\n    port: Port to check. Required when pool members have no port of their own; otherwise\n        members are checked on their service port.\n    interval_s: Seconds between checks.\n    timeout_s: Seconds before a check fails.\n    rise: Consecutive successes to mark a server up.\n    fall: Consecutive failures to mark a server down.\n    http: Request details; required for ``http`` and forbidden for ``tcp`` and ``udp``.\n    udp: Optional probe details; only valid for ``udp``.\n    preset: Protocol-aware check for a ``tcp`` monitor: ``redis``, ``smtp``, ``ldap`` or\n        ``mysql``. Without one a ``tcp`` monitor only connects.\n    sni: TLS server name the check presents when the pool uses TLS to its members\n        (HAProxy ``check-sni``, ADR 0222). Without it the check uses the exact host of a\n        route that sends to the pool, and without such a route it sends no server name.\n        Not valid on a ``udp`` monitor.",
+        "description": "Active health check, shareable across pools.\n\nAttributes:\n    type: ``tcp`` connect check, ``http`` request check, ``grpc`` HTTP/2 health-method probe\n        (pools with ``backend_protocol`` ``h2``/``h2c`` only, ADR 0227) or ``udp`` probe (UDP\n        services only).\n    port: Port to check. Required when pool members have no port of their own; otherwise\n        members are checked on their service port.\n    interval_s: Seconds between checks; also the interval of a ``grpc`` monitor.\n    timeout_s: Seconds before a check fails.\n    rise: Consecutive successes to mark a server up.\n    fall: Consecutive failures to mark a server down.\n    http: Request details; required for ``http`` and forbidden for ``tcp``, ``grpc`` and\n        ``udp``.\n    grpc: gRPC health details; required for ``grpc`` and forbidden for every other type.\n    udp: Optional probe details; only valid for ``udp``.\n    preset: Protocol-aware check for a ``tcp`` monitor: ``redis``, ``smtp``, ``ldap`` or\n        ``mysql``. Without one a ``tcp`` monitor only connects.\n    sni: TLS server name the check presents when the pool uses TLS to its members\n        (HAProxy ``check-sni``, ADR 0222). Without it the check uses the exact host of a\n        route that sends to the pool, and without such a route it sends no server name.\n        Not valid on a ``udp`` monitor.",
         "properties": {
           "fall": {
             "default": 3,
@@ -11223,6 +11247,16 @@
             "minimum": 1.0,
             "title": "Fall",
             "type": "integer"
+          },
+          "grpc": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GrpcCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "http": {
             "anyOf": [
@@ -11347,6 +11381,16 @@
             "title": "Fall",
             "type": "integer"
           },
+          "grpc": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GrpcCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "http": {
             "anyOf": [
               {
@@ -11455,6 +11499,16 @@
               }
             ],
             "title": "Fall"
+          },
+          "grpc": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GrpcCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "http": {
             "anyOf": [
@@ -11595,6 +11649,16 @@
             "minimum": 1.0,
             "title": "Fall",
             "type": "integer"
+          },
+          "grpc": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GrpcCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "http": {
             "anyOf": [
@@ -14755,11 +14819,12 @@
         "type": "object"
       },
       "MonitorType": {
-        "description": "Health monitor kind.",
+        "description": "Health monitor kind.\n\n``grpc`` is an HTTP/2 request to the gRPC health method, valid only on a pool whose\n``backend_protocol`` is ``h2`` or ``h2c`` (ADR 0227).",
         "enum": [
           "tcp",
           "http",
-          "udp"
+          "udp",
+          "grpc"
         ],
         "title": "MonitorType",
         "type": "string"
@@ -48531,6 +48596,7 @@
             "application/json": {
               "example": {
                 "fall": 3,
+                "grpc": null,
                 "http": {
                   "expect_body": null,
                   "expect_body_regex": null,

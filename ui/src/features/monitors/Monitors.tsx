@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 type Monitor = components["schemas"]["HealthMonitorRead"];
 export interface MonitorForm {
   name: string;
-  type: "tcp" | "http" | "udp";
+  type: "tcp" | "http" | "udp" | "grpc";
   interval_s: number;
   timeout_s: number;
   rise: number;
@@ -44,6 +44,8 @@ export interface MonitorForm {
   /** Server name the check presents to a TLS pool (check-sni). */
   sni?: string | null;
   udp: { payload_hex: string | null; require_reply: boolean } | null;
+  /** gRPC health probe: an HTTP/2 request to the standard health method (ADR 0227). */
+  grpc?: { service: string; expect_status: number[] } | null;
 }
 
 const INPUT =
@@ -60,6 +62,7 @@ export function emptyMonitor(): MonitorForm {
     port: null,
     http: null,
     udp: null,
+    grpc: null,
   };
 }
 
@@ -89,17 +92,25 @@ export function toForm(m: Monitor): MonitorForm {
     udp: m.udp
       ? { payload_hex: m.udp.payload_hex ?? null, require_reply: m.udp.require_reply ?? false }
       : null,
+    grpc: m.grpc
+      ? { service: m.grpc.service ?? "", expect_status: m.grpc.expect_status ?? [200] }
+      : null,
   };
 }
 
 /** The "Check" column: what the monitor sends. */
-export function describeCheck(m: Pick<MonitorForm, "type" | "http" | "udp">): string {
+export function describeCheck(m: Pick<MonitorForm, "type" | "http" | "udp" | "grpc">): string {
   if (m.type === "http" && m.http)
     return `${m.http.method} ${m.http.path} → ${m.http.expect_status.join(", ")}`;
+  if (m.type === "grpc")
+    return `HTTP/2 ${GRPC_HEALTH_PATH}${m.grpc?.service ? ` for ${m.grpc.service}` : ""}`;
   if (m.type === "udp")
     return m.udp?.require_reply ? "UDP probe, reply required" : "UDP probe, no reply required";
   return "TCP connect";
 }
+
+/** The standard gRPC health method the check calls (ADR 0227). */
+const GRPC_HEALTH_PATH = "/grpc.health.v1.Health/Check";
 
 function useMonitorList(tenant: string, changeSet?: string) {
   return useQuery({
@@ -255,6 +266,10 @@ function MonitorSheet({
             ? (f.http ?? { method: "GET", path: "/", host: null, expect_status: [200] })
             : null,
         udp: udp ? (f.udp ?? { payload_hex: null, require_reply: false }) : null,
+        grpc:
+          f.type === "grpc"
+            ? (f.grpc ?? { service: "", expect_status: [200] })
+            : null,
         preset: f.type === "tcp" ? (f.preset ?? null) : null,
         sni: f.type === "udp" ? null : f.sni?.trim() || null,
       };
@@ -359,7 +374,7 @@ function MonitorSheet({
             aria-labelledby="monitor-type"
             className="inline-flex rounded-md border"
           >
-            {(["tcp", "http", "udp"] as const).map((k) => (
+            {(["tcp", "http", "grpc", "udp"] as const).map((k) => (
               <button
                 key={k}
                 type="button"
@@ -380,7 +395,7 @@ function MonitorSheet({
           </div>
           <p className="text-xs text-muted-foreground">
             {t(
-              "TCP and HTTP monitors check TCP and HTTP pools; UDP monitors check UDP pools only.",
+              "TCP, HTTP and gRPC monitors check TCP and HTTP pools (gRPC only a pool that speaks HTTP/2); UDP monitors check UDP pools only.",
             )}
           </p>
         </div>
@@ -539,6 +554,50 @@ function MonitorSheet({
                 </>
               );
             })()}
+          </fieldset>
+        )}
+        {f.type === "grpc" && (
+          <fieldset className="space-y-3 rounded-lg border p-4">
+            <legend className="px-1 text-sm font-medium">{t("gRPC health probe")}</legend>
+            <label className="block space-y-1.5 text-sm font-medium">
+              {t("Service name")}
+              <input
+                aria-label={t("Service name")}
+                placeholder="acme.echo.Health"
+                className={cn(INPUT, "font-mono")}
+                disabled={!write.allowed}
+                value={f.grpc?.service ?? ""}
+                onChange={(e) =>
+                  set({
+                    grpc: {
+                      service: e.target.value,
+                      expect_status: f.grpc?.expect_status ?? [200],
+                    },
+                  })
+                }
+              />
+              <span className="block text-xs font-normal text-muted-foreground">
+                {t("Letters, digits, dots, dashes and underscores; empty means the whole server.")}
+              </span>
+            </label>
+            <ChipInput
+              label={t("Expected status codes")}
+              value={(f.grpc?.expect_status ?? [200]).map(String)}
+              onChange={(v) =>
+                set({ grpc: { service: f.grpc?.service ?? "", expect_status: v.map(Number) } })
+              }
+              freeText={{
+                validate: (x) =>
+                  /^[1-5]\d\d$/.test(x.trim()) ? null : t("Use a status code, 100 to 599."),
+              }}
+              placeholder={t("Add code")}
+              disabled={!write.allowed}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Runs a POST to the standard gRPC health method over HTTP/2. The pool must use backend protocol h2 or h2c. HAProxy cannot read grpc-status, so a server that answers NOT_SERVING still passes.",
+              )}
+            </p>
           </fieldset>
         )}
         {f.type === "tcp" && (
