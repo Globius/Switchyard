@@ -37,6 +37,13 @@ def lines(text: str) -> list[str]:
     return [line.strip() for line in text.splitlines()]
 
 
+def backend_block(text: str, name: str) -> str:
+    """The indented lines of one ``backend`` section (empty when it is not rendered)."""
+    match = re.search(rf"^backend {name}\n((?:[ \t]+\S.*\n)*)", text, re.M)
+    assert match, f"no backend {name} in:\n{text}"
+    return match.group(1)
+
+
 def with_routes(routes: list[dict[str, Any]], **vs: Any) -> dict[str, Any]:
     data = base_data()
     data["virtual_services"][0]["routes"] = routes
@@ -404,6 +411,24 @@ class TestBackends:
         text = cfg(data)
         assert "stick-table type ipv6 size 5000 expire 60s" in text
         assert "stick on src" in text
+
+    @pytest.mark.parametrize("seconds", [2, 45, 3600])
+    def test_tunnel_timeout_is_the_pools_value_and_only_in_its_backend(self, seconds: int) -> None:
+        """The WebSocket idle timeout is the pool field, spelled as HAProxy's ``timeout tunnel``.
+
+        A service does not carry the knob: ``Pool.tunnel_timeout_s`` does, and the rendered line
+        must follow it exactly so the tunnel lives as long as the operator asked.
+        """
+        data = base_data()
+        data["pools"][0]["tunnel_timeout_s"] = seconds
+        text = cfg(data)
+        assert f"timeout tunnel {seconds}s" in lines(backend_block(text, "pool_web"))
+        assert text.count(f"timeout tunnel {seconds}s") == 1, "one backend, one line"
+
+    def test_without_the_field_the_backend_keeps_the_default_tunnel_timeout(self) -> None:
+        text = cfg(base_data())
+        assert "timeout tunnel" not in backend_block(text, "pool_web")
+        assert "timeout tunnel 1h" in text, "`defaults` always carries one"
 
     def test_only_referenced_pools_of_enabled_services_are_rendered(self) -> None:
         data = base_data()

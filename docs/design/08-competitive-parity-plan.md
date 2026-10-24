@@ -57,7 +57,7 @@ priorities are those of revision 2 and are kept for the record; 4.0 says what is
 | HTTP/2 to clients | yes | yes | ALB | App GW | done (`http2`) | HAProxy | |
 | HTTP/3 (QUIC) to clients | yes | yes | ALB (2024+), CloudFront | Front Door | done (`http3`: `quic4@`/`quic6@` bind plus `Alt-Svc`; lab pass 2026-10-12) | HAProxy | S |
 | gRPC routing and health | yes | yes | ALB | App GW | part: `backend_protocol: h2/h2c` and `tunnel_timeout_s`; no gRPC (or HTTP/2) health check, and streams were not run in the lab | HAProxy | S |
-| WebSocket | yes | yes | ALB | App GW | part: works as an HTTP/1.1 upgrade with `tunnel_timeout_s`; nothing to switch on, and no test asserts an upgrade | HAProxy | S |
+| WebSocket | yes | yes | ALB | App GW | part: works as an HTTP/1.1 upgrade with `tunnel_timeout_s`; nothing to switch on, and `tests/integration/test_websocket_upgrade.py` proves the upgrade and the tunnel timeout | HAProxy | S |
 | Algorithms: RR, least conn, source hash, random | yes | yes | RR, LOR, random (ALB), flow hash (NLB) | hash, 5-tuple | done (4) | HAProxy | |
 | Weighted RR, ratio, dynamic ratio, fastest, observed, predictive | yes | yes | no | no | weights only | HAProxy | L |
 | URI, header and parameter hash balancing | yes | iRule | no | no | done (ADR 0224): `balance uri`, `balance hdr(<name>)` and `balance url_param(<name>)` from `Algorithm` `uri`/`hdr`/`url_param` plus `Pool.hash_key`; `hash-type` stays HAProxy's default | HAProxy | S |

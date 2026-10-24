@@ -76,10 +76,12 @@ test-smoke:
       when: never
     - when: on_success
   script:
-    # RLS isolation, the apply pipeline end to end, and HAProxy validation of the rendered golden cases.
+    # RLS isolation, the apply pipeline end to end, a WebSocket upgrade through the rendered config,
+    # and HAProxy validation of the rendered golden cases.
     # Bind mounts are resolved by dind: keep pytest's temporary files on the build volume it shares.
     - uv run pytest --basetemp="$CI_PROJECT_DIR/.pytest-tmp" -p no:cacheprovider
       tests/integration/test_rls.py tests/integration/test_apply_pipeline.py
+      tests/integration/test_websocket_upgrade.py
       "tests/integration/test_golden_haproxy.py::test_haproxy_accepts_rendered_config[01-minimal-http]"
 
 test-full:
