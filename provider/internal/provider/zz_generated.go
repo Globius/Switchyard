@@ -224,11 +224,13 @@ var Definitions = []Definition{
 			{Name: "fall", Kind: KindInt},
 			{Name: "http", Kind: KindObject, Doc: "HTTP health check request and expectation.", Attrs: []Attr{
 				{Name: "expect_body", Kind: KindString},
+				{Name: "expect_body_regex", Kind: KindString},
 				{Name: "expect_header", Kind: KindObject, Doc: "A response header the health check must see, optionally with an exact value.", Attrs: []Attr{
 					{Name: "name", Kind: KindString, Required: true},
 					{Name: "value", Kind: KindString},
 				}},
 				{Name: "expect_status", Kind: KindList, Elem: &Attr{Kind: KindInt}},
+				{Name: "expect_status_regex", Kind: KindString},
 				{Name: "host", Kind: KindString},
 				{Name: "method", Kind: KindString, Enum: []string{"GET", "HEAD", "OPTIONS"}},
 				{Name: "path", Kind: KindString},
