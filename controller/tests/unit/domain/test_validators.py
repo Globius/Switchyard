@@ -209,6 +209,48 @@ class TestMisc:
             v.validate_secret_ref(bad)
 
 
+class TestCheckRegex:
+    @pytest.mark.parametrize(
+        "ok",
+        [
+            "^2[0-9][0-9]$",
+            "^v[0-9]+[.][0-9]+[.][0-9]+$",
+            '"version":"v[0-9]+"',
+            "^ok$",
+            "x" * v.CHECK_REGEX_MAX,
+        ],
+    )
+    def test_accepts_anchored_and_json_patterns(self, ok: str) -> None:
+        assert v.validate_check_regex(ok) == ok
+
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            "",
+            "x" * (v.CHECK_REGEX_MAX + 1),
+            "(unclosed",
+            "[z-a]",
+            "*leading",
+            "%[req.hdr(x)]",
+            "%{+Q}o",
+            "it's",
+            "a\nb",
+            "a\tb",
+        ],
+    )
+    def test_rejects(self, bad: str) -> None:
+        with pytest.raises(ValueError):
+            v.validate_check_regex(bad)
+
+    def test_rejection_reason_is_specific(self) -> None:
+        with pytest.raises(ValueError, match="log-format variable"):
+            v.validate_check_regex("%[req.hdr(x)]")
+        with pytest.raises(ValueError, match="does not compile"):
+            v.validate_check_regex("(unclosed")
+        with pytest.raises(ValueError, match="1-256 characters"):
+            v.validate_check_regex("x" * (v.CHECK_REGEX_MAX + 1))
+
+
 class TestVipInNetwork:
     NET = ipaddress.ip_network("192.0.2.0/24")
 

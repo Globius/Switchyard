@@ -151,6 +151,7 @@ group has a `nat` UDP service. Validation codes: `ipvs_port_mismatch`, `ipvs_dr_
 | Health monitor `tcp` | `check` on each server (`port <n>` when the monitor sets one) |
 | Health monitor `http` | `option httpchk`, `http-check send meth <m> uri <path> [ver HTTP/1.1 hdr Host <h>]`, `http-check expect status <codes>` |
 | Health monitor `http` `expect_body`, `expect_header` | `http-check expect string <text>` or `http-check expect hdr name <H> [value <v>]`; one of `expect_status`, `expect_body`, `expect_header`; match text and header values may only use letters, digits and `._:/-` (ADR 0108) |
+| Health monitor `http` `expect_status_regex`, `expect_body_regex` | `http-check expect rstatus '<regex>'` or `http-check expect rstring '<regex>'`, single-quoted and in the same slot as the literal expectations; the pattern is validated (length cap, no `%[...]`, compiles) at change-set time with code `invalid_regex`, and exactly one expectation may be set (extends ADR 0066) |
 | Health monitor `tcp` with `preset` | `option redis-check`, `option smtpchk`, `option ldap-check` or `option mysql-check` (ADR 0108) |
 | Health monitor `sni`, or a host route to the pool, on a pool with `tls` | `check-sni <name>` on each server line: the monitor's `sni`, else the first exact route host, else none (ADR 0222) |
 | Monitor `interval_s`, `rise`, `fall`, `timeout_s` | `default-server inter <i>s fall <f> rise <r>` and `timeout check <t>s` |
