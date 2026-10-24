@@ -102,6 +102,10 @@ def protocol_rules(protocol: Protocol) -> ProtocolRules:
         else ("http2", "http3", "https_redirect_port"),
         (),
         tuple(Algorithm),
-        (MonitorType.TCP, MonitorType.HTTP),
+        # A grpc monitor needs an HTTP/2 pool, and only an http service's pool may speak
+        # HTTP/2 (ADR 0227); a tcp service keeps the checks that do not need a request.
+        (MonitorType.TCP, MonitorType.HTTP)
+        if protocol is Protocol.TCP
+        else (MonitorType.TCP, MonitorType.HTTP, MonitorType.GRPC),
         False,
     )

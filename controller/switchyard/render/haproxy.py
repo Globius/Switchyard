@@ -1637,6 +1637,16 @@ class _Renderer:
 
     @staticmethod
     def _monitor_lines(monitor: dm.HealthMonitor) -> list[str]:
+        """Backend lines for one health monitor (ADR 0227 for ``grpc``).
+
+        Example:
+            >>> import uuid
+            >>> m = dm.HealthMonitor(tenant_id=uuid.UUID(int=2), id=uuid.UUID(int=1),
+            ...                      name="grpc", type=dm.MonitorType.GRPC,
+            ...                      grpc=dm.GrpcCheck(service="acme.echo"))
+            >>> _Renderer._monitor_lines(m)[1]
+            'http-check connect default proto h2'
+        """
         lines: list[str] = []
         if monitor.preset is not None:
             lines.append(_TCP_PRESETS[monitor.preset])
@@ -1663,6 +1673,22 @@ class _Renderer:
                 if expected.value is not None:
                     line += f" value {esc.match_text(expected.value)}"
                 lines.append(line)
+        elif monitor.type is dm.MonitorType.GRPC:
+            grpc = _need(monitor.grpc, "grpc monitor block")
+            lines.append("option httpchk")
+            # ``default`` inherits the server line's ssl/sni/alpn; ``proto h2`` forces HTTP/2.
+            lines.append("http-check connect default proto h2")
+            lines.append(
+                "http-check send meth POST uri /grpc.health.v1.Health/Check ver HTTP/2 "
+                "hdr content-type application/grpc hdr te trailers"
+            )
+            codes = ",".join(str(c) for c in sorted(set(grpc.expect_status)))
+            expect = f"http-check expect status {codes}"
+            if grpc.service:
+                # The engine cannot name a service in the request; the name lands in the
+                # check's failure message so a member's last-check text says which one it was for.
+                expect += f" comment service={grpc.service}"
+            lines.append(expect)
         lines += [
             f"timeout check {monitor.timeout_s}s",
             f"default-server inter {monitor.interval_s}s fall {monitor.fall} rise {monitor.rise}",

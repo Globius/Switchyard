@@ -397,6 +397,60 @@ class TestBackends:
             "sni req.hdr(host),field(1,:),lower weight 100"
         ) in text
 
+    def test_grpc_monitor_lines(self) -> None:
+        data = base_data()
+        data["health_monitors"] = [
+            {
+                "id": "hm",
+                "tenant_id": "t-acme",
+                "name": "grpc-health",
+                "type": "grpc",
+                "interval_s": 10,
+                "timeout_s": 2,
+                "rise": 3,
+                "fall": 4,
+                "grpc": {"service": "acme.echo.Health", "expect_status": [200, 204]},
+            }
+        ]
+        data["pools"][0].update(health_monitor_id="hm", backend_protocol="h2c")
+        text = cfg(data)
+        backend = [line for line in lines(text) if "http-check" in line or "option httpchk" in line]
+        assert backend == [
+            "option httpchk",
+            "http-check connect default proto h2",
+            "http-check send meth POST uri /grpc.health.v1.Health/Check ver HTTP/2 "
+            "hdr content-type application/grpc hdr te trailers",
+            "http-check expect status 200,204 comment service=acme.echo.Health",
+        ]
+        assert "default-server inter 10s fall 4 rise 3" in text
+        assert "timeout check 2s" in text
+        # the pool's member line keeps the HTTP/2 protocol and the check
+        assert "server 10-20-0-11-8080 10.20.0.11:8080 check proto h2 weight 100" in text
+
+    def test_grpc_monitor_without_a_service_names_none(self) -> None:
+        data = base_data()
+        data["health_monitors"] = [
+            {"id": "hm", "tenant_id": "t-acme", "name": "g", "type": "grpc", "grpc": {}}
+        ]
+        data["pools"][0].update(health_monitor_id="hm", backend_protocol="h2", tls=True)
+        text = cfg(data)
+        assert "http-check expect status 200" in lines(text)
+        assert not [line for line in lines(text) if " comment " in line]
+        assert "check check-ssl check-sni app.example.test ssl verify none" in text
+        assert "alpn h2 weight 100" in text
+
+    def test_grpc_monitor_needs_http2(self) -> None:
+        data = base_data()
+        data["health_monitors"] = [
+            {"id": "hm", "tenant_id": "t-acme", "name": "g", "type": "grpc", "grpc": {}}
+        ]
+        data["pools"][0]["health_monitor_id"] = "hm"
+        with pytest.raises(DomainValidationError) as raised:
+            render(data)
+        assert ("pools.web.health_monitor_id", "grpc_check_needs_h2") in [
+            (p.path, p.code) for p in raised.value.problems
+        ]
+
     def test_check_port_override(self) -> None:
         data = base_data()
         data["health_monitors"] = [

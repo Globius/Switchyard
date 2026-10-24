@@ -27,8 +27,9 @@ the connection open instead. The renderer half is pinned without a container by
 `tests/unit/render/test_haproxy.py::TestBackends::test_tunnel_timeout_is_the_pools_value_and_only_in_its_backend`.
 
 **Limits.** `http` services and pools only. The VIP must accept UDP on the HTTP/3 port, so check firewalls in front of the
-engines. There is no separate gRPC switch: use `h2` or `h2c`. The WebSocket test covers cleartext `ws` through a
-plain-HTTP port; it does not compare `wss` termination with other HTTPS services, and it waits seconds rather than
-exercising long-lived idle behaviour (no keepalives, no reconnect, no hours-long tunnel).
+engines. There is no separate gRPC switch: use `h2` or `h2c`. Checking a gRPC pool is a monitor kind of its own
+(`type: grpc`, see [health checks](health-checks.md)), not a property of the pool. The WebSocket test covers cleartext
+`ws` through a plain-HTTP port; it does not compare `wss` termination with other HTTPS services, and it waits seconds
+rather than exercising long-lived idle behaviour (no keepalives, no reconnect, no hours-long tunnel).
 
-**Decision:** [0116](../adr/0116-http3-grpc-websocket.md).
+**Decision:** [0116](../adr/0116-http3-grpc-websocket.md), [0227](../adr/0227-grpc-health-check.md).

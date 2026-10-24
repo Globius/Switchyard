@@ -179,6 +179,7 @@ class HealthMonitorRow(TenantOwnedMixin, Base):
     rise: Mapped[int] = mapped_column(Integer, nullable=False)
     fall: Mapped[int] = mapped_column(Integer, nullable=False)
     http: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    grpc: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     udp: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     preset: Mapped[str | None] = mapped_column(Text)
     sni: Mapped[str | None] = mapped_column(Text)

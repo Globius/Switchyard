@@ -196,6 +196,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
       (ADR 0196).
     - ``needs_health_monitor`` and ``passive_check_layer7_needs_http``: passive checks and slow
       start build on a health monitor, and ``layer7`` observation needs an HTTP-only pool.
+    - ``grpc_check_needs_h2``: a ``grpc`` monitor sits on a pool whose ``backend_protocol`` is
+      ``h2`` or ``h2c`` (ADR 0227), reported on the pool's ``health_monitor_id``.
 
     Returns:
         Findings sorted by path; empty when the snapshot is valid.
@@ -917,11 +919,27 @@ def _check_udp_pools(
     ``udp`` monitors belong on UDP pools only, ``tcp``/``http`` monitors on UDP pools never, and a
     UDP pool cannot use TLS, persistence, a hash key, ``random``/``uri``/``hdr``/``url_param`` or
     members without a port (IPVS has no such scheduler, ADR 0020 and ADR 0224).
+
+    A ``grpc`` monitor needs an HTTP/2 pool: on any other ``backend_protocol`` it is
+    ``grpc_check_needs_h2`` on the pool's ``health_monitor_id`` (ADR 0227).
     """
     for pool in snapshot.pools:
         protocols = pool_protocols.get(pool.id, set())
         base = f"pools.{pool.name}"
         monitor = monitors.get(pool.health_monitor_id) if pool.health_monitor_id else None
+        if (
+            monitor is not None
+            and monitor.type is MonitorType.GRPC
+            and pool.backend_protocol not in ("h2", "h2c")
+        ):
+            problems.append(
+                Problem(
+                    f"{base}.health_monitor_id",
+                    "grpc_check_needs_h2",
+                    f"a grpc monitor needs a pool that speaks HTTP/2; {pool.name} speaks "
+                    f"{pool.backend_protocol}",
+                )
+            )
         if protocols == {Protocol.UDP}:
             if pool.tls:
                 problems.append(

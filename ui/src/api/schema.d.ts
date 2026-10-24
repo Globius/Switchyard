@@ -10333,6 +10333,40 @@ export interface components {
             state: ("pending" | "succeeded" | "failed" | "reverted") | string;
         };
         /**
+         * GrpcCheck
+         * @description Probe of a gRPC server's standard health method over HTTP/2 (ADR 0227).
+         *
+         *     HAProxy cannot put a gRPC request on the wire from a health check: its config strings are
+         *     NUL-terminated and a gRPC frame starts with a 0x00 compression flag, and the check engine
+         *     cannot read ``grpc-status`` from trailers. The probe is therefore an HTTP/2 ``POST`` to
+         *     ``/grpc.health.v1.Health/Check`` that accepts the member on the HTTP status the whole exchange
+         *     ended with, which proves the port speaks HTTP/2 and dispatches the health handler.
+         *
+         *     Attributes:
+         *         service: gRPC service name the check is for (``[A-Za-z0-9_.-]``, at most 128 characters;
+         *             empty means overall server health). The engine cannot name a service in the request, so
+         *             the name travels in the check's ``comment`` and shows up in a member's last-check text.
+         *         expect_status: HTTP status codes that mean healthy; at least one, 200 by default.
+         *
+         *     Example:
+         *         >>> GrpcCheck(service="acme.echo.Health").expect_status
+         *         (200,)
+         */
+        GrpcCheck: {
+            /**
+             * Expect Status
+             * @default [
+             *       200
+             *     ]
+             */
+            expect_status: number[];
+            /**
+             * Service
+             * @default
+             */
+            service: string;
+        };
+        /**
          * GslbDsRead
          * @description DNSSEC state of a zone.
          */
@@ -10464,14 +10498,18 @@ export interface components {
          * @description Active health check, shareable across pools.
          *
          *     Attributes:
-         *         type: ``tcp`` connect check, ``http`` request check or ``udp`` probe (UDP services only).
+         *         type: ``tcp`` connect check, ``http`` request check, ``grpc`` HTTP/2 health-method probe
+         *             (pools with ``backend_protocol`` ``h2``/``h2c`` only, ADR 0227) or ``udp`` probe (UDP
+         *             services only).
          *         port: Port to check. Required when pool members have no port of their own; otherwise
          *             members are checked on their service port.
-         *         interval_s: Seconds between checks.
+         *         interval_s: Seconds between checks; also the interval of a ``grpc`` monitor.
          *         timeout_s: Seconds before a check fails.
          *         rise: Consecutive successes to mark a server up.
          *         fall: Consecutive failures to mark a server down.
-         *         http: Request details; required for ``http`` and forbidden for ``tcp`` and ``udp``.
+         *         http: Request details; required for ``http`` and forbidden for ``tcp``, ``grpc`` and
+         *             ``udp``.
+         *         grpc: gRPC health details; required for ``grpc`` and forbidden for every other type.
          *         udp: Optional probe details; only valid for ``udp``.
          *         preset: Protocol-aware check for a ``tcp`` monitor: ``redis``, ``smtp``, ``ldap`` or
          *             ``mysql``. Without one a ``tcp`` monitor only connects.
@@ -10486,6 +10524,7 @@ export interface components {
              * @default 3
              */
             fall: number;
+            grpc?: components["schemas"]["GrpcCheck"] | null;
             http?: components["schemas"]["HttpCheck"] | null;
             /**
              * Id
@@ -10535,6 +10574,7 @@ export interface components {
              * @default 3
              */
             fall: number;
+            grpc?: components["schemas"]["GrpcCheck"] | null;
             http?: components["schemas"]["HttpCheck"] | null;
             /**
              * Interval S
@@ -10566,6 +10606,7 @@ export interface components {
         HealthMonitorPatch: {
             /** Fall */
             fall?: number | null;
+            grpc?: components["schemas"]["GrpcCheck"] | null;
             http?: components["schemas"]["HttpCheck"] | null;
             /** Interval S */
             interval_s?: number | null;
@@ -10601,6 +10642,7 @@ export interface components {
              * @default 3
              */
             fall: number;
+            grpc?: components["schemas"]["GrpcCheck"] | null;
             http?: components["schemas"]["HttpCheck"] | null;
             /**
              * Id
@@ -12124,9 +12166,12 @@ export interface components {
         /**
          * MonitorType
          * @description Health monitor kind.
+         *
+         *     ``grpc`` is an HTTP/2 request to the gRPC health method, valid only on a pool whose
+         *     ``backend_protocol`` is ``h2`` or ``h2c`` (ADR 0227).
          * @enum {string}
          */
-        MonitorType: "tcp" | "http" | "udp";
+        MonitorType: "tcp" | "http" | "udp" | "grpc";
         /**
          * Network
          * @description An L2/L3 network VMs attach to.
@@ -32485,6 +32530,7 @@ export interface operations {
                 /**
                  * @example {
                  *       "fall": 3,
+                 *       "grpc": null,
                  *       "http": {
                  *         "expect_body": null,
                  *         "expect_body_regex": null,

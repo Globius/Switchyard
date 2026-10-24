@@ -156,11 +156,16 @@ class AdminState(enum.StrEnum):
 
 
 class MonitorType(enum.StrEnum):
-    """Health monitor kind."""
+    """Health monitor kind.
+
+    ``grpc`` is an HTTP/2 request to the gRPC health method, valid only on a pool whose
+    ``backend_protocol`` is ``h2`` or ``h2c`` (ADR 0227).
+    """
 
     TCP = "tcp"
     HTTP = "http"
     UDP = "udp"
+    GRPC = "grpc"
 
 
 class CertSource(enum.StrEnum):
@@ -1263,18 +1268,54 @@ class UdpCheck(Model):
 TcpPreset = Literal["redis", "smtp", "ldap", "mysql"]
 
 
+class GrpcCheck(Model):
+    """Probe of a gRPC server's standard health method over HTTP/2 (ADR 0227).
+
+    HAProxy cannot put a gRPC request on the wire from a health check: its config strings are
+    NUL-terminated and a gRPC frame starts with a 0x00 compression flag, and the check engine
+    cannot read ``grpc-status`` from trailers. The probe is therefore an HTTP/2 ``POST`` to
+    ``/grpc.health.v1.Health/Check`` that accepts the member on the HTTP status the whole exchange
+    ended with, which proves the port speaks HTTP/2 and dispatches the health handler.
+
+    Attributes:
+        service: gRPC service name the check is for (``[A-Za-z0-9_.-]``, at most 128 characters;
+            empty means overall server health). The engine cannot name a service in the request, so
+            the name travels in the check's ``comment`` and shows up in a member's last-check text.
+        expect_status: HTTP status codes that mean healthy; at least one, 200 by default.
+
+    Example:
+        >>> GrpcCheck(service="acme.echo.Health").expect_status
+        (200,)
+    """
+
+    service: str = Field(default="", pattern=r"^[A-Za-z0-9_.-]{0,128}$")
+    expect_status: tuple[int, ...] = (200,)
+
+    @model_validator(mode="after")
+    def _codes(self) -> Self:
+        if not self.expect_status:
+            raise ValueError("a grpc check needs at least one expect_status code")
+        if any(not 100 <= c <= 599 for c in self.expect_status):
+            raise ValueError("expect_status codes must be between 100 and 599")
+        return self
+
+
 class HealthMonitor(TenantOwned):
     """Active health check, shareable across pools.
 
     Attributes:
-        type: ``tcp`` connect check, ``http`` request check or ``udp`` probe (UDP services only).
+        type: ``tcp`` connect check, ``http`` request check, ``grpc`` HTTP/2 health-method probe
+            (pools with ``backend_protocol`` ``h2``/``h2c`` only, ADR 0227) or ``udp`` probe (UDP
+            services only).
         port: Port to check. Required when pool members have no port of their own; otherwise
             members are checked on their service port.
-        interval_s: Seconds between checks.
+        interval_s: Seconds between checks; also the interval of a ``grpc`` monitor.
         timeout_s: Seconds before a check fails.
         rise: Consecutive successes to mark a server up.
         fall: Consecutive failures to mark a server down.
-        http: Request details; required for ``http`` and forbidden for ``tcp`` and ``udp``.
+        http: Request details; required for ``http`` and forbidden for ``tcp``, ``grpc`` and
+            ``udp``.
+        grpc: gRPC health details; required for ``grpc`` and forbidden for every other type.
         udp: Optional probe details; only valid for ``udp``.
         preset: Protocol-aware check for a ``tcp`` monitor: ``redis``, ``smtp``, ``ldap`` or
             ``mysql``. Without one a ``tcp`` monitor only connects.
@@ -1291,6 +1332,7 @@ class HealthMonitor(TenantOwned):
     rise: int = Field(default=2, ge=1, le=100)
     fall: int = Field(default=3, ge=1, le=100)
     http: HttpCheck | None = None
+    grpc: GrpcCheck | None = None
     udp: UdpCheck | None = None
     preset: TcpPreset | None = None
     sni: Hostname | None = None
@@ -1305,6 +1347,10 @@ class HealthMonitor(TenantOwned):
             raise ValueError("an http monitor needs an http block")
         if self.type is not MonitorType.HTTP and self.http is not None:
             raise ValueError(f"a {self.type} monitor cannot have an http block")
+        if self.type is MonitorType.GRPC and self.grpc is None:
+            raise ValueError("a grpc monitor needs a grpc block")
+        if self.type is not MonitorType.GRPC and self.grpc is not None:
+            raise ValueError(f"a {self.type} monitor cannot have a grpc block")
         if self.type is not MonitorType.UDP and self.udp is not None:
             raise ValueError(f"a {self.type} monitor cannot have a udp block")
         return self
