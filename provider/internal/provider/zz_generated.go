@@ -174,9 +174,9 @@ var Definitions = []Definition{
 		Slug:      "pools",
 		Doc:       "",
 		Resource:  true,
-		PatchKeys: []string{"algorithm", "backend_protocol", "client_certificate_id", "discovery", "health_monitor_id", "labels", "members", "name", "passive_check", "persistence", "send_proxy", "slow_start_s", "tls", "tls_verify", "tunnel_timeout_s"},
+		PatchKeys: []string{"algorithm", "backend_protocol", "client_certificate_id", "discovery", "hash_key", "health_monitor_id", "labels", "members", "name", "passive_check", "persistence", "send_proxy", "slow_start_s", "tls", "tls_verify", "tunnel_timeout_s"},
 		Attrs: []Attr{
-			{Name: "algorithm", Kind: KindString, Doc: "Pool load-balancing algorithm.", Enum: []string{"roundrobin", "leastconn", "source", "random"}},
+			{Name: "algorithm", Kind: KindString, Doc: "Pool load-balancing algorithm.", Enum: []string{"roundrobin", "leastconn", "source", "random", "uri", "hdr", "url_param"}},
 			{Name: "backend_protocol", Kind: KindString, Enum: []string{"http1", "h2", "h2c"}},
 			{Name: "client_certificate_id", Kind: KindString},
 			{Name: "discovery", Kind: KindObject, Doc: "Fill a pool's members from Proxmox guests that carry a tag (ADR 0145).", Attrs: []Attr{
@@ -186,6 +186,7 @@ var Definitions = []Definition{
 				{Name: "tag", Kind: KindString, Required: true},
 				{Name: "weight", Kind: KindInt},
 			}},
+			{Name: "hash_key", Kind: KindString},
 			{Name: "health_monitor_id", Kind: KindString},
 			{Name: "labels", Kind: KindMap, Elem: &Attr{Kind: KindString}},
 			{Name: "members", Kind: KindList, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
@@ -223,11 +224,13 @@ var Definitions = []Definition{
 			{Name: "fall", Kind: KindInt},
 			{Name: "http", Kind: KindObject, Doc: "HTTP health check request and expectation.", Attrs: []Attr{
 				{Name: "expect_body", Kind: KindString},
+				{Name: "expect_body_regex", Kind: KindString},
 				{Name: "expect_header", Kind: KindObject, Doc: "A response header the health check must see, optionally with an exact value.", Attrs: []Attr{
 					{Name: "name", Kind: KindString, Required: true},
 					{Name: "value", Kind: KindString},
 				}},
 				{Name: "expect_status", Kind: KindList, Elem: &Attr{Kind: KindInt}},
+				{Name: "expect_status_regex", Kind: KindString},
 				{Name: "host", Kind: KindString},
 				{Name: "method", Kind: KindString, Enum: []string{"GET", "HEAD", "OPTIONS"}},
 				{Name: "path", Kind: KindString},

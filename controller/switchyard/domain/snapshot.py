@@ -26,7 +26,9 @@ from switchyard.domain.field_rules import UDP_FORBIDDEN_PORT_FIELDS, UDP_FORBIDD
 from switchyard.domain.models import (
     ATTACHABLE_POLICY_KINDS,
     CACHE_MAX_MB_PER_GROUP,
+    HASH_ALGORITHMS,
     HTTP_ONLY_PERSISTENCE,
+    UDP_UNSUPPORTED_ALGORITHMS,
     AccessPolicySet,
     Algorithm,
     AllowListPolicySet,
@@ -174,6 +176,9 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
     - ``pool_protocol_mismatch``: a pool is not shared between services of different protocols.
     - ``udp_field_not_allowed``, ``udp_algorithm_unsupported``, ``udp_member_port_required`` and
       ``monitor_protocol_mismatch``: the UDP field rules of ADR 0020, each on the offending field.
+    - ``hash_key_required``, ``hash_key_unexpected`` and ``hash_key_invalid``: a pool's ``uri``,
+      ``hdr`` and ``url_param`` algorithms hash a request attribute, so ``hash_key`` must be set
+      (and safe) for them and unset otherwise (ADR 0224).
     - ``duplicate_route``: a host/path match appears at most once per service.
     - ``certificate_coverage``: every route host of a TLS-terminating HTTP service is covered by
       a SAN of the service's certificates (wildcards cover exactly one label).
@@ -461,6 +466,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         listeners += [v.Listener(s.name, s.vip, p.port, transport) for p in s.ports]
 
     _check_udp_pools(snapshot, pool_protocols, monitors, problems)
+    _check_hash_balancing(snapshot, problems)
     _check_dns_names(snapshot, problems)
     _check_failover(snapshot, problems)
     _check_cache_quota(snapshot, problems)
@@ -861,6 +867,45 @@ def _check_ipvs_forwarding(
             )
 
 
+def _check_hash_balancing(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """A hash algorithm needs a safe key; every other algorithm takes none (ADR 0224).
+
+    The point is that ``balance hdr(...)``/``url_param(...)`` cannot be rendered with an empty
+    argument and ``hash_key`` must not sit unused on a pool, where it would look effective.
+    """
+    for pool in snapshot.pools:
+        path = f"pools.{pool.name}.hash_key"
+        if pool.algorithm in (Algorithm.HDR, Algorithm.URL_PARAM):
+            if pool.hash_key is None:
+                problems.append(
+                    Problem(
+                        path,
+                        "hash_key_required",
+                        f"algorithm {pool.algorithm.value} needs a hash key: the header or URL "
+                        "parameter name to hash",
+                    )
+                )
+                continue
+            try:
+                v.validate_hash_key(pool.hash_key)
+            except ValueError:
+                problems.append(
+                    Problem(
+                        path,
+                        "hash_key_invalid",
+                        "hash key must be 1-64 characters of letters, digits, '_', '.' and '-'",
+                    )
+                )
+        elif pool.hash_key is not None:
+            problems.append(
+                Problem(
+                    path,
+                    "hash_key_unexpected",
+                    f"a hash key is only used by hdr and url_param, not {pool.algorithm.value}",
+                )
+            )
+
+
 def _check_udp_pools(
     snapshot: Snapshot,
     pool_protocols: Mapping[UUID, set[Protocol]],
@@ -870,7 +915,8 @@ def _check_udp_pools(
     """Check pools against the protocol of the services that use them.
 
     ``udp`` monitors belong on UDP pools only, ``tcp``/``http`` monitors on UDP pools never, and a
-    UDP pool cannot use TLS, persistence, ``random`` or members without a port.
+    UDP pool cannot use TLS, persistence, a hash key, ``random``/``uri``/``hdr``/``url_param`` or
+    members without a port (IPVS has no such scheduler, ADR 0020 and ADR 0224).
     """
     for pool in snapshot.pools:
         protocols = pool_protocols.get(pool.id, set())
@@ -891,7 +937,13 @@ def _check_udp_pools(
                         "persistence is not valid on a udp pool; use the source algorithm",
                     )
                 )
-            for field in ("passive_check", "slow_start_s", "send_proxy", "client_certificate_id"):
+            for field in (
+                "passive_check",
+                "slow_start_s",
+                "send_proxy",
+                "client_certificate_id",
+                "hash_key",
+            ):
                 if getattr(pool, field) is not None:
                     problems.append(
                         Problem(
@@ -916,12 +968,13 @@ def _check_udp_pools(
                         "backend_protocol is not valid on a udp pool",
                     )
                 )
-            if pool.algorithm is Algorithm.RANDOM:
+            if pool.algorithm in UDP_UNSUPPORTED_ALGORITHMS:
                 problems.append(
                     Problem(
                         f"{base}.algorithm",
                         "udp_algorithm_unsupported",
-                        "IPVS has no random scheduler; use roundrobin, leastconn or source",
+                        f"IPVS has no {pool.algorithm.value} scheduler; use roundrobin, leastconn "
+                        "or source",
                     )
                 )
             for member in pool.members:
@@ -974,8 +1027,9 @@ def _check_live_traffic(
     """Passive checks and slow start build on the health monitor; ``layer7`` needs HTTP.
 
     Codes: ``needs_health_monitor`` (on ``passive_check`` or ``slow_start_s``),
-    ``passive_check_layer7_needs_http`` and ``persistence_needs_http`` (cookie, header and URI
-    persistence on a pool a ``tcp`` service uses).
+    ``passive_check_layer7_needs_http``, ``persistence_needs_http`` (cookie, header and URI
+    persistence on a pool a ``tcp`` service uses) and ``hash_key_needs_http`` (the ``uri``, ``hdr``
+    and ``url_param`` algorithms, which read an HTTP request attribute; ADR 0224).
     """
     if pool.backend_protocol != "http1" and Protocol.TCP in protocols:
         problems.append(
@@ -992,6 +1046,15 @@ def _check_live_traffic(
                 "persistence_needs_http",
                 f"{pool.persistence.type} persistence needs a pool used only by http services; "
                 "use source_ip for tcp",
+            )
+        )
+    if pool.algorithm in HASH_ALGORITHMS and Protocol.TCP in protocols:
+        problems.append(
+            Problem(
+                f"{base}.algorithm",
+                "hash_key_needs_http",
+                f"{pool.algorithm.value} balancing reads an HTTP request attribute, so the pool "
+                "needs a pool used only by http services; use source or leastconn for tcp",
             )
         )
     for field in ("passive_check", "slow_start_s"):

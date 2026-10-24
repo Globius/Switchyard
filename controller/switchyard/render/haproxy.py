@@ -1563,7 +1563,7 @@ class _Renderer:
 
     def _backend(self, pool: dm.Pool, mode: str) -> dict[str, Any]:
         monitor = self.monitors.get(pool.health_monitor_id) if pool.health_monitor_id else None
-        lines: list[str] = [f"mode {mode}", f"balance {pool.algorithm.value}"]
+        lines: list[str] = [f"mode {mode}", self._balance(pool)]
         if pool.persistence is not None:
             lines += self._persistence_lines(pool.persistence, self.group.peers is not None)
         if pool.tunnel_timeout_s is not None:
@@ -1572,6 +1572,25 @@ class _Renderer:
             lines += self._monitor_lines(monitor)
         servers = sorted(self._server(pool, m, monitor, mode) for m in pool.members)
         return {"name": self._backend_name(pool.id), "lines": lines, "servers": servers}
+
+    @staticmethod
+    def _balance(pool: dm.Pool) -> str:
+        """The ``balance`` line of one backend (ADR 0224).
+
+        ``hash-type`` stays at HAProxy's default (``map-based``): the controller has no per-pool
+        knob for it, and the default keeps a key on the same server after a member leaves.
+
+        Example:
+            >>> import uuid
+            >>> p = dm.Pool(tenant_id=uuid.UUID(int=2), id=uuid.UUID(int=1), name="cache",
+            ...             algorithm=dm.Algorithm.HDR, hash_key="X-Cache-Key")
+            >>> _Renderer._balance(p)
+            'balance hdr(X-Cache-Key)'
+        """
+        if pool.algorithm in (dm.Algorithm.HDR, dm.Algorithm.URL_PARAM):
+            key = esc.hash_key(_need(pool.hash_key, f"{pool.algorithm.value} hash key"))
+            return f"balance {pool.algorithm.value}({key})"
+        return f"balance {pool.algorithm.value}"
 
     @staticmethod
     def _persistence_lines(persistence: dm.Persistence, peers: bool) -> list[str]:

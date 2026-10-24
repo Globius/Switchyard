@@ -698,7 +698,7 @@ PROTOCOL_RULES = {
         "routes",
     ],
     "port_forbidden": ["tls", "proxy_protocol", "http2", "https_redirect_port"],
-    "pool_forbidden": ["tls", "tls_verify", "persistence"],
+    "pool_forbidden": ["tls", "tls_verify", "persistence", "hash_key"],
     "algorithms": ["roundrobin", "leastconn", "source"],
     "monitor_types": ["udp"],
     "member_port_required": True,

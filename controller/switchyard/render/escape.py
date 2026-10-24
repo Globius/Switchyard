@@ -38,6 +38,7 @@ _HEADER = re.compile(r"[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?")
 _VALUE = re.compile(r"[A-Za-z0-9 ._~/:@+,;=*()&!'-]+")
 _PATH = re.compile(r"/[A-Za-z0-9._~/%:@+,;=-]*")
 _PARAM = re.compile(r"[A-Za-z0-9_.-]+")
+_HASH_KEY = re.compile(r"[A-Za-z0-9_.-]{1,64}")
 
 
 def ident(value: str) -> str:
@@ -97,6 +98,22 @@ def header_name(value: str) -> str:
     """
     if not _HEADER.fullmatch(value):
         raise RenderError(f"unsafe header name {value!r}")
+    return value
+
+
+def hash_key(value: str) -> str:
+    """Return ``value`` if it is safe inside ``balance hdr(...)`` or ``balance url_param(...)``.
+
+    Example:
+        >>> hash_key("X-Cache-Key")
+        'X-Cache-Key'
+        >>> hash_key("%[req.hdr(host)]")
+        Traceback (most recent call last):
+            ...
+        switchyard.render.escape.RenderError: unsafe hash key '%[req.hdr(host)]'
+    """
+    if not _HASH_KEY.fullmatch(value):
+        raise RenderError(f"unsafe hash key {value!r}")
     return value
 
 

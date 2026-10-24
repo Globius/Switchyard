@@ -60,6 +60,7 @@ CheckRegex = Annotated[str, AfterValidator(_check_regex)]
 SecretRef = Annotated[str, AfterValidator(v.validate_secret_ref)]
 HeaderValue = Annotated[str, AfterValidator(v.validate_header_value)]
 QueryParam = Annotated[str, AfterValidator(v.validate_query_param)]
+HashKey = Annotated[str, AfterValidator(v.validate_hash_key)]
 Body = Annotated[str, AfterValidator(v.validate_body)]
 Issuer = Annotated[str, AfterValidator(v.validate_issuer)]
 JwksUrl = Annotated[str, AfterValidator(v.validate_jwks_url)]
@@ -117,12 +118,25 @@ class Protocol(enum.StrEnum):
 
 
 class Algorithm(enum.StrEnum):
-    """Pool load-balancing algorithm."""
+    """Pool load-balancing algorithm.
+
+    ``uri``, ``hdr`` and ``url_param`` hash a request attribute instead of counting connections, so
+    a pool of caches or shards keeps one key on one member (ADR 0224); each needs ``Pool.hash_key``.
+    """
 
     ROUNDROBIN = "roundrobin"
     LEASTCONN = "leastconn"
     SOURCE = "source"
     RANDOM = "random"
+    URI = "uri"
+    HDR = "hdr"
+    URL_PARAM = "url_param"
+
+
+#: Algorithms that hash a request attribute and therefore need a ``Pool.hash_key``.
+HASH_ALGORITHMS = frozenset({Algorithm.URI, Algorithm.HDR, Algorithm.URL_PARAM})
+#: Algorithms HAProxy has but IPVS (the data path of a ``udp`` service, ADR 0020) has not.
+UDP_UNSUPPORTED_ALGORITHMS = frozenset({Algorithm.RANDOM}) | HASH_ALGORITHMS
 
 
 class AdminState(enum.StrEnum):
@@ -1106,6 +1120,9 @@ class Pool(TenantOwned):
 
     Attributes:
         algorithm: Load-balancing algorithm.
+        hash_key: Header name (``hdr``) or URL parameter name (``url_param``) whose value picks the
+            member; ``uri`` hashes the path and needs none, and the counting algorithms reject one.
+            Required by the three hash algorithms (ADR 0224).
         persistence: Optional persistence profile.
         health_monitor_id: Optional shared health monitor.
         tls: Connect to members over TLS.
@@ -1129,6 +1146,7 @@ class Pool(TenantOwned):
     """
 
     algorithm: Algorithm = Algorithm.ROUNDROBIN
+    hash_key: HashKey | None = None
     persistence: Persistence | None = None
     health_monitor_id: UUID | None = None
     tls: bool = False

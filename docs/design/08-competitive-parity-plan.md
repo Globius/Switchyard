@@ -60,7 +60,7 @@ priorities are those of revision 2 and are kept for the record; 4.0 says what is
 | WebSocket | yes | yes | ALB | App GW | part: works as an HTTP/1.1 upgrade with `tunnel_timeout_s`; nothing to switch on, and no test asserts an upgrade | HAProxy | S |
 | Algorithms: RR, least conn, source hash, random | yes | yes | RR, LOR, random (ALB), flow hash (NLB) | hash, 5-tuple | done (4) | HAProxy | |
 | Weighted RR, ratio, dynamic ratio, fastest, observed, predictive | yes | yes | no | no | weights only | HAProxy | L |
-| URI, header and parameter hash balancing | yes | iRule | no | no | **no**: `Algorithm` is `roundrobin`, `leastconn`, `source`, `random`, and `balance uri`, `balance hdr` or `balance url_param` is never emitted | HAProxy | S |
+| URI, header and parameter hash balancing | yes | iRule | no | no | done (ADR 0224): `balance uri`, `balance hdr(<name>)` and `balance url_param(<name>)` from `Algorithm` `uri`/`hdr`/`url_param` plus `Pool.hash_key`; `hash-type` stays HAProxy's default | HAProxy | S |
 | Server weights, drain, disable | yes | yes | yes (deregistration delay) | yes | done | HAProxy | |
 | Slow start | yes | yes | ALB | no | done (ADR 0066) | HAProxy | |
 | Connection limits per member / per service | yes | yes | no | no | part: per-member `maxconn`, per-source `conn_cur`/`conn_rate`, per-rule `max_concurrent`; no per-service cap | HAProxy | S |
@@ -237,7 +237,7 @@ front of a route, a Dex broker supplies the identity providers, and the SE passe
 1. **Core L4/L7 is at parity or ahead** on tenancy, audit, change control and IPv6. The gaps are not in routing or TLS.
 2. **HTTP policy is no longer the distance.** Cookie, header and URI persistence, header and prefix rewrite, fixed
    responses, error pages, richer matches, weighted pools, rate limits and concurrency limits were the largest block in
-   revision 2, and all shipped. What is left there is narrow: hash-based balancing, regex rewrite, a per-URL rate-limit
+   revision 2, and all shipped. What is left there is narrow: regex rewrite, a per-URL rate-limit
    key and regex health-check expectations.
 3. **Observability is built; its workflow is not.** Metrics, per-VS readback, request logs, tenant-scoped Grafana and
    webhook/SMTP/chat delivery exist. Acknowledgement, silencing, escalation and delivery retry do not, so an on-call
@@ -435,6 +435,6 @@ HAProxy feature. Ordered by the cost of not having it.
 7. **Lifecycle detail**: a running job cannot be cancelled (only a queued one), the audit table has no retention or SIEM
    forward, backups are scheduled by host cron with no automated verify or staleness alert, VS-derived DNS records work
    on Cloudflare only, and the Git mirror is a push-only GitLab mirror rather than a GitOps source.
-8. **Data-plane model holes**: no hash-based balancing (`balance uri`, `balance hdr` or `balance url_param`), no gRPC or HTTP/2 health check, no
+8. **Data-plane model holes**: no gRPC or HTTP/2 health check, no
    regex health-check expectation, no per-URL rate-limit key, no JSON body schema validation, and WebSocket support is
    asserted but untested.

@@ -11,7 +11,7 @@ Both read the same table, so they cannot drift apart. See ADR 0020.
 
 from dataclasses import dataclass
 
-from switchyard.domain.models import Algorithm, MonitorType, Protocol
+from switchyard.domain.models import UDP_UNSUPPORTED_ALGORITHMS, Algorithm, MonitorType, Protocol
 
 #: Fields of a virtual service that a UDP service cannot use.
 UDP_FORBIDDEN_SERVICE_FIELDS = (
@@ -83,8 +83,9 @@ def protocol_rules(protocol: Protocol) -> ProtocolRules:
                 "slow_start_s",
                 "send_proxy",
                 "client_certificate_id",
+                "hash_key",
             ),
-            tuple(a for a in Algorithm if a is not Algorithm.RANDOM),
+            tuple(a for a in Algorithm if a not in UDP_UNSUPPORTED_ALGORITHMS),
             (MonitorType.UDP,),
             True,
         )

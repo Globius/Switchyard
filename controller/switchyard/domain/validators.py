@@ -29,6 +29,9 @@ _VALUE_CHARS = r"A-Za-z0-9._~/:@+,;=*()&!'-"
 _HEADER_VALUE = re.compile(rf"^[{_VALUE_CHARS}]([ {_VALUE_CHARS}]{{0,254}}[{_VALUE_CHARS}])?$")
 _BAD_VALUE = "header value must be 1-256 characters without quotes, backslash, $, % or #"
 _QUERY_PARAM = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+# A balance key is a header name or a URL parameter name used unquoted inside hdr()/url_param():
+# token characters only, and no '%' (HAProxy log-format sigil).
+_HASH_KEY = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 _SECRET_REF = re.compile(r"^[a-z0-9][a-z0-9/_.-]{0,254}$")
 
 
@@ -549,6 +552,28 @@ def validate_query_param(value: str) -> str:
         raise ValueError(
             "query parameter name must be 1-64 characters of letters, digits, '_', '.' or '-'"
         )
+    return value
+
+
+def validate_hash_key(value: str) -> str:
+    """Validate a load-balancing hash key: an HTTP header name or a URL parameter name.
+
+    Both HAProxy forms take the key unquoted inside ``hdr(...)``/``url_param(...)``, so the key is
+    limited to the HTTP token characters ``A-Z a-z 0-9 _ . -``, 1-64 characters. ``%`` is refused on
+    purpose: HAProxy would read ``%[...]`` as a log-format expression rather than a literal name.
+
+    Example:
+        >>> validate_hash_key("X-Cache-Key")
+        'X-Cache-Key'
+        >>> validate_hash_key("session.id")
+        'session.id'
+        >>> validate_hash_key("%[req.hdr(host)]")
+        Traceback (most recent call last):
+            ...
+        ValueError: hash key must be 1-64 characters of letters, digits, '_', '.' and '-'
+    """
+    if not _HASH_KEY.fullmatch(value):
+        raise ValueError("hash key must be 1-64 characters of letters, digits, '_', '.' and '-'")
     return value
 
 
