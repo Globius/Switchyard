@@ -76,6 +76,22 @@ ACME_MAP = f"{BASE_DIR}/maps/acme-http01.map"
 CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
 PEERS_SECTION = "sy_peers"
 
+#: The access-log format of every HTTP frontend: one line per request, the shape Vector parses
+#: (``se-image/files/vector.yaml``) and ``docs/render.md`` documents field by field. It keeps
+#: HAProxy's ``option httplog`` prefix (client, frontend, backend/server, timings, status, bytes,
+#: flags, captured headers, request line) and adds labelled fields between the bytes and the flags:
+#: the request id, the TLS SNI, the request host, the upstream address and port, and the retries.
+#: ``%ID`` is HAProxy's own id (``unique-id-format %[uuid()]`` in ``defaults``), so the controller
+#: is not in the path. ``%f`` rather than ``%ft`` keeps the frontend name free of HAProxy's TLS
+#: ``~`` suffix, which the Vector label and the tenant's service name would not match. TCP
+#: frontends keep ``option tcplog`` and are not covered by this format.
+LOG_FORMAT = (
+    "%ci:%cp [%tr] %f %b/%s %TR/%Tw/%Tc/%Tr/%Ta %ST %B"
+    " request_id=%ID sni=%{+Q}[ssl_fc_sni] host=%{+Q}[var(txn.host)]"
+    " upstream=%[bc_dst] upstream_port=%[bc_dst_port] retries=%rc"
+    " %tsc %ac/%fc/%bc/%sc %sq/%bq %hr %hs %{+Q}r"
+)
+
 #: Protocol-aware health checks HAProxy ships, by monitor ``preset`` (ADR 0108).
 _TCP_PRESETS = {
     "redis": "option redis-check",
@@ -462,6 +478,7 @@ class _Renderer:
                 lua_loads=self.lua_loads,
                 waf_backend=waf.backend_lines() if self.uses_waf else [],
                 crowdsec_backend=crowdsec.backend_lines() if self.uses_crowdsec else [],
+                log_format=LOG_FORMAT,
             )
 
         # The fingerprint covers every file; the config is hashed with a placeholder in its own

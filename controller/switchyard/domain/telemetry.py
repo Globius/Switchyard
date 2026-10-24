@@ -89,6 +89,26 @@ class AccessLogEntry(Model):
     status: int
     bytes: int
     duration_ms: int = Field(description="Total time of the request (HAProxy `Tt`).")
+    request_id: str | None = Field(
+        default=None,
+        description="HAProxy's unique id for the request (`%ID`), generated on the engine with no "
+        "controller involvement; `None` for a line from an engine that still logs the default "
+        "httplog.",
+    )
+    sni: str | None = Field(default=None, description="TLS SNI of the connection, if any.")
+    host: str | None = Field(
+        default=None,
+        description="Host the request asked for (first Host header field, lowercased).",
+    )
+    upstream: str | None = Field(
+        default=None, description="Address of the server the request was sent to."
+    )
+    upstream_port: int | None = Field(
+        default=None, description="Port of the server the request was sent to."
+    )
+    retries: int | None = Field(
+        default=None, description="Retries before the server answered (HAProxy `%rc`)."
+    )
     method: str | None = None
     path: str | None = None
     waf: bool = Field(

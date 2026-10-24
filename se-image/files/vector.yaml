@@ -2,6 +2,9 @@
 # when its URL is set in /etc/switchyard/vector.env) are written at start by sy-vector-sinks into
 # /run/switchyard-vector/sinks.yaml (ADR 0221). Loki labels match controller/switchyard/adapters/telemetry.py:
 # `tenant` (id) and `frontend` (vs_<service>); tenant_name, se_group and engine are for dashboards.
+# The `parse` transform reads the access-log fields the renderer emits (request id, SNI, host, upstream, retries,
+# status, bytes, timings, see docs/render.md) as plain fields of the event: they change per request, so they are never
+# labels. OTLP ships them as attributes of the log record, not of the resource.
 # Values come from /etc/switchyard/vector.env, written by cloud-init (se-instance.yaml.tpl).
 sources:
   vector_metrics:
@@ -32,10 +35,31 @@ transforms:
     inputs: [haproxy]
     source: |
       msg = string!(.message)
-      parsed, err = parse_regex(msg, r'(?P<client>\S+):\d+ \[[^\]]+\] (?P<frontend>\S+) (?P<backend>[^/\s]+)/\S+ ')
+      # One regex for the rendered `log-format` of the HTTP frontends (controller/switchyard/render/haproxy.py,
+      # LOG_FORMAT): the default httplog prefix, then the labelled fields this pipeline adds. The labelled
+      # block is optional, so a line from an engine that still logs the default httplog parses as before.
+      parsed, err = parse_regex(msg, r'(?P<client>\S+):\d+ \[(?P<date>[^\]]+)\] (?P<frontend>\S+) (?P<backend>[^/\s]+)/(?P<server>\S+) (?P<tq>-?\d+)/(?P<tw>-?\d+)/(?P<tc>-?\d+)/(?P<tr>-?\d+)/(?P<tt>\+?-?\d+) (?P<status>\d{3}) (?P<bytes>\d+)(?: request_id=(?P<request_id>\S+) sni=(?P<sni>"(?:[^"\\]|\\.)*"|-) host=(?P<host>"(?:[^"\\]|\\.)*"|-) upstream=(?P<upstream>\S*) upstream_port=(?P<upstream_port>-?\d*) retries=(?P<retries>\d+))?')
       if err != null { abort }
       .frontend = parsed.frontend
       .sy_service = "haproxy"
+      .status = to_int(parsed.status) ?? 0
+      .bytes = to_int(parsed.bytes) ?? 0
+      .timings_ms = { "queue": to_int(parsed.tq) ?? -1, "wait": to_int(parsed.tw) ?? -1, "connect": to_int(parsed.tc) ?? -1, "response": to_int(parsed.tr) ?? -1, "total": to_int(parsed.tt) ?? -1 }
+      # Kept as fields of the event, never as Loki labels: each one changes per request.
+      rid = string(parsed.request_id) ?? ""
+      if rid != "" { .sy_request_id = rid }
+      # `%{+Q}` wraps SNI and host in quotes and escapes what is inside; drop the quotes and keep the
+      # escaping, so a hostile Host header cannot split the line into fields.
+      sni = replace(string(parsed.sni) ?? "", r'^"|"$', "")
+      if sni != "" && sni != "-" { .sni = sni }
+      host = replace(string(parsed.host) ?? "", r'^"|"$', "")
+      if host != "" && host != "-" { .host = host }
+      upstream = string(parsed.upstream) ?? ""
+      if upstream != "" && upstream != "-" { .upstream = upstream }
+      upstream_port = string(parsed.upstream_port) ?? ""
+      if upstream_port != "" && upstream_port != "-" { .upstream_port = to_int(upstream_port) ?? 0 }
+      retries = string(parsed.retries) ?? ""
+      if retries != "" { .retries = to_int(retries) ?? 0 }
       .message = msg
   parse_waf:
     type: remap
@@ -63,10 +87,19 @@ transforms:
         { "key": "engine", "value": { "stringValue": get_env_var!("ENGINE") } },
         { "key": "frontend", "value": { "stringValue": string!(.frontend) } },
       ]
+      # The parsed access-log fields travel as attributes of the record, not of the resource: they change
+      # per request, so they must not become labels or series.
+      rec = []
+      if exists(.sy_request_id) { rec = push(rec, { "key": "request_id", "value": { "stringValue": string!(.sy_request_id) } }) }
+      if exists(.sni) { rec = push(rec, { "key": "sni", "value": { "stringValue": string!(.sni) } }) }
+      if exists(.host) { rec = push(rec, { "key": "host", "value": { "stringValue": string!(.host) } }) }
+      if exists(.upstream) { rec = push(rec, { "key": "upstream", "value": { "stringValue": string!(.upstream) } }) }
+      if exists(.upstream_port) { rec = push(rec, { "key": "upstream_port", "value": { "intValue": to_string(to_int!(.upstream_port)) } }) }
+      if exists(.retries) { rec = push(rec, { "key": "retries", "value": { "intValue": to_string(to_int!(.retries)) } }) }
       msg = string!(.message)
       . = { "resourceLogs": [ { "resource": { "attributes": attr }, "scopeLogs": [ { "scope": { "name": "switchyard-vector" },
         "logRecords": [ { "timeUnixNano": to_string(ts), "observedTimeUnixNano": to_string(ts), "severityNumber": 9,
-        "severityText": "INFO", "body": { "stringValue": msg } } ] } ] } ] }
+        "severityText": "INFO", "attributes": rec, "body": { "stringValue": msg } } ] } ] } ] }
 
 sinks:
   # Vector's own counters, including the events each log sink's buffer discarded

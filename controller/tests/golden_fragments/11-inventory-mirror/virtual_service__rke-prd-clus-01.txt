@@ -1,4 +1,4 @@
-==> haproxy/haproxy.cfg (haproxy, lines 57-64)
+==> haproxy/haproxy.cfg (haproxy, lines 59-66)
 frontend vs_rke-prd-clus-01
     mode tcp
     bind 192.0.2.27:80

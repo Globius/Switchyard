@@ -56,6 +56,14 @@ echo "$out" | grep -q 'name: TRUSTED_PROXY_CIDRS' || fail "proxy trust must be c
 out=$(render --set tls.secretName=sy-tls --set proxy.nodeSelector.role=edge   --set proxy.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key=edge)
 echo "$out" | grep -q 'role: edge' || fail "proxy.nodeSelector must be rendered"
 echo "$out" | grep -q 'nodeAffinity:' || fail "proxy.affinity must be rendered"
+# 4e. Monitoring: nothing by default, both operator objects when asked, scraped with the metrics token.
+render --set tls.secretName=sy-tls | grep -q 'kind: ServiceMonitor' && fail "monitoring must be off by default"
+out=$(render --set tls.secretName=sy-tls --set monitoring.serviceMonitor.enabled=true --set monitoring.prometheusRule.enabled=true)
+echo "$out" | grep -q 'kind: ServiceMonitor' || fail "monitoring.serviceMonitor.enabled must render a ServiceMonitor"
+echo "$out" | grep -q 'kind: PrometheusRule' || fail "monitoring.prometheusRule.enabled must render a PrometheusRule"
+echo "$out" | grep -q 'path: /metrics' || fail "the ServiceMonitor must scrape /metrics"
+echo "$out" | grep -q 'key: metrics-token' || fail "the ServiceMonitor must use the scrape token"
+echo "$out" | grep -q 'alert: ControllerStatusPollStale' || fail "the rule must carry the stale status poll alert"
 # 5. Required values are enforced.
 helm template sy . >/dev/null 2>&1 && fail "rendering without publicUrl must fail"
 echo "helm chart checks passed"

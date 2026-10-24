@@ -16,6 +16,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from ipaddress import ip_interface
+from uuid import UUID
 
 from sqlalchemy import func, select
 
@@ -81,58 +82,253 @@ def render_exposition(families: Iterable[Family]) -> str:
     return "\n".join(lines) + "\n"
 
 
-async def collect_metrics(db: Databases, *, now: datetime | None = None) -> list[Family]:
-    """Read the metrics from the database.
+#: The ``tenant`` label of work that belongs to no tenant (housekeeping and system jobs).
+SYSTEM_TENANT = "system"
 
-    Metrics: ``switchyard_info``, ``switchyard_jobs`` (by kind and state),
-    ``switchyard_job_duration_seconds`` (a summary of finished jobs by kind and outcome),
-    ``switchyard_change_sets`` (by state; ``failed`` are apply failures),
-    ``switchyard_engines`` (by reachability), ``switchyard_engines_drifted``,
-    ``switchyard_drift_findings`` and ``switchyard_status_age_seconds`` (how stale the newest
-    engine poll is, so a dead poller can be alerted on).
+
+@dataclass(frozen=True)
+class EngineSample:
+    """One engine's latest status poll."""
+
+    tenant: UUID
+    reachable: bool
+    drifted: bool
+    findings: int
+    observed_at: datetime
+
+
+@dataclass(frozen=True)
+class ServiceSample:
+    """One virtual service, for the per-service series."""
+
+    tenant: UUID
+    name: str
+    protocol: str
+    enabled: bool
+
+
+@dataclass(frozen=True)
+class MetricRows:
+    """What :func:`collect_metrics` reads, so that :func:`metric_families` stays a pure function."""
+
+    jobs: tuple[tuple[UUID | None, str, str, int], ...] = ()
+    job_seconds: tuple[tuple[UUID | None, str, str, int, float], ...] = ()
+    change_sets: tuple[tuple[UUID, str, int], ...] = ()
+    engines: tuple[EngineSample, ...] = ()
+    services: tuple[ServiceSample, ...] = ()
+
+
+def tenant_label(tenant: UUID | None) -> str:
+    """The ``tenant`` label value: the tenant id, or :data:`SYSTEM_TENANT` for work without one."""
+    return SYSTEM_TENANT if tenant is None else str(tenant)
+
+
+def metric_families(rows: MetricRows, *, now: datetime, version: str) -> list[Family]:
+    """The controller's families, every series labelled by tenant (and, per service, by name).
+
+    Metrics: ``switchyard_info``, ``switchyard_jobs`` (by tenant, kind and state),
+    ``switchyard_job_duration_seconds`` (a summary of finished jobs by tenant, kind and outcome),
+    ``switchyard_change_sets`` (by tenant and state; ``failed`` are apply failures),
+    ``switchyard_engines`` (by tenant and reachability), ``switchyard_engines_drifted``,
+    ``switchyard_drift_findings``, ``switchyard_status_age_seconds`` (how stale the newest engine
+    poll of that tenant is, so a dead poller can be alerted on) and ``switchyard_virtual_services``
+    (one series of 1 per virtual service, so a tenant's series join to the objects it owns).
+
+    **Cardinality argument.** Every label value is a point in a set whose size the configuration
+    fixes; no label comes from request data:
+
+    - ``tenant`` is the id of a ``tenant`` row (the id every counted row references through a
+      foreign key), plus the single literal ``system`` for jobs that belong to no tenant. The
+      dimension is the number of tenants.
+    - ``kind``, ``state``, ``outcome``, ``protocol`` and ``enabled`` are enums of the domain
+      models, so each adds a fixed number of values.
+    - ``switchyard_info`` carries no tenant label: it is one sample per build, not tenant data.
+    - ``service`` is a virtual service's own name, read from ``virtual_service``: one series per
+      row, so the dimension is bounded by the tenant's virtual services, and deleting one drops
+      its series. It is never a value a caller sends.
+    - Per-request values (request id, host, SNI, client address, upstream) are deliberately absent:
+      they belong to the access-log line, where Loki owns per-request cardinality (ADR 0052).
+
+    A family therefore has at most ``tenants x |enum values|`` series, times the number of virtual
+    services for the per-service family — the size of the configuration, not of the traffic.
+
+    Example:
+        >>> rows = MetricRows(services=(ServiceSample(UUID(int=7), "shop", "http", True),))
+        >>> f = {x.name: x for x in metric_families(rows, now=datetime.now(UTC), version="1")}
+        >>> f["switchyard_virtual_services"].samples[0][1]["service"]
+        'shop'
     """
-    now = now or datetime.now(UTC)
     info = Family("switchyard_info", "gauge", "Controller build information.")
-    info.add(1, version=__version__)
-    jobs = Family("switchyard_jobs", "gauge", "Jobs in the queue, by kind and state.")
+    info.add(1, version=version)
+    jobs = Family("switchyard_jobs", "gauge", "Jobs in the queue, by tenant, kind and state.")
     durations = Family(
         "switchyard_job_duration_seconds",
         "summary",
-        "Run time of finished jobs, by kind and outcome (jobs older than the retention are gone).",
+        "Run time of finished jobs, by tenant, kind and outcome (retention removes old rows).",
     )
-    change_sets = Family("switchyard_change_sets", "gauge", "Change sets by state.")
-    engines = Family("switchyard_engines", "gauge", "Enabled engines by reachability.")
-    drifted = Family("switchyard_engines_drifted", "gauge", "Engines whose running config drifted.")
-    findings = Family("switchyard_drift_findings", "gauge", "Drift findings across all engines.")
+    change_sets = Family("switchyard_change_sets", "gauge", "Change sets by tenant and state.")
+    engines = Family("switchyard_engines", "gauge", "Enabled engines by tenant and reachability.")
+    drifted = Family(
+        "switchyard_engines_drifted", "gauge", "Engines whose running config drifted, by tenant."
+    )
+    findings = Family("switchyard_drift_findings", "gauge", "Drift findings, by tenant.")
     age = Family(
-        "switchyard_status_age_seconds", "gauge", "Seconds since the newest engine status poll."
+        "switchyard_status_age_seconds",
+        "gauge",
+        "Seconds since the newest engine status poll of that tenant.",
     )
+    services = Family(
+        "switchyard_virtual_services",
+        "gauge",
+        "Virtual services, one series per object (value 1), by tenant, name, protocol and state.",
+    )
+
+    for tenant, kind, state, count in sorted(
+        rows.jobs, key=lambda r: (tenant_label(r[0]), r[1], r[2])
+    ):
+        jobs.add(count, tenant=tenant_label(tenant), kind=kind, state=state)
+    for tenant, kind, state, count, total in sorted(
+        rows.job_seconds, key=lambda r: (tenant_label(r[0]), r[1], r[2])
+    ):
+        durations.add(count, "_count", tenant=tenant_label(tenant), kind=kind, outcome=state)
+        durations.add(float(total), "_sum", tenant=tenant_label(tenant), kind=kind, outcome=state)
+    for tenant, state, count in sorted(rows.change_sets, key=lambda r: (str(r[0]), r[1])):
+        change_sets.add(count, tenant=str(tenant), state=state)
+
+    reachable: dict[str, int] = {}
+    unreachable: dict[str, int] = {}
+    per_engine_drift: dict[str, int] = {}
+    per_engine_findings: dict[str, int] = {}
+    newest: dict[str, datetime] = {}
+    for engine in rows.engines:
+        owner = str(engine.tenant)
+        if engine.reachable:
+            reachable[owner] = reachable.get(owner, 0) + 1
+        else:
+            unreachable[owner] = unreachable.get(owner, 0) + 1
+        if engine.drifted:
+            per_engine_drift[owner] = per_engine_drift.get(owner, 0) + 1
+        per_engine_findings[owner] = per_engine_findings.get(owner, 0) + engine.findings
+        newest[owner] = max(newest.get(owner, engine.observed_at), engine.observed_at)
+    for owner, drifted_count in sorted(per_engine_drift.items()):
+        drifted.add(drifted_count, tenant=owner)
+    for owner, findings_count in sorted(per_engine_findings.items()):
+        findings.add(findings_count, tenant=owner)
+    for owner, observed_at in sorted(newest.items()):
+        age.add(max(0.0, (now - observed_at).total_seconds()), tenant=owner)
+    # Both reachability values for every tenant that has an engine, so a query does not have to
+    # distinguish "no unreachable engine" from "no engine".
+    for owner in sorted(set(reachable) | set(unreachable)):
+        engines.add(reachable.get(owner, 0), tenant=owner, reachable="true")
+        engines.add(unreachable.get(owner, 0), tenant=owner, reachable="false")
+
+    for service in sorted(rows.services, key=lambda s: (str(s.tenant), s.name)):
+        services.add(
+            1,
+            tenant=str(service.tenant),
+            service=service.name,
+            protocol=service.protocol,
+            enabled="true" if service.enabled else "false",
+        )
+    return [info, jobs, durations, change_sets, engines, drifted, findings, age, services]
+
+
+async def collect_metrics(db: Databases, *, now: datetime | None = None) -> list[Family]:
+    """Read the metrics from the database and label them per tenant.
+
+    Everything is grouped by ``tenant`` (the tenant id, as the telemetry contract uses) and the
+    per-service series carry the virtual service's own name. See :func:`metric_families` for the
+    families, the label sets and why they cannot grow without bound.
+
+    Example:
+        >>> print(render_exposition([f for f in metric_families(MetricRows(), now=datetime.now(UTC),
+        ...     version="0.1.0") if f.name == "switchyard_info"]), end="")
+        # HELP switchyard_info Controller build information.
+        # TYPE switchyard_info gauge
+        switchyard_info{version="0.1.0"} 1
+    """
+    now = now or datetime.now(UTC)
     async with admin_session(db.admin) as session:
-        for kind, state, count in await session.execute(
-            select(JobRow.kind, JobRow.state, func.count()).group_by(JobRow.kind, JobRow.state)
-        ):
-            jobs.add(count, kind=kind, state=state)
+        jobs = [
+            (tenant, kind, state, int(count))
+            for tenant, kind, state, count in (
+                await session.execute(
+                    select(JobRow.tenant_id, JobRow.kind, JobRow.state, func.count()).group_by(
+                        JobRow.tenant_id, JobRow.kind, JobRow.state
+                    )
+                )
+            ).all()
+        ]
         seconds = func.extract("epoch", JobRow.finished_at - JobRow.started_at)
-        for kind, state, count, total in await session.execute(
-            select(JobRow.kind, JobRow.state, func.count(), func.coalesce(func.sum(seconds), 0))
-            .where(JobRow.finished_at.is_not(None), JobRow.started_at.is_not(None))
-            .group_by(JobRow.kind, JobRow.state)
-        ):
-            durations.add(count, "_count", kind=kind, outcome=state)
-            durations.add(float(total), "_sum", kind=kind, outcome=state)
-        for state, count in await session.execute(
-            select(ChangeSetRow.state, func.count()).group_by(ChangeSetRow.state)
-        ):
-            change_sets.add(count, state=state)
-        status = (await session.execute(select(EngineStatusRow))).scalars().all()
-    reachable = sum(1 for s in status if s.reachable)
-    engines.add(reachable, reachable="true")
-    engines.add(len(status) - reachable, reachable="false")
-    drifted.add(sum(1 for s in status if s.drift))
-    findings.add(sum(len(s.drift) for s in status))
-    if status:
-        age.add(max(0.0, (now - max(s.observed_at for s in status)).total_seconds()))
-    return [info, jobs, durations, change_sets, engines, drifted, findings, age]
+        job_seconds = [
+            (tenant, kind, state, int(count), float(total))
+            for tenant, kind, state, count, total in (
+                await session.execute(
+                    select(
+                        JobRow.tenant_id,
+                        JobRow.kind,
+                        JobRow.state,
+                        func.count(),
+                        func.coalesce(func.sum(seconds), 0),
+                    )
+                    .where(JobRow.finished_at.is_not(None), JobRow.started_at.is_not(None))
+                    .group_by(JobRow.tenant_id, JobRow.kind, JobRow.state)
+                )
+            ).all()
+        ]
+        change_sets = [
+            (tenant, state, int(count))
+            for tenant, state, count in (
+                await session.execute(
+                    select(ChangeSetRow.tenant_id, ChangeSetRow.state, func.count()).group_by(
+                        ChangeSetRow.tenant_id, ChangeSetRow.state
+                    )
+                )
+            ).all()
+        ]
+        engines = [
+            EngineSample(
+                tenant=tenant,
+                reachable=bool(reachable),
+                drifted=bool(drift),
+                findings=len(drift),
+                observed_at=observed_at,
+            )
+            for tenant, reachable, drift, observed_at in (
+                await session.execute(
+                    select(
+                        EngineStatusRow.tenant_id,
+                        EngineStatusRow.reachable,
+                        EngineStatusRow.drift,
+                        EngineStatusRow.observed_at,
+                    )
+                )
+            ).all()
+        ]
+        services = [
+            ServiceSample(tenant=tenant, name=name, protocol=str(protocol), enabled=bool(enabled))
+            for tenant, name, protocol, enabled in (
+                await session.execute(
+                    select(
+                        m.VirtualServiceRow.tenant_id,
+                        m.VirtualServiceRow.name,
+                        m.VirtualServiceRow.protocol,
+                        m.VirtualServiceRow.enabled,
+                    )
+                )
+            ).all()
+        ]
+    return metric_families(
+        MetricRows(
+            jobs=tuple(jobs),
+            job_seconds=tuple(job_seconds),
+            change_sets=tuple(change_sets),
+            engines=tuple(engines),
+            services=tuple(services),
+        ),
+        now=now,
+        version=__version__,
+    )
 
 
 def _host(address: object) -> str:

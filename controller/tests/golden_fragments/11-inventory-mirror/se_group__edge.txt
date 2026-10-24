@@ -9,7 +9,7 @@
 ==> haproxy/haproxy.cfg (haproxy, whole file)
 # Managed by Switchyard. Do not edit: changes are reported as drift.
 # SE group: edge
-# switchyard-render: sha256:2d21ee669c02ce8382ad27f20076313db44e0f1212768e08fd2091082ddce635
+# switchyard-render: sha256:2bf9739e6a52d209b06807f204c778ba340574a153e7eb659241e286def6d6f0
 
 global
     log /dev/log local0
@@ -23,6 +23,7 @@ defaults
     option dontlognull
     option redispatch
     retries 3
+    unique-id-format %[uuid()]
     timeout connect 5s
     timeout client 50s
     timeout server 50s
@@ -47,6 +48,7 @@ frontend vs_external-sni
     bind 192.0.2.20:8843 ssl crt-list /etc/switchyard/certs/external-sni.crtlist alpn http/1.1,acme-tls/1
     bind 192.0.2.20:8880
     option httplog
+    log-format "%ci:%cp [%tr] %f %b/%s %TR/%Tw/%Tc/%Tr/%Ta %ST %B request_id=%ID sni=%{+Q}[ssl_fc_sni] host=%{+Q}[var(txn.host)] upstream=%[bc_dst] upstream_port=%[bc_dst_port] retries=%rc %tsc %ac/%fc/%bc/%sc %sq/%bq %hr %hs %{+Q}r"
     option forwardfor
     tcp-request session reject if !{ src -f /etc/switchyard/haproxy/lists/cloudflare-ranges.cidr }
     http-request return status 200 content-type text/plain lf-string "%[path,map(/etc/switchyard/haproxy/maps/acme-http01.map)]" if { dst_port 80 } { path,map(/etc/switchyard/haproxy/maps/acme-http01.map) -m found }

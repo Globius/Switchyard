@@ -4,6 +4,12 @@
 login logs to Loki. The controller reads Prometheus and Loki with tenant-scoped queries, so a tenant sees only its own services,
 and proxies Grafana with the same scoping.
 
+Each access-log line carries what a request needs to be traced: HAProxy's own request id (`%ID`), the TLS SNI and the
+`Host`, the upstream server's address and port, the retry count, status, bytes and the timings. The controller's
+`/metrics` is labelled `tenant` (and per virtual service), with labels bounded by the configuration, not the traffic
+([render.md](../render.md#access-log)). On Kubernetes the chart can render a `ServiceMonitor` and a `PrometheusRule`
+(`monitoring.*`), and `deploy/telemetry/prometheus/rules.yml` holds the same controller alerts for the Compose stack.
+
 **How to use.**
 
 - Run `deploy/telemetry/` (Prometheus, Loki, Grafana), point it at the controller, and set `SWITCHYARD_PROMETHEUS_URL` and

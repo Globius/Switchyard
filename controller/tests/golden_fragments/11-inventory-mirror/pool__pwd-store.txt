@@ -1,4 +1,4 @@
-==> haproxy/haproxy.cfg (haproxy, lines 159-167)
+==> haproxy/haproxy.cfg (haproxy, lines 161-169)
 backend pool_pwd-store
     mode http
     balance roundrobin

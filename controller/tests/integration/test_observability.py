@@ -123,13 +123,16 @@ async def test_metrics_report_jobs_change_sets_and_engines(setup: Setup) -> None
         "switchyard_engines_drifted",
         "switchyard_drift_findings",
         "switchyard_status_age_seconds",
+        "switchyard_virtual_services",
     } <= set(families)
     r = await setup.client.get("/metrics", headers=bearer(SCRAPE))
     assert r.headers["content-type"].startswith("text/plain; version=0.0.4")
     body = r.text
     assert "# TYPE switchyard_jobs gauge" in body
     assert 'switchyard_info{version="0.1.0"} 1' in body
-    assert 'switchyard_engines{reachable="true"} 0' in body
+    # every tenant-scoped series carries the tenant label
+    engine = next(line for line in body.splitlines() if line.startswith("switchyard_engines{"))
+    assert 'reachable="true"' in engine and f'tenant="{TENANT}"' in engine
 
 
 def test_exposition_escapes_labels_and_formats_numbers() -> None:
