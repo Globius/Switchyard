@@ -30,6 +30,10 @@ from switchyard.render.haproxy import fingerprint_of
 
 Failure = Literal["rejected", "conflict", "reload", "unreachable"]
 # Keywords the renderer emits; anything else is treated as a syntax error, like HAProxy would.
+# This list must keep up with render/haproxy.py: a directive the renderer adds but the fake does not
+# know makes every pipeline, worker and status test fail with "unknown keyword", which looks like a
+# broken engine rather than a stale fake. tests/unit/test_fake_haproxy_keywords.py fails on a golden
+# case that uses a keyword missing here, so the gap is caught without Docker.
 _KNOWN = frozenset(
     {
         *("global", "defaults", "frontend", "backend", "log", "maxconn", "stats"),
@@ -37,6 +41,15 @@ _KNOWN = frozenset(
         *("timeout", "mode", "bind", "tcp-request", "http-request", "use_backend"),
         *("default_backend", "balance", "stick-table", "stick", "http-check"),
         *("default-server", "server", "monitor-uri", "no"),
+        # Added with the features that emit them: cache and compression sections, cookie
+        # persistence, response-side rules, SPOE filters, the access-log format, peers, resolvers.
+        *("cache", "compression", "cookie", "filter", "http-error", "http-response"),
+        *("log-format", "unique-id-format", "peers", "peer"),
+        *("resolvers", "parse-resolv-conf", "resolve_retries", "lua-load"),
+        *("max-age", "max-object-size", "total-max-size"),
+        *("tune.stick-counters", "tune.lua.bool-sample-conversion"),
+        *("httpclient.resolvers.id", "httpclient.resolvers.prefer"),
+        *("httpclient.ssl.ca-file", "httpclient.ssl.verify"),
     }
 )
 _ADMIN_TO_STATUS = {"ready": "UP", "drain": "DRAIN", "maint": "MAINT"}
