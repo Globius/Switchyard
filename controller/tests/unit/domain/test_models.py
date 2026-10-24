@@ -216,6 +216,34 @@ class TestHealthMonitor:
                 }
             )
 
+    def _http(self, **http: Any) -> dict[str, Any]:
+        return {
+            "id": T,
+            "tenant_id": T,
+            "name": "m",
+            "type": "http",
+            "http": http,
+        }
+
+    def test_regex_expectation_is_opt_in_and_exclusive(self) -> None:
+        monitor = HealthMonitor.model_validate(self._http(expect_body_regex="^v[0-9]+$"))
+        assert monitor.http is not None
+        assert (monitor.http.expect_body, monitor.http.expect_body_regex) == (None, "^v[0-9]+$")
+        with pytest.raises(ValidationError, match="only one"):
+            HealthMonitor.model_validate(
+                self._http(expect_status=[200], expect_status_regex="^200$")
+            )
+        with pytest.raises(ValidationError, match="only one"):
+            HealthMonitor.model_validate(self._http(expect_body="ok", expect_body_regex="^ok$"))
+
+    def test_invalid_regex_is_a_field_error_with_its_own_code(self) -> None:
+        with pytest.raises(ValidationError) as caught:
+            HealthMonitor.model_validate(self._http(expect_status_regex="(unclosed"))
+        error = caught.value.errors()[0]
+        assert error["type"] == "invalid_regex"
+        assert error["loc"] == ("http", "expect_status_regex")
+        assert "does not compile" in error["msg"]
+
 
 class TestCertificate:
     def base(self, **kw: Any) -> dict[str, Any]:

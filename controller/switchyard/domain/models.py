@@ -27,12 +27,22 @@ from typing import Annotated, Literal, Self
 from uuid import UUID
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from switchyard.domain import validators as v
 from switchyard.domain.posture import PostureRequirements
 
 IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
+
+
+def _check_regex(value: str) -> str:
+    """Validate a health-check pattern, reporting a failure as the ``invalid_regex`` code."""
+    try:
+        return v.validate_check_regex(value)
+    except ValueError as exc:
+        raise PydanticCustomError("invalid_regex", "{message}", {"message": str(exc)}) from exc
+
 
 Name = Annotated[str, AfterValidator(v.validate_name)]
 Hostname = Annotated[str, AfterValidator(v.validate_hostname)]
@@ -46,6 +56,7 @@ MediaType = Annotated[str, AfterValidator(v.validate_media_type)]
 PersistenceCookieName = Annotated[str, AfterValidator(v.validate_persistence_cookie_name)]
 CookieName = Annotated[str, AfterValidator(v.validate_cookie_name)]
 MatchText = Annotated[str, AfterValidator(v.validate_match_text)]
+CheckRegex = Annotated[str, AfterValidator(_check_regex)]
 SecretRef = Annotated[str, AfterValidator(v.validate_secret_ref)]
 HeaderValue = Annotated[str, AfterValidator(v.validate_header_value)]
 QueryParam = Annotated[str, AfterValidator(v.validate_query_param)]
@@ -1161,13 +1172,31 @@ class HeaderExpect(Model):
 
 
 class HttpCheck(Model):
-    """HTTP health check request and expectation."""
+    """HTTP health check request and expectation.
+
+    Attributes:
+        method: HTTP method the check sends.
+        path: Request path.
+        host: ``Host`` header; without one HAProxy sends none.
+        expect_status: Accepted status codes.
+        expect_status_regex: Opt-in regex a status code must match (``http-check expect rstatus``);
+            for codes HAProxy cannot list literally.
+        expect_body: Literal text the response body must contain.
+        expect_body_regex: Opt-in regex the response body must match (``http-check expect
+            rstring``); for a version string or a JSON fragment the literal matcher cannot
+            express.
+        expect_header: A response header (with an optional literal value) the check must see.
+
+    Only one expectation may be set: HAProxy renders one ``http-check expect`` line per check.
+    """
 
     method: Literal["GET", "HEAD", "OPTIONS"] = "GET"
     path: UrlPath = "/"
     host: Hostname | None = None
     expect_status: tuple[int, ...] = ()
+    expect_status_regex: CheckRegex | None = None
     expect_body: MatchText | None = None
+    expect_body_regex: CheckRegex | None = None
     expect_header: HeaderExpect | None = None
 
     @model_validator(mode="after")
@@ -1176,8 +1205,13 @@ class HttpCheck(Model):
             raise ValueError("expect_status codes must be between 100 and 599")
         chosen = [bool(self.expect_status), self.expect_body is not None]
         chosen.append(self.expect_header is not None)
+        chosen.append(self.expect_status_regex is not None)
+        chosen.append(self.expect_body_regex is not None)
         if sum(chosen) > 1:
-            raise ValueError("use only one of expect_status, expect_body and expect_header")
+            raise ValueError(
+                "use only one of expect_status, expect_status_regex, expect_body, "
+                "expect_body_regex and expect_header"
+            )
         return self
 
 

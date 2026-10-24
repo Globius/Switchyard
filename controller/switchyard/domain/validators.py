@@ -299,6 +299,46 @@ def validate_match_text(value: str) -> str:
     return value
 
 
+#: Longest health-check pattern accepted. HAProxy runs the pattern on every check, so the cap is
+#: the first half of the ReDoS mitigation; the compile check below is the other half.
+CHECK_REGEX_MAX = 256
+
+
+def validate_check_regex(value: str) -> str:
+    """Validate a health-check regex (``http-check expect rstatus|rstring``).
+
+    The pattern is a POSIX extended regex compiled by HAProxy for every check. It must be 1 to
+    256 characters, must not carry a log-format variable (``%[`` or ``%{``), must not contain a
+    single quote (the renderer single-quotes it) or a control character, and must compile. The
+    length cap and the compile check bound the cost of a pathological pattern.
+
+    Example:
+        >>> validate_check_regex("^v[0-9]+[.][0-9]+$")
+        '^v[0-9]+[.][0-9]+$'
+        >>> validate_check_regex('"status":"ok"')
+        '"status":"ok"'
+        >>> validate_check_regex("%[req.hdr(x)]")
+        Traceback (most recent call last):
+            ...
+        ValueError: check regex must not contain a log-format variable ('%[' or '%{')
+        >>> validate_check_regex("(unclosed")
+        Traceback (most recent call last):
+            ...
+        ValueError: check regex does not compile: missing ), unterminated subpattern at position 0
+    """
+    if not 1 <= len(value) <= CHECK_REGEX_MAX:
+        raise ValueError(f"check regex must be 1-{CHECK_REGEX_MAX} characters")
+    if "%[" in value or "%{" in value:
+        raise ValueError("check regex must not contain a log-format variable ('%[' or '%{')")
+    if "'" in value or any(ord(char) < 0x20 or ord(char) == 0x7F for char in value):
+        raise ValueError("check regex must not contain a quote or control characters")
+    try:
+        re.compile(value)
+    except re.error as exc:
+        raise ValueError(f"check regex does not compile: {exc}") from exc
+    return value
+
+
 def validate_interface(value: str) -> str:
     """Validate a network interface name (Linux ``IFNAMSIZ``: at most 15 characters).
 

@@ -11910,7 +11910,7 @@
       },
       "HttpCheck": {
         "additionalProperties": false,
-        "description": "HTTP health check request and expectation.",
+        "description": "HTTP health check request and expectation.\n\nAttributes:\n    method: HTTP method the check sends.\n    path: Request path.\n    host: ``Host`` header; without one HAProxy sends none.\n    expect_status: Accepted status codes.\n    expect_status_regex: Opt-in regex a status code must match (``http-check expect rstatus``);\n        for codes HAProxy cannot list literally.\n    expect_body: Literal text the response body must contain.\n    expect_body_regex: Opt-in regex the response body must match (``http-check expect\n        rstring``); for a version string or a JSON fragment the literal matcher cannot\n        express.\n    expect_header: A response header (with an optional literal value) the check must see.\n\nOnly one expectation may be set: HAProxy renders one ``http-check expect`` line per check.",
         "properties": {
           "expect_body": {
             "anyOf": [
@@ -11922,6 +11922,17 @@
               }
             ],
             "title": "Expect Body"
+          },
+          "expect_body_regex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expect Body Regex"
           },
           "expect_header": {
             "anyOf": [
@@ -11940,6 +11951,17 @@
             },
             "title": "Expect Status",
             "type": "array"
+          },
+          "expect_status_regex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expect Status Regex"
           },
           "host": {
             "anyOf": [
@@ -48441,9 +48463,12 @@
               "example": {
                 "fall": 3,
                 "http": {
+                  "expect_body": null,
+                  "expect_body_regex": null,
                   "expect_status": [
                     200
                   ],
+                  "expect_status_regex": null,
                   "host": null,
                   "method": "GET",
                   "path": "/healthz"

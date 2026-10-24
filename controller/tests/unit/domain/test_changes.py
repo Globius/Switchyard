@@ -94,6 +94,19 @@ class TestApply:
         with pytest.raises(OperationInvalidError, match="surprise"):
             apply_ops(base_snapshot(), [bad], tenant_id=TENANT)
 
+    def test_invalid_health_check_regex_is_a_change_set_field_error(self) -> None:
+        bad = op(
+            Action.CREATE,
+            ObjectType.HEALTH_MONITOR,
+            uuid.UUID(int=9),
+            body={"name": "m", "type": "http", "http": {"expect_body_regex": "(unclosed"}},
+        )
+        with pytest.raises(OperationInvalidError) as caught:
+            apply_ops(base_snapshot(), [bad], tenant_id=TENANT)
+        problem = next(p for p in caught.value.problems if p.code == "invalid_regex")
+        assert problem.path == "ops[0].http.expect_body_regex"
+        assert "does not compile" in problem.message
+
     def test_duplicate_id_on_create(self) -> None:
         with pytest.raises(OperationInvalidError, match="duplicate_id"):
             apply_ops(base_snapshot(), [new_pool(5), new_pool(5)], tenant_id=TENANT)

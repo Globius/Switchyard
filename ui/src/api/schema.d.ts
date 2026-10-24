@@ -10716,16 +10716,35 @@ export interface components {
         /**
          * HttpCheck
          * @description HTTP health check request and expectation.
+         *
+         *     Attributes:
+         *         method: HTTP method the check sends.
+         *         path: Request path.
+         *         host: ``Host`` header; without one HAProxy sends none.
+         *         expect_status: Accepted status codes.
+         *         expect_status_regex: Opt-in regex a status code must match (``http-check expect rstatus``);
+         *             for codes HAProxy cannot list literally.
+         *         expect_body: Literal text the response body must contain.
+         *         expect_body_regex: Opt-in regex the response body must match (``http-check expect
+         *             rstring``); for a version string or a JSON fragment the literal matcher cannot
+         *             express.
+         *         expect_header: A response header (with an optional literal value) the check must see.
+         *
+         *     Only one expectation may be set: HAProxy renders one ``http-check expect`` line per check.
          */
         HttpCheck: {
             /** Expect Body */
             expect_body?: string | null;
+            /** Expect Body Regex */
+            expect_body_regex?: string | null;
             expect_header?: components["schemas"]["HeaderExpect"] | null;
             /**
              * Expect Status
              * @default []
              */
             expect_status: number[];
+            /** Expect Status Regex */
+            expect_status_regex?: string | null;
             /** Host */
             host?: string | null;
             /**
@@ -32438,9 +32457,12 @@ export interface operations {
                  * @example {
                  *       "fall": 3,
                  *       "http": {
+                 *         "expect_body": null,
+                 *         "expect_body_regex": null,
                  *         "expect_status": [
                  *           200
                  *         ],
+                 *         "expect_status_regex": null,
                  *         "host": null,
                  *         "method": "GET",
                  *         "path": "/healthz"

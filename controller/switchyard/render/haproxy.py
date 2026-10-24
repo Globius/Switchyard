@@ -1619,8 +1619,13 @@ class _Renderer:
             if http.expect_status:
                 codes = ",".join(str(c) for c in sorted(set(http.expect_status)))
                 lines.append(f"http-check expect status {codes}")
+            elif http.expect_status_regex is not None:
+                # Opt-in regex match (extends ADR 0066); single-quoted so '$' is never expanded.
+                lines.append(f"http-check expect rstatus {_quote_regex(http.expect_status_regex)}")
             elif http.expect_body is not None:
                 lines.append(f"http-check expect string {esc.match_text(http.expect_body)}")
+            elif http.expect_body_regex is not None:
+                lines.append(f"http-check expect rstring {_quote_regex(http.expect_body_regex)}")
             elif http.expect_header is not None:
                 expected = http.expect_header
                 line = f"http-check expect hdr name {esc.header_name(expected.name)}"
