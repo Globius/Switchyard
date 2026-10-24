@@ -63,4 +63,45 @@ A path parameter of the wrong type (`/pets/abc` for an integer `id`) matches no 
   `allow_unknown_query: true` unknown parameters pass, and the listed ones are checked on their first occurrence only.
 - When two operations could match the same path, the one with more literal segments wins (`/orders/mine` before `/orders/{ref}`).
 - `OPTIONS` (CORS pre-flight) is refused unless you list it as an operation.
-- Not covered: JSON bodies against their schema, responses, headers and cookies. Keep the CRS rules on for the body content.
+- Not covered: responses, headers and cookies. Keep the CRS rules on for the body content.
+
+## JSON bodies
+
+An operation can also say what its JSON body looks like (ADR 0228). Give it `content_types: [application/json]` and a
+`body`; the check runs in Coraza, against a schema the controller generates from that object:
+
+```yaml
+- method: POST
+  path: /pets
+  content_types: [application/json]
+  max_body_bytes: 65536
+  body:
+    additional_properties: false       # default: a member you do not list is a violation
+    properties:
+    - {name: name, kind: string, required: true, max_length: 64}
+    - {name: age, kind: integer}
+    - {name: kind, kind: enum, values: [cat, dog], required: true}
+    - {name: chip, kind: uuid}
+    - name: owner                     # nested object, up to three levels
+      kind: object
+      required: true
+      properties:
+      - {name: email, kind: string, required: true}
+    - {name: tags, kind: array, items: string, max_items: 8}
+```
+
+The kinds are the query-parameter kinds plus `object` (nested `properties`) and `array` (`items` of one scalar type).
+A violation is a `400` in `block` mode and only a log line in `detect` mode; it appears in the service's WAF log lines
+(`|= "waf "`, `msg:"api body schema violation"`), not in the `{...}` capture the HAProxy checks write, because the
+check runs after them. A body that is not valid JSON at all is refused with `400` before the schema is consulted.
+
+Three settings are required, and refused at change-set time otherwise:
+
+- the operation must accept `application/json` (the JSON parser only runs for that media type);
+- the policy must keep `inspect_body: true` (otherwise the sidecar never receives the body);
+- `api.mode: block` needs the WAF itself in `mode: block`: the sidecar only logs while the WAF detects.
+
+Limits, on purpose: at most 3 levels of nested objects, 64 properties per body, 32 per object, 32 enum values per
+property, and 64 operations with a body per policy (each generates one file on the engine). Only the documented shape
+is checked — `oneOf` / `anyOf` / `allOf`, arrays of objects, numeric ranges and string formats other than `uuid` are
+not representable. `syctl waf api-schema` does not import body schemas from OpenAPI yet; write them by hand.

@@ -26,15 +26,18 @@ service's logs (`|= "waf "`), disable the rules that fire on legitimate traffic,
 `GET /waf/crs-rules` lists the rule families and the rules most often disabled.
 
 **API schema.** The policy can also carry `api`, the operations of your API, so requests outside it are refused (404, 405, 400,
-411, 413, 415) or logged first. `syctl waf api-schema openapi.yaml` makes it from an OpenAPI file. See
-[API schema protection](../waf-api-schema.md).
+411, 413, 415) or logged first. `syctl waf api-schema openapi.yaml` makes it from an OpenAPI file. An operation may also
+carry a `body`: a typed tree of JSON members, which the controller turns into the schema Coraza validates the body
+against (400 on a violation, or a log line in detect mode). See [API schema protection](../waf-api-schema.md).
 
 **Limits.** One WAF policy per service. No custom rules or free-form directives. No response-body inspection. The CRS
 release is one of a fixed list shipped in the engine image, so an image update never changes a policy's behaviour. An engine
 whose sidecar is down loses 25 points of health score ("WAF sidecar not running"), so a fail-open WAF that inspects nothing
-shows up.
+shows up. A body schema (ADR 0228) only checks the JSON shape you documented — types, required members, enums, array
+bounds, unknown members — so nested `oneOf` variants, numeric ranges and arbitrary string formats are not checked, and
+blocking it needs the WAF itself in `block` mode.
 
 **Decisions:** [0140](../adr/0140-waf-policy-set.md), [0141](../adr/0141-waf-detect-first-and-crs-pinning.md),
 [0142](../adr/0142-waf-sidecar-and-failure-mode.md), [0143](../adr/0143-waf-logs.md),
 [0144](../adr/0144-waf-image-and-agent-contract.md), [0152](../adr/0152-crs-rule-catalogue.md),
-[0197](../adr/0197-waf-api-schema-protection.md).
+[0197](../adr/0197-waf-api-schema-protection.md), [0228](../adr/0228-api-body-schema-validation.md).

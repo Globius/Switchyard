@@ -1,0 +1,44 @@
+# Managed by Switchyard. Do not edit: changes are reported as drift.
+bind: 127.0.0.1:9000
+log_level: info
+log_file: /dev/stdout
+log_format: json
+applications:
+  - name: orders
+    log_level: info
+    log_file: /dev/stdout
+    log_format: json
+    transaction_ttl_ms: 60000
+    directives: |
+      Include @coraza.conf-recommended
+      SecRuleEngine DetectionOnly
+      # OWASP CRS 4.8.0, pinned in the SE image
+      Include /usr/share/coreruleset/4.8.0/crs-setup.conf.example
+      SecAction "id:900000,phase:1,pass,t:none,nolog,setvar:tx.blocking_paranoia_level=1"
+      SecAction "id:900110,phase:1,pass,t:none,nolog,setvar:tx.inbound_anomaly_score_threshold=5,setvar:tx.outbound_anomaly_score_threshold=4"
+      Include /usr/share/coreruleset/4.8.0/rules/*.conf
+      # API body schema: POST /v1/orders (operation 1)
+      SecRule REQUEST_METHOD "@streq POST" "id:100001,phase:2,rev:1,log,auditlog,chain,msg:'api body schema violation',tag:'switchyard/api-body',logdata:'%{REQUEST_METHOD} %{REQUEST_FILENAME}',pass"
+      SecRule REQUEST_FILENAME "@rx ^/v1/orders$" "chain,t:none"
+      SecRule REQUEST_BODY "@validateSchema /etc/switchyard/coraza/schemas/orders-1.json" "t:none"
+  - name: pets
+    log_level: info
+    log_file: /dev/stdout
+    log_format: json
+    transaction_ttl_ms: 60000
+    directives: |
+      Include @coraza.conf-recommended
+      SecRuleEngine On
+      # OWASP CRS 4.8.0, pinned in the SE image
+      Include /usr/share/coreruleset/4.8.0/crs-setup.conf.example
+      SecAction "id:900000,phase:1,pass,t:none,nolog,setvar:tx.blocking_paranoia_level=1"
+      SecAction "id:900110,phase:1,pass,t:none,nolog,setvar:tx.inbound_anomaly_score_threshold=5,setvar:tx.outbound_anomaly_score_threshold=4"
+      Include /usr/share/coreruleset/4.8.0/rules/*.conf
+      # API body schema: POST /v1/pets (operation 2)
+      SecRule REQUEST_METHOD "@streq POST" "id:100002,phase:2,rev:1,log,auditlog,chain,msg:'api body schema violation',tag:'switchyard/api-body',logdata:'%{REQUEST_METHOD} %{REQUEST_FILENAME}',deny,status:400"
+      SecRule REQUEST_FILENAME "@rx ^/v1/pets$" "chain,t:none"
+      SecRule REQUEST_BODY "@validateSchema /etc/switchyard/coraza/schemas/pets-2.json" "t:none"
+      # API body schema: PUT /v1/pets/{id} (operation 3)
+      SecRule REQUEST_METHOD "@streq PUT" "id:100003,phase:2,rev:1,log,auditlog,chain,msg:'api body schema violation',tag:'switchyard/api-body',logdata:'%{REQUEST_METHOD} %{REQUEST_FILENAME}',deny,status:400"
+      SecRule REQUEST_FILENAME "@rx ^/v1/pets/([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})$" "chain,t:none"
+      SecRule REQUEST_BODY "@validateSchema /etc/switchyard/coraza/schemas/pets-3.json" "t:none"

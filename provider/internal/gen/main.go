@@ -234,6 +234,20 @@ func (s spec) resolve(sch map[string]any) map[string]any {
 }
 
 func (s spec) attribute(name string, sch map[string]any) attr {
+	return s.attributeAt(name, sch, map[string]bool{})
+}
+
+// attributeAt is attribute with the $ref names already expanded on this path. A schema that names
+// itself (ApiBody -> ApiBodyProperty -> ApiBodyProperty) has no finite attribute tree, so the
+// second visit of the same definition is emitted as opaque JSON instead of recursing forever.
+func (s spec) attributeAt(name string, sch map[string]any, seen map[string]bool) attr {
+	if ref := str(sch["$ref"]); ref != "" {
+		def := ref[strings.LastIndex(ref, "/")+1:]
+		if seen[def] {
+			return attr{name: name, kind: kJSON, doc: firstParagraph(str(sch["description"]))}
+		}
+		seen = cloneSeen(seen, def)
+	}
 	sch = s.resolve(sch)
 	a := attr{name: name, doc: firstParagraph(str(sch["description"]))}
 	// X | null is just X; several non-null alternatives are one string when all are strings
@@ -248,7 +262,7 @@ func (s spec) attribute(name string, sch map[string]any) attr {
 		}
 		switch {
 		case len(kept) == 1:
-			inner := s.attribute(name, kept[0])
+			inner := s.attributeAt(name, kept[0], seen)
 			if inner.doc == "" {
 				inner.doc = a.doc
 			}
@@ -283,13 +297,13 @@ func (s spec) attribute(name string, sch map[string]any) attr {
 		a.kind = kBool
 	case "array":
 		a.kind = kList
-		e := s.attribute("", obj(sch["items"]))
+		e := s.attributeAt("", obj(sch["items"]), seen)
 		a.elem = &e
 	case "object":
 		props := obj(sch["properties"])
 		if len(props) == 0 {
 			if extra := obj(sch["additionalProperties"]); len(extra) > 0 {
-				e := s.attribute("", extra)
+				e := s.attributeAt("", extra, seen)
 				if e.kind != kJSON {
 					a.kind, a.elem = kMap, &e
 					return a
@@ -304,7 +318,7 @@ func (s spec) attribute(name string, sch map[string]any) attr {
 			required[str(r)] = true
 		}
 		for _, n := range sortedKeys(props) {
-			child := s.attribute(n, obj(props[n]))
+			child := s.attributeAt(n, obj(props[n]), seen)
 			child.required = required[n]
 			a.attrs = append(a.attrs, child)
 		}
@@ -312,6 +326,16 @@ func (s spec) attribute(name string, sch map[string]any) attr {
 		a.kind = kJSON
 	}
 	return a
+}
+
+// cloneSeen returns a copy of seen with def added, so a sibling branch still sees its own path.
+func cloneSeen(seen map[string]bool, def string) map[string]bool {
+	out := make(map[string]bool, len(seen)+1)
+	for k, v := range seen {
+		out[k] = v
+	}
+	out[def] = true
+	return out
 }
 
 func allStrings(alts []map[string]any) bool {

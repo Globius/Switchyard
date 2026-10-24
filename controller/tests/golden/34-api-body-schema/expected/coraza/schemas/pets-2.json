@@ -1,0 +1,54 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "kind",
+    "owner"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "age": {
+      "type": "integer"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "cat",
+        "dog"
+      ]
+    },
+    "chip": {
+      "type": "string",
+      "pattern": "[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"
+    },
+    "owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "email"
+      ],
+      "properties": {
+        "email": {
+          "type": "string",
+          "maxLength": 254
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 256
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 256
+      },
+      "maxItems": 8
+    }
+  }
+}

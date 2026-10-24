@@ -18,6 +18,7 @@ import yaml
 
 from switchyard.domain.loader import snapshot_from_mapping, symbolic_uuid
 from switchyard.render.haproxy import RenderResult, render_haproxy
+from switchyard.render.waf import render_waf_files
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 WARNINGS_FILE = "warnings.txt"
@@ -29,11 +30,19 @@ def case_names() -> list[str]:
 
 
 def render_case(name: str) -> RenderResult:
-    """Render one golden case."""
+    """Render one golden case.
+
+    A case's files are the group's HAProxy files plus the Coraza files the same group's WAF
+    policies produce (``coraza/config.yaml`` and, with an API body schema, ``coraza/schemas/*``),
+    so the agent side of an SE group is covered by the same case.
+    """
     data: dict[str, Any] = yaml.safe_load((GOLDEN_DIR / name / "input.yaml").read_text("utf-8"))
     options = data.pop("render")
     group = UUID(symbolic_uuid(options["se_group"]))
-    return render_haproxy(snapshot_from_mapping(data), group, options.get("broker_url"))
+    result = render_haproxy(snapshot_from_mapping(data), group, options.get("broker_url"))
+    waf = render_waf_files(snapshot_from_mapping(data), group)
+    files = dict(result.files) | waf
+    return RenderResult(files=files, warnings=result.warnings, notices=result.notices)
 
 
 def expected_files(name: str) -> dict[str, str]:

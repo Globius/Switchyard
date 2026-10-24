@@ -743,6 +743,20 @@ var Definitions = []Definition{
 				{Name: "max_body_bytes", Kind: KindInt},
 				{Name: "mode", Kind: KindString, Enum: []string{"detect", "block"}},
 				{Name: "operations", Kind: KindList, Required: true, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
+					{Name: "body", Kind: KindObject, Doc: "The JSON body of one operation, as a closed tree of typed members (ADR 0228).", Attrs: []Attr{
+						{Name: "additional_properties", Kind: KindBool},
+						{Name: "properties", Kind: KindList, Required: true, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
+							{Name: "additional_properties", Kind: KindBool},
+							{Name: "items", Kind: KindString, Enum: []string{"string", "integer", "number", "boolean", "uuid"}},
+							{Name: "kind", Kind: KindString, Enum: []string{"string", "integer", "number", "boolean", "uuid", "enum", "object", "array"}},
+							{Name: "max_items", Kind: KindInt},
+							{Name: "max_length", Kind: KindInt},
+							{Name: "name", Kind: KindString, Required: true},
+							{Name: "properties", Kind: KindList, Elem: &Attr{Kind: KindJSON}},
+							{Name: "required", Kind: KindBool},
+							{Name: "values", Kind: KindList, Elem: &Attr{Kind: KindString}},
+						}}},
+					}},
 					{Name: "content_types", Kind: KindList, Elem: &Attr{Kind: KindString}},
 					{Name: "max_body_bytes", Kind: KindInt},
 					{Name: "method", Kind: KindString, Required: true, Enum: []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}},
