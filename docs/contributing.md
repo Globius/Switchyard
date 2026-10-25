@@ -27,7 +27,7 @@ Every change ships with its tests, its docs, and passes the same gates CI runs:
 | Area | Run |
 | --- | --- |
 | Controller | `cd controller && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -m "not docker"` |
-| With containers | `uv run pytest` (needs Docker; coverage is checked at 85% for `domain`, `render` and `pipeline`) |
+| With containers | `cd controller && uv run python -m tests.ci_pull_images && uv run pytest` (needs Docker; the first command pulls every image the tests name, which CI does in its `before_script`; coverage is checked at 85% for `domain`, `render` and `pipeline`) |
 | UI | `cd ui && pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm gen:api:check` |
 | Agent (Go) | `cd agent && gofmt -l . && go vet ./... && go test ./...` |
 | Docs | `uvx --with-requirements docs/requirements.txt mkdocs build --strict` |
