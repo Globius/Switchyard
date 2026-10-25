@@ -139,6 +139,11 @@ ui:
     - pnpm test
     - pnpm build
     - pnpm gen:api:check
+  # Four certificate-dialog tests race the 300 ms SAN debounce (RequestCertificate.tsx) and are
+  # CPU-sensitive: they pass locally and fail intermittently on the lab runners, where the submit
+  # does not fire inside the 20 s Testing Library timeout. Retried while the de-flake is tracked in
+  # #20; a needless retry of a green run costs nothing, a red main costs a day.
+  retry: 2
 
 # The device posture agent (ADR 0196): standard library only, builds for the three desktop systems.
 posture-agent:
