@@ -44,7 +44,7 @@ def directory_url() -> Iterator[str]:
         .with_exposed_ports(14000)
     )
     with container:
-        url = f"https://localhost:{container.get_exposed_port(14000)}/dir"
+        url = f"https://{container.get_container_host_ip()}:{container.get_exposed_port(14000)}/dir"
         for _ in range(60):
             try:
                 if httpx.get(url, verify=False, timeout=2).status_code == 200:  # noqa: S501
