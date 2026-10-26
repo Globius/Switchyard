@@ -44,6 +44,7 @@ dev = [
   "grpcio-tools>=1.84.0",
   "jsonschema>=4.26.0",
   "types-jsonschema>=4.26.0.20261006",
+  "pytest-timeout>=2.3",
 ]
 
 [build-system]
@@ -90,6 +91,11 @@ markers = [
 ]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+# A hang must fail with a stack, not consume the job until the CI cap kills it: the ACME pebble
+# image pull inside dind hung once and the only evidence was 80 minutes of silence.  Nosec so a
+# deliberate timeout can still be requested per test.
+timeout = 900
+timeout_method = "thread"
 
 [tool.coverage.run]
 source = ["switchyard"]

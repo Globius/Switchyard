@@ -32,7 +32,7 @@ Every change ships with its tests, its docs, and passes the same gates CI runs:
 | Agent (Go) | `cd agent && gofmt -l . && go vet ./... && go test ./...` |
 | Docs | `uvx --with-requirements docs/requirements.txt mkdocs build --strict` |
 
-- **Tests:** renderers have golden-file tests; database code is tested against a real PostgreSQL, including row-level-security isolation tests.
+- **Tests:** renderers have golden-file tests; database code is tested against a real PostgreSQL, including row-level-security isolation tests. Every test has a 900 s timeout (`pytest-timeout`), so a hang fails with a stack trace instead of eating the CI job; raise it per test with `@pytest.mark.timeout(...)` when a case genuinely needs longer.
 - **Docs:** public functions have docstrings (Google style); behaviour a user sees is documented in `docs/`; a new decision gets an ADR in `docs/adr/`.
 - **Security rules** (the full list is in `CLAUDE.md`): tenancy is enforced twice, in services and in PostgreSQL RLS; no secrets in the database, logs or
   fixtures (store a `secret_ref`); every user value that reaches a config file passes a strict validator; the engine agent never opens a remote shell.
