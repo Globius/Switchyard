@@ -18,7 +18,7 @@ from switchyard.domain.errors import DomainValidationError
 from switchyard.domain.loader import snapshot_from_mapping, symbolic_uuid
 from switchyard.domain.models import Algorithm, Pool, RedirectAction, RouteMatch
 from switchyard.render.escape import RenderError
-from switchyard.render.haproxy import _Renderer, render_haproxy
+from switchyard.render.haproxy import _ADDR_CHARS, _Renderer, render_haproxy
 from tests.factories import base_data
 
 GROUP = uuid.UUID(symbolic_uuid("seg-1"))
@@ -296,7 +296,7 @@ class TestClientAddress:
         assert len(set_src) == 1
         for check in (
             "req.fhdr_cnt(CF-Connecting-IP) eq 1",
-            "req.fhdr(CF-Connecting-IP) -m reg ^[0-9A-Fa-f:.]+$",
+            f"req.fhdr(CF-Connecting-IP) -m reg {_ADDR_CHARS}",
             "req.hdr_ip(CF-Connecting-IP) -m found",
         ):
             assert f"{{ {check} }}" in set_src[0]
@@ -304,6 +304,25 @@ class TestClientAddress:
         # the header is overwritten, never trusted: X-Forwarded-For is still dropped
         assert "http-request del-header X-Forwarded-For" in rules
         assert rules.index(set_src[0]) < rules.index("http-request del-header X-Forwarded-For")
+
+    @pytest.mark.parametrize(
+        ("value", "accepted"),
+        [
+            ("203.0.113.9", True),
+            ("2001:db8::1", True),
+            ("::1", True),
+            ("::ffff:1.2.3.4", True),
+            ("1.2.3.4:80", False),  # one colon: an address with a port is not an address
+            ("[2001:db8::1]:443", False),
+            ("fe80::1%eth0", False),
+            ("1.2.3.4, 5.6.7.8", False),
+            ("not-an-ip", False),
+            ("", False),
+        ],
+    )
+    def test_address_shape_accepts_only_bare_addresses(self, value: str, accepted: bool) -> None:
+        # Value-range checks (``999.1.1.1``) are left to HAProxy's ``req.hdr_ip``; this is the shape gate.
+        assert bool(re.fullmatch(_ADDR_CHARS, value)) is accepted
 
     def test_header_without_list_or_opt_in_is_refused_before_rendering(self) -> None:
         data = self.data(restore_client_ip_header="CF-Connecting-IP")

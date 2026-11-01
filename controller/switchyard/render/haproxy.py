@@ -138,7 +138,10 @@ _ENV = Environment(  # nosemgrep: python-jinja2-xss-autoescape-false-atomic
 
 
 #: Characters of an IPv4/IPv6 literal; a header value with anything else is not an address.
-_ADDR_CHARS = "^[0-9A-Fa-f:.]+$"
+# A bare IPv4 address (``a.b.c.d``) or an IPv6 address (at least two colons; ``::ffff:1.2.3.4`` is
+# fine). One colon (``1.2.3.4:80``), brackets and zone ids do not match. ``req.hdr_ip`` still has
+# to parse the value, so out-of-range octets are rejected there.
+_ADDR_CHARS = "^([0-9]+[.][0-9]+[.][0-9]+[.][0-9]+|[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*)$"
 
 
 @dataclass(frozen=True)

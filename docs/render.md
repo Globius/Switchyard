@@ -262,7 +262,7 @@ With a list:
 
 ```text
 http-request set-var(txn.trusted) bool(true) if { src -f .../lists/cloudflare-ranges.cidr }
-http-request set-src req.hdr_ip(CF-Connecting-IP) if { var(txn.trusted) -m bool } { req.fhdr_cnt(CF-Connecting-IP) eq 1 } { req.fhdr(CF-Connecting-IP) -m reg ^[0-9A-Fa-f:.]+$ } { req.hdr_ip(CF-Connecting-IP) -m found }
+http-request set-src req.hdr_ip(CF-Connecting-IP) if { var(txn.trusted) -m bool } { req.fhdr_cnt(CF-Connecting-IP) eq 1 } { req.fhdr(CF-Connecting-IP) -m reg ^([0-9]+[.][0-9]+[.][0-9]+[.][0-9]+|[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*)$ } { req.hdr_ip(CF-Connecting-IP) -m found }
 http-request del-header CF-Connecting-IP if !{ var(txn.trusted) -m bool }
 http-request del-header CF-Connecting-IP if !{ req.fhdr_cnt(...) eq 1 } || !{ req.fhdr(...) -m reg ... } || !{ req.hdr_ip(...) -m found }
 ```

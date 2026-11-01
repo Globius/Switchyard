@@ -23,7 +23,9 @@ and the second can be asked on its own.
    silently win or lose) and is HTTP only, like the header. Migration 0051 adds the column with default `false`; existing rows
    all have a list and render as before.
 3. **The header is validated either way.** The rules use the header only when it is exactly one header line, made of address
-   characters, that HAProxy parses as one IPv4/IPv6 address (`req.fhdr_cnt`, `req.fhdr -m reg`, `req.hdr_ip`). `set-src` takes
+   characters, that HAProxy parses as one IPv4/IPv6 address (`req.fhdr_cnt`, `req.fhdr -m reg`, `req.hdr_ip`). The shape gate
+   accepts a bare IPv4 address or an IPv6 address (two or more colons); `1.2.3.4:80`, `[v6]:port` and zone ids are not used.
+   `set-src` takes
    `req.hdr_ip(H)`. Any other value (list, second line, hostname, garbage) is not used and is deleted, in both modes, and a
    header from an untrusted source is deleted as before. `X-Forwarded-For` is still dropped and rebuilt from the restored source.
    Verified with the HAProxy 3.x package binary (`haproxy -c` over every golden case, and requests with valid v4/v6, comma list,
