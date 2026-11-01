@@ -21747,6 +21747,47 @@
         "title": "RollStepRead",
         "type": "object"
       },
+      "RouteClientIp": {
+        "additionalProperties": false,
+        "description": "Per-host override of the service's client-IP restoration (ADR 0230).\n\nReplaces the service-level ``restore_client_ip_header`` / ``allow_list_id`` /\n``restore_client_ip_from_any_source`` as one block (nothing is merged field by field) for the\nrequest's host. The same safety rules as the service level apply (ADR 0229).\n\nAttributes:\n    enabled: ``False`` turns restoration off for this host (the header is then left alone, as\n        on a service without one). Takes no other field.\n    header: Header carrying the real client address (for example ``CF-Connecting-IP``).\n    allow_list_id: Trusted sources: the header is honoured only from these networks.\n    from_any_source: Explicit opt-in to honour the header from every source. Not together\n        with ``allow_list_id``.\n\nExample:\n    >>> RouteClientIp(enabled=False).enabled\n    False\n    >>> RouteClientIp(header=\"CF-Connecting-IP\", from_any_source=True).header\n    'CF-Connecting-IP'",
+        "properties": {
+          "allow_list_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow List Id"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "from_any_source": {
+            "default": false,
+            "title": "From Any Source",
+            "type": "boolean"
+          },
+          "header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header"
+          }
+        },
+        "title": "RouteClientIp",
+        "type": "object"
+      },
       "RouteMatch": {
         "additionalProperties": false,
         "description": "Request match shared by routes and policy rules; every condition given must hold (AND).\n\nAttributes:\n    host: Exact host or single-label ``*.`` wildcard (the ``Host`` header, port removed).\n    path_prefix: Path starts with this.\n    path_exact: Path equals this. Not together with ``path_prefix``.\n    methods: Request method is one of these.\n    headers: Request header conditions, all of which must hold.\n    query: Query-string parameter conditions, all of which must hold.\n    source_cidrs: Client address is inside one of these networks (after client-IP restoration).\n    sni: TLS server name the client asked for (exact or ``*.`` wildcard); never true on a\n        port without TLS.\n\nExample:\n    >>> RouteMatch(methods=[\"GET\"], path_prefix=\"/api\").is_empty\n    False\n    >>> RouteMatch().is_empty\n    True",
@@ -26508,8 +26549,18 @@
       },
       "VsRoute": {
         "additionalProperties": false,
-        "description": "Route a request to a pool, split it over weighted pools, or answer it with a redirect.\n\nAttributes:\n    order: Position among path routes; lower runs first. Host-only routes are looked up in map\n        files and are order-independent (exact host wins over wildcard).\n    match: What the request must match. Must not be empty.\n    pool_id: Target pool, or ``None`` when ``redirect`` or ``pools`` is set.\n    redirect: Redirect to answer with, or ``None`` when ``pool_id`` or ``pools`` is set.\n    fallback_pool_ids: Priority groups: pools tried in order when every server of the pool\n        before them is down (``pool_id`` only; up to three; ADR 0119).\n    pools: Canary or blue-green split: two to eight pools whose weights add up to 100. Each\n        request is sent to one of them at random in that proportion (ADR 0119).\n\nExample:\n    >>> import uuid\n    >>> route = VsRoute(\n    ...     match=RouteMatch(host=\"app.example.test\"),\n    ...     pools=(\n    ...         WeightedPool(pool_id=uuid.UUID(int=1), weight=90),\n    ...         WeightedPool(pool_id=uuid.UUID(int=2), weight=10),\n    ...     ),\n    ... )\n    >>> len(route.pool_ids)\n    2",
+        "description": "Route a request to a pool, split it over weighted pools, or answer it with a redirect.\n\nAttributes:\n    client_ip: Per-host client-IP restoration override (ADR 0230); host-only routes only.\n        ``None`` inherits the service settings.\n    order: Position among path routes; lower runs first. Host-only routes are looked up in map\n        files and are order-independent (exact host wins over wildcard).\n    match: What the request must match. Must not be empty.\n    pool_id: Target pool, or ``None`` when ``redirect`` or ``pools`` is set.\n    redirect: Redirect to answer with, or ``None`` when ``pool_id`` or ``pools`` is set.\n    fallback_pool_ids: Priority groups: pools tried in order when every server of the pool\n        before them is down (``pool_id`` only; up to three; ADR 0119).\n    pools: Canary or blue-green split: two to eight pools whose weights add up to 100. Each\n        request is sent to one of them at random in that proportion (ADR 0119).\n\nExample:\n    >>> import uuid\n    >>> route = VsRoute(\n    ...     match=RouteMatch(host=\"app.example.test\"),\n    ...     pools=(\n    ...         WeightedPool(pool_id=uuid.UUID(int=1), weight=90),\n    ...         WeightedPool(pool_id=uuid.UUID(int=2), weight=10),\n    ...     ),\n    ... )\n    >>> len(route.pool_ids)\n    2",
         "properties": {
+          "client_ip": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RouteClientIp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "fallback_pool_ids": {
             "default": [],
             "items": {

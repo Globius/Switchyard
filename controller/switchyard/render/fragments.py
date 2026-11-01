@@ -163,6 +163,11 @@ def _select(c: _Collector, view: Snapshot, object_type: ObjectType, object_id: U
                 if svc.allow_list_id is not None:
                     allow = next(p for p in view.policy_sets if p.id == svc.allow_list_id)
                     c.file(f"haproxy/lists/{esc.ident(allow.name)}.cidr")
+                for route in svc.routes:
+                    if route.client_ip is not None and route.client_ip.allow_list_id is not None:
+                        rid = route.client_ip.allow_list_id
+                        rl = next(p for p in view.policy_sets if p.id == rid)
+                        c.file(f"haproxy/lists/{esc.ident(rl.name)}.cidr")
     elif object_type is ObjectType.POOL:
         for pool in view.pools:
             if pool.id == object_id:

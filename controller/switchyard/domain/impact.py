@@ -53,6 +53,12 @@ def _uses(svc: VirtualService, changed: dict[ObjectType, set[UUID]], pool_ids: s
         or set(svc.certificate_ids) & changed[ObjectType.CERTIFICATE]
         or set(svc.policy_set_ids) & changed[ObjectType.POLICY_SET]
         or (svc.allow_list_id and svc.allow_list_id in changed[ObjectType.POLICY_SET])
+        or any(
+            r.client_ip
+            and r.client_ip.allow_list_id
+            and r.client_ip.allow_list_id in changed[ObjectType.POLICY_SET]
+            for r in svc.routes
+        )
     )
 
 

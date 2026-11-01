@@ -123,6 +123,11 @@ class Snapshot(Model):
             policy_ids.update(s.policy_set_ids)
             if s.allow_list_id:
                 policy_ids.add(s.allow_list_id)
+            policy_ids.update(
+                r.client_ip.allow_list_id
+                for r in s.routes
+                if r.client_ip and r.client_ip.allow_list_id
+            )
             if s.deny_list_id:
                 policy_ids.add(s.deny_list_id)
         for ps in self.policy_sets:
@@ -430,6 +435,21 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                         f"policy set {ps.name} is not an allow-list policy set",
                     )
                 )
+
+        for ri, route in enumerate(s.routes):
+            if route.client_ip is not None and route.client_ip.allow_list_id:
+                path = f"{base}.routes[{ri}].client_ip.allow_list_id"
+                ps = check_ref(
+                    path, s.tenant_id, "policy set", route.client_ip.allow_list_id, policies
+                )
+                if ps is not None and not isinstance(ps, AllowListPolicySet):
+                    problems.append(
+                        Problem(
+                            path,
+                            "wrong_policy_kind",
+                            f"policy set {ps.name} is not an allow-list policy set",
+                        )
+                    )
 
         if s.deny_list_id:
             ps = check_ref(

@@ -168,3 +168,4 @@ Date: YYYY-MM-DD
 | [0227](0227-grpc-health-check.md) | gRPC health checks: an HTTP/2 request, not a gRPC stream | Accepted |
 | [0228](0228-api-body-schema-validation.md) | JSON body schemas for API-schema protection: generated Coraza rules, bounded schema tree | Accepted |
 | [0229](0229-restore-client-ip-without-allow-list.md) | Restore the client address without an allow list: explicit any-source opt-in, validated single address | Accepted |
+| [0230](0230-per-route-client-ip-restoration.md) | Per-host client-IP restoration override on host-only routes | Accepted |

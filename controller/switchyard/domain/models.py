@@ -644,10 +644,61 @@ class WeightedPool(Model):
     weight: int = Field(ge=1, le=99)
 
 
+class RouteClientIp(Model):
+    """Per-host override of the service's client-IP restoration (ADR 0230).
+
+    Replaces the service-level ``restore_client_ip_header`` / ``allow_list_id`` /
+    ``restore_client_ip_from_any_source`` as one block (nothing is merged field by field) for the
+    request's host. The same safety rules as the service level apply (ADR 0229).
+
+    Attributes:
+        enabled: ``False`` turns restoration off for this host (the header is then left alone, as
+            on a service without one). Takes no other field.
+        header: Header carrying the real client address (for example ``CF-Connecting-IP``).
+        allow_list_id: Trusted sources: the header is honoured only from these networks.
+        from_any_source: Explicit opt-in to honour the header from every source. Not together
+            with ``allow_list_id``.
+
+    Example:
+        >>> RouteClientIp(enabled=False).enabled
+        False
+        >>> RouteClientIp(header="CF-Connecting-IP", from_any_source=True).header
+        'CF-Connecting-IP'
+    """
+
+    enabled: bool = True
+    header: HeaderName | None = None
+    allow_list_id: UUID | None = None
+    from_any_source: bool = False
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if not self.enabled:
+            if self.header is not None or self.allow_list_id or self.from_any_source:
+                raise ValueError(
+                    "client_ip with enabled=false takes no header, allow_list_id or from_any_source"
+                )
+            return self
+        if self.header is None:
+            raise ValueError("client_ip needs header (or enabled=false to turn restoration off)")
+        if self.from_any_source and self.allow_list_id:
+            raise ValueError(
+                "client_ip.from_any_source conflicts with client_ip.allow_list_id: "
+                "the allow list already restricts who is trusted"
+            )
+        if not self.from_any_source and not self.allow_list_id:
+            raise ValueError(
+                "client_ip.header needs allow_list_id (trusted sources) or from_any_source=true"
+            )
+        return self
+
+
 class VsRoute(Model):
     """Route a request to a pool, split it over weighted pools, or answer it with a redirect.
 
     Attributes:
+        client_ip: Per-host client-IP restoration override (ADR 0230); host-only routes only.
+            ``None`` inherits the service settings.
         order: Position among path routes; lower runs first. Host-only routes are looked up in map
             files and are order-independent (exact host wins over wildcard).
         match: What the request must match. Must not be empty.
@@ -677,6 +728,7 @@ class VsRoute(Model):
     redirect: RedirectAction | None = None
     pools: tuple[WeightedPool, ...] = Field(default=(), max_length=8)
     fallback_pool_ids: tuple[UUID, ...] = Field(default=(), max_length=3)
+    client_ip: RouteClientIp | None = None
 
     @model_validator(mode="after")
     def _one_action(self) -> Self:
@@ -697,6 +749,11 @@ class VsRoute(Model):
                 raise ValueError("a pool can appear only once in a priority chain")
         if self.match.is_empty:
             raise ValueError("a route must match a host or a path; use default_pool_id as fallback")
+        if self.client_ip is not None and not self.match.is_host_only:
+            raise ValueError(
+                "client_ip is only valid on a host-only route (the host is the only match "
+                "condition): the client address is settled before the path is looked at"
+            )
         return self
 
     @property
@@ -961,6 +1018,12 @@ class VirtualService(TenantOwned):
                 "restore_client_ip_header needs allow_list_id (trusted sources) or "
                 "restore_client_ip_from_any_source=true"
             )
+        overridden = [r.match.host for r in self.routes if r.client_ip is not None]
+        if overridden:
+            if self.protocol is not Protocol.HTTP:
+                raise ValueError("route client_ip is only valid for http services")
+            if len(set(overridden)) != len(overridden):
+                raise ValueError("at most one route per host may set client_ip")
         tls_ports = {p.port for p in self.ports if p.tls}
         for p in self.ports:
             if p.https_redirect_port is not None and p.https_redirect_port not in tls_ports:

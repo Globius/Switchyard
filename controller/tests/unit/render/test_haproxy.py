@@ -913,3 +913,19 @@ class TestFingerprint:
         from switchyard.render.haproxy import fingerprint_of
 
         assert fingerprint_of("global\n  maxconn 1\n") is None
+
+
+def test_golden_37_precedence_and_inherit() -> None:
+    """Per-route client_ip (ADR 0230): inherit, off, other header, any-source, wildcard < exact."""
+    from tests.golden_support import render_case
+
+    cfg = render_case("37-per-route-client-ip").files["haproxy/haproxy.cfg"]
+    wild = cfg.index("sy_cip) int(5) if")
+    exact = cfg.index("sy_cip) int(2) if")
+    assert wild < exact  # wildcards first, so an exact host overrides them
+    assert "set-src req.hdr_ip(CF-Connecting-IP) if" in cfg
+    assert "del-header X-Forwarded-For" in cfg
+    # the service rules apply only when no override matched
+    assert cfg.count("!{ var(txn.sy_cip) -m found }") == 4
+    # 'disabled' (int 2 and 5) adds no rule of its own
+    assert "-m int 2 }" not in cfg and "-m int 5 }" not in cfg

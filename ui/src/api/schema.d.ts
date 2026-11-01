@@ -15359,6 +15359,44 @@ export interface components {
             phase: string;
         };
         /**
+         * RouteClientIp
+         * @description Per-host override of the service's client-IP restoration (ADR 0230).
+         *
+         *     Replaces the service-level ``restore_client_ip_header`` / ``allow_list_id`` /
+         *     ``restore_client_ip_from_any_source`` as one block (nothing is merged field by field) for the
+         *     request's host. The same safety rules as the service level apply (ADR 0229).
+         *
+         *     Attributes:
+         *         enabled: ``False`` turns restoration off for this host (the header is then left alone, as
+         *             on a service without one). Takes no other field.
+         *         header: Header carrying the real client address (for example ``CF-Connecting-IP``).
+         *         allow_list_id: Trusted sources: the header is honoured only from these networks.
+         *         from_any_source: Explicit opt-in to honour the header from every source. Not together
+         *             with ``allow_list_id``.
+         *
+         *     Example:
+         *         >>> RouteClientIp(enabled=False).enabled
+         *         False
+         *         >>> RouteClientIp(header="CF-Connecting-IP", from_any_source=True).header
+         *         'CF-Connecting-IP'
+         */
+        RouteClientIp: {
+            /** Allow List Id */
+            allow_list_id?: string | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * From Any Source
+             * @default false
+             */
+            from_any_source: boolean;
+            /** Header */
+            header?: string | null;
+        };
+        /**
          * RouteMatch
          * @description Request match shared by routes and policy rules; every condition given must hold (AND).
          *
@@ -17512,6 +17550,8 @@ export interface components {
          * @description Route a request to a pool, split it over weighted pools, or answer it with a redirect.
          *
          *     Attributes:
+         *         client_ip: Per-host client-IP restoration override (ADR 0230); host-only routes only.
+         *             ``None`` inherits the service settings.
          *         order: Position among path routes; lower runs first. Host-only routes are looked up in map
          *             files and are order-independent (exact host wins over wildcard).
          *         match: What the request must match. Must not be empty.
@@ -17535,6 +17575,7 @@ export interface components {
          *         2
          */
         VsRoute: {
+            client_ip?: components["schemas"]["RouteClientIp"] | null;
             /**
              * Fallback Pool Ids
              * @default []
