@@ -61,9 +61,11 @@ jobs:
           rc=$?
           [ "$rc" -le 1 ] || exit "$rc"
           [ -f snyk.sarif ] || echo '{"version":"2.1.0","runs":[]}' > snyk.sarif
-          # Snyk Container writes `"security-severity": null` for some rules and code scanning rejects the file
-          # ("invalid security severity value, is not a number: null"). Drop the null; a rule without it is fine.
-          jq 'del(.runs[]?.tool.driver.rules[]?.properties["security-severity"] | select(. == null))' snyk.sarif > snyk.clean.sarif
+          # Snyk Container writes a non-numeric "security-severity" (null) on some rules and code scanning rejects the
+          # file ("invalid security severity value, is not a number: null"). Keep the property only where it is a
+          # number (or a numeric string); a rule without it is valid. Log what was seen so a new shape shows up.
+          jq -c '[.runs[]?.tool.driver.rules[]?.properties["security-severity"]] | group_by(.) | map({v: .[0], n: length})' snyk.sarif
+          jq 'del(.runs[]?.tool.driver.rules[]? | .properties? | select(. != null) | ."security-severity"? | select((tostring | test("^[0-9]+([.][0-9]+)?$")) | not))' snyk.sarif > snyk.clean.sarif
           mv snyk.clean.sarif snyk.sarif
       - if: steps.gate.outputs.enabled == 'true' && github.event.pull_request.head.repo.fork != true
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
