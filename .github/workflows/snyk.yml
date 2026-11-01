@@ -61,6 +61,10 @@ jobs:
           rc=$?
           [ "$rc" -le 1 ] || exit "$rc"
           [ -f snyk.sarif ] || echo '{"version":"2.1.0","runs":[]}' > snyk.sarif
+          # Snyk Container writes `"security-severity": null` for some rules and code scanning rejects the file
+          # ("invalid security severity value, is not a number: null"). Drop the null; a rule without it is fine.
+          jq 'del(.runs[]?.tool.driver.rules[]?.properties["security-severity"] | select(. == null))' snyk.sarif > snyk.clean.sarif
+          mv snyk.clean.sarif snyk.sarif
       - if: steps.gate.outputs.enabled == 'true' && github.event.pull_request.head.repo.fork != true
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
