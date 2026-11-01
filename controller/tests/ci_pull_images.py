@@ -20,6 +20,7 @@ Example:
 from __future__ import annotations
 
 import os
+import time
 
 import docker
 
@@ -51,8 +52,23 @@ def _on_docker_hub(image: str) -> bool:
     return "/" not in image or not ("." in first or ":" in first or first == "localhost")
 
 
+def _pull(client: docker.DockerClient, repo: str, tag: str, auth: dict[str, str] | None) -> None:
+    """Pull ``repo:tag`` and raise on an error in the progress stream.
+
+    The Docker SDK's ``images.pull`` ignores errors reported inside the stream, so a failed pull only
+    shows up later as ``ImageNotFound`` with no reason. Read the stream and raise the real message.
+    """
+    for event in client.api.pull(repo, tag=tag, stream=True, decode=True, auth_config=auth):
+        if "error" in event:
+            raise RuntimeError(f"pull of {repo}:{tag} failed: {event['error']}")
+
+
 def main() -> None:
-    """Pull each image in ``IMAGES``, through the Dependency Proxy when CI provides one."""
+    """Pull each image in ``IMAGES``, through the Dependency Proxy when CI provides one.
+
+    A pull is tried three times through the proxy; if that keeps failing the image is pulled from
+    Docker Hub directly, so a cache hiccup does not fail the whole nightly run.
+    """
     client = docker.from_env()
     proxy = os.environ.get("CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX")
     auth = None
@@ -63,11 +79,25 @@ def main() -> None:
         }
     for image in IMAGES:
         source = f"{proxy}/{image}" if proxy and _on_docker_hub(image) else image
-        repo, tag = source.rsplit(":", 1)
-        pulled = client.images.pull(repo, tag=tag, auth_config=auth if source != image else None)
+        for attempt in range(1, 4):
+            try:
+                repo, tag = source.rsplit(":", 1)
+                _pull(client, repo, tag, auth if source != image else None)
+                break
+            except (RuntimeError, docker.errors.APIError) as err:
+                print(f"{source}: attempt {attempt}: {err}")  # noqa: T201 - CI log
+                if attempt == 3:
+                    if source == image:
+                        raise
+                    print(f"falling back to Docker Hub for {image}")  # noqa: T201
+                    name, name_tag = image.rsplit(":", 1)
+                    _pull(client, name, name_tag, None)
+                    source = image
+                else:
+                    time.sleep(5 * attempt)
         if source != image:
             name, name_tag = image.rsplit(":", 1)
-            pulled.tag(name, tag=name_tag)
+            client.images.get(source).tag(name, tag=name_tag)
         print(f"pulled {image} from {source}")  # noqa: T201 - progress in the CI log
 
 
