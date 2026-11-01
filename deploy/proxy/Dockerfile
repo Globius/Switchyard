@@ -8,7 +8,7 @@ RUN pnpm install --frozen-lockfile
 COPY ui/ .
 RUN pnpm exec vite build
 
-FROM nginxinc/nginx-unprivileged:stable-alpine@sha256:56b8272e43a0525f67aed68d1e0794a712d10e3e45a563e118e9a77c817e6f86
+FROM nginxinc/nginx-unprivileged:stable-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03
 USER root
 # Upgrade the pinned base's zlib to the signed Alpine security update (CVE-2026-85091).
 RUN apk upgrade --no-cache zlib
