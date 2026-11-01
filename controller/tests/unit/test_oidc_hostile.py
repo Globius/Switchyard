@@ -4,6 +4,9 @@
 
 """ID-token validation against hostile tokens (docs/security/backend-review.md)."""
 
+import base64
+import hashlib
+import hmac
 import json
 import time
 from typing import Any
@@ -11,7 +14,7 @@ from typing import Any
 import httpx
 import pytest
 from joserfc import jwt
-from joserfc.jwk import KeySet, OctKey, RSAKey
+from joserfc.jwk import KeySet, RSAKey
 
 from switchyard.services.oidc import OidcClient, OidcError, ProviderConfig
 
@@ -97,8 +100,16 @@ async def test_alg_none_is_refused() -> None:
 
 
 async def test_hmac_with_the_public_key_as_the_secret_is_refused() -> None:
+    # The classic key-confusion forgery: sign with HMAC, using the public PEM as the secret. joserfc >= 1.7.6
+    # refuses to build an OctKey from a public key, so the token is assembled by hand to keep the attack real.
     public_pem = KEY.as_pem(private=False)
-    forged = jwt.encode({"alg": "HS256", "kid": "k1"}, claims(), OctKey.import_key(public_pem))
+    segments = [
+        base64.urlsafe_b64encode(json.dumps(part, separators=(",", ":")).encode()).rstrip(b"=")
+        for part in ({"alg": "HS256", "kid": "k1"}, claims())
+    ]
+    signing_input = b".".join(segments)
+    mac = hmac.new(public_pem, signing_input, hashlib.sha256).digest()
+    forged = (signing_input + b"." + base64.urlsafe_b64encode(mac).rstrip(b"=")).decode()
     with pytest.raises(OidcError):
         await check(forged)
 
