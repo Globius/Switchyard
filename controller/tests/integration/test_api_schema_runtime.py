@@ -25,6 +25,7 @@ from docker.models.containers import Container
 
 from switchyard.domain.loader import snapshot_from_mapping, symbolic_uuid
 from switchyard.render.haproxy import render_haproxy
+from tests import dockerhost
 from tests.golden_support import GOLDEN_DIR
 from tests.haproxy_check import HAPROXY_IMAGE
 
@@ -67,7 +68,7 @@ def proxy(request: pytest.FixtureRequest) -> Iterator[tuple[str, dict[int, str]]
     container: Container = client.containers.create(
         HAPROXY_IMAGE,
         command=["haproxy", "-f", "/etc/switchyard/haproxy/haproxy.cfg"],
-        ports={"8080/tcp": ("127.0.0.1", None), "8081/tcp": ("127.0.0.1", None)},
+        ports={"8080/tcp": (dockerhost.BIND, None), "8081/tcp": (dockerhost.BIND, None)},
         user="root",
     )
     try:
@@ -93,7 +94,7 @@ def call(
     content_type: str | None = None,
     chunked: bool = False,
 ) -> int:
-    connection = http.client.HTTPConnection("127.0.0.1", int(port), timeout=15)
+    connection = http.client.HTTPConnection(dockerhost.HOST, int(port), timeout=15)
     headers = {"Host": "api.example.test"}
     if content_type:
         headers["Content-Type"] = content_type

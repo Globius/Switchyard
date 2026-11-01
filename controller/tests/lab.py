@@ -27,6 +27,8 @@ from typing import Any
 import docker
 import httpx
 
+from tests import dockerhost
+
 SE_IMAGE = "haproxytech/haproxy-debian:3.2"
 BACKEND_IMAGE = "haproxy:3.2"
 CURL_IMAGE = "curlimages/curl:8.10.1"
@@ -266,12 +268,14 @@ class Lab:
             user="root",
             environment={"CERTS": " ".join(certs)},
             ports=[5555],
-            port_bindings={5555: ("127.0.0.1", None)},
+            port_bindings={5555: (dockerhost.BIND, None)},
             sysctls={"net.ipv4.ip_nonlocal_bind": "1" if nonlocal_bind else "0"},
         )
         container.reload()
         host_port = container.attrs["NetworkSettings"]["Ports"]["5555/tcp"][0]["HostPort"]
-        se = Se(name=name, ip=ip, api_url=f"http://127.0.0.1:{host_port}", container=container)
+        se = Se(
+            name=name, ip=ip, api_url=f"http://{dockerhost.HOST}:{host_port}", container=container
+        )
         deadline = time.monotonic() + 30
         while True:
             try:

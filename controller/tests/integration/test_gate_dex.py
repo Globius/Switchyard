@@ -31,6 +31,7 @@ from switchyard.adapters.radius import FakeRadiusServer
 from switchyard.domain.loader import snapshot_from_mapping, symbolic_uuid
 from switchyard.gate import app as gate_app
 from switchyard.render.broker import render_broker_files
+from tests import dockerhost
 
 DEX_IMAGE = "ghcr.io/dexidp/dex:v2.41.1-alpine"
 BROKER_URL = "https://auth.example.test/dex"
@@ -136,7 +137,7 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
         DEX_IMAGE,
         entrypoint=["sh", "-c", "mkdir -p /var/lib/dex && exec dex serve /etc/dex.yaml"],
         user="root",
-        ports={f"{port}/tcp": ("127.0.0.1", None)},
+        ports={f"{port}/tcp": (dockerhost.BIND, None)},
     )
     try:
         container.put_archive("/etc", _tar("dex.yaml", yaml.safe_dump(dex)))
@@ -146,7 +147,7 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
         deadline = time.time() + 40
         while True:
             try:
-                url = f"http://127.0.0.1:{host_port}{PATH}/.well-known/openid-configuration"
+                url = f"http://{dockerhost.HOST}:{host_port}{PATH}/.well-known/openid-configuration"
                 if httpx.get(url).is_success:
                     break
             except httpx.HTTPError:
@@ -155,7 +156,7 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
                 raise AssertionError("Dex did not start:\n" + container.logs().decode())
             time.sleep(0.5)
         config = json.loads(files["gate/acme-staff-radius.json"])
-        config["dex_port"] = host_port
+        config["dex_port"] = dockerhost.loopback_port(host_port)  # the gate dials Dex on 127.0.0.1
         for server, server_port in (("main", main_port), ("otp", otp_port)):
             config["servers"][server].update(host="127.0.0.1", port=server_port, allow_local=True)
         config["servers"]["main"]["port"] = main_port
