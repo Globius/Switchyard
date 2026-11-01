@@ -21,6 +21,7 @@ UDP_FORBIDDEN_SERVICE_FIELDS = (
     "enforce_allow_list",
     "deny_list_id",
     "restore_client_ip_header",
+    "restore_client_ip_from_any_source",
     "routes",
     "compression",
     "cache",
@@ -92,6 +93,7 @@ def protocol_rules(protocol: Protocol) -> ProtocolRules:
     forbidden = (
         "policy_set_ids",
         "restore_client_ip_header",
+        "restore_client_ip_from_any_source",
         "compression",
     )
     return ProtocolRules(

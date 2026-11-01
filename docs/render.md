@@ -158,7 +158,7 @@ group has a `nat` UDP service. Validation codes: `ipvs_port_mismatch`, `ipvs_dr_
 | Policy set `rewrite`, response rule | `http-response set-header\|add-header\|del-header ...`; a rule with a match tests a flag set at request time: `http-request set-var(txn.sy_m<n>) bool(true) if <conditions>` then `http-response ... if { var(txn.sy_m<n>) -m bool }` |
 | Service `allow_list_id` + `enforce_allow_list` | `tcp-request session reject if !{ src -f <dir>/lists/<name>.cidr }` |
 | Service `deny_list_id` | HTTP: `http-request deny deny_status 403 if { src -f <dir>/lists/<name>.cidr }` after the client address is restored; TCP: `tcp-request session reject if { src -f ... }` |
-| Service `restore_client_ip_header` | trust flag, `set-src hdr(<H>)` if trusted, `del-header <H>` if not (see below) |
+| Service `restore_client_ip_header` | trust flag (only with `allow_list_id`), `set-src req.hdr_ip(<H>)` for a valid single address, `del-header <H>` for an untrusted or malformed one (see below) |
 | Pool `name`, `algorithm` | `backend pool_<name>`, `balance <algorithm>` |
 | Pool `algorithm` `uri`, `hdr`, `url_param` | `balance uri`, `balance hdr(<hash_key>)` or `balance url_param <hash_key>` (note the space: HAProxy rejects `url_param(<name>)`); `hash-type` stays at HAProxy's default, and the pool must be used by `http` services only (ADR 0224) |
 | Pool `persistence` `source_ip` | `stick-table type ipv6 size <n> expire <t>s` and `stick on src` |
@@ -244,19 +244,35 @@ An empty match (allowed in rewrite and respond rules) renders no `if`, so the ru
 Wildcards match exactly one label: `*.example.test` matches `a.example.test`, not `example.test` and
 not `a.b.example.test`. Certificate coverage uses the same rule.
 
-### Restoring the client address behind Cloudflare
+### Restoring the client address behind a CDN
 
-With `allow_list_id` (for example the Cloudflare ranges) and `restore_client_ip_header:
-CF-Connecting-IP`:
+`restore_client_ip_header` (for example `CF-Connecting-IP`) replaces the connection source with the address in that header, so
+deny lists, rate limits, route `source_cidrs` and logs see the real client (ADR 0229). It does not depend on an allow list.
+Who may set the header is explicit, one of two modes:
+
+- **With `allow_list_id`** (for example the Cloudflare ranges): the header is honoured only from a listed source and removed
+  from every other one.
+- **Without a list**, only with `restore_client_ip_from_any_source: true`: the header is honoured from every source. Anyone who
+  can reach the VIP directly can then choose their client IP, so use it only when the VIP is reachable through the CDN alone.
+  Without that flag the API refuses the service (422).
+
+The two cannot be combined, and `enforce_allow_list` (reject sources outside the list) still needs `allow_list_id`.
+
+With a list:
 
 ```text
 http-request set-var(txn.trusted) bool(true) if { src -f .../lists/cloudflare-ranges.cidr }
-http-request set-src hdr(CF-Connecting-IP) if { var(txn.trusted) -m bool } { hdr(CF-Connecting-IP) -m found }
+http-request set-src req.hdr_ip(CF-Connecting-IP) if { var(txn.trusted) -m bool } { req.fhdr_cnt(CF-Connecting-IP) eq 1 } { req.fhdr(CF-Connecting-IP) -m reg ^([0-9]+[.][0-9]+[.][0-9]+[.][0-9]+|[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*)$ } { req.hdr_ip(CF-Connecting-IP) -m found }
 http-request del-header CF-Connecting-IP if !{ var(txn.trusted) -m bool }
+http-request del-header CF-Connecting-IP if !{ req.fhdr_cnt(...) eq 1 } || !{ req.fhdr(...) -m reg ... } || !{ req.hdr_ip(...) -m found }
 ```
 
-The trust flag is computed first because `set-src` changes what `src` means afterwards. A source
-outside the list cannot spoof the header: it is removed before the backend sees it.
+Without a list there is no trust flag, `set-src` has only the three validity conditions and the final `del-header` stays.
+
+The trust flag is computed first because `set-src` changes what `src` means afterwards. A value is used only if it is exactly one
+header line holding one IPv4 or IPv6 literal; a comma list, a second header line, a hostname or garbage is never used for
+`set-src` and is removed, so it cannot break the request or reach the backend. `X-Forwarded-For` is always dropped and rebuilt
+from the (restored) source by `option forwardfor`.
 
 ## Example
 

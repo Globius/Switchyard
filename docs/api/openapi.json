@@ -25018,7 +25018,7 @@
       },
       "VirtualService": {
         "additionalProperties": false,
-        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    deny_list_id: Allow-list policy set whose networks are refused (for example a country or\n        reputation list, ADR 0147). Applies to the client address after restoration.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.\n    compression: Response compression (``http`` only; ADR 0117).\n    cache: Response cache (``http`` only; ADR 0117).\n    labels: Free key/value tags for finding the service (``?label=``; ADR 0198). Never rendered.\n    forward_mode: IPVS forwarding method (``udp`` only): ``nat`` (default), ``dr`` or\n        ``tunnel`` (ADR 0192). The last two need every member on the service port.\n    dns: DNS address records the controller keeps pointing at the VIP (ADR 0193).",
+        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    deny_list_id: Allow-list policy set whose networks are refused (for example a country or\n        reputation list, ADR 0147). Applies to the client address after restoration.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address. With ``allow_list_id`` set it is honoured only when the connection\n        source is in that list (and stripped otherwise); without a list it needs\n        ``restore_client_ip_from_any_source`` (ADR 0229).\n    restore_client_ip_from_any_source: Explicit opt-in to honour ``restore_client_ip_header``\n        from every source when there is no ``allow_list_id``. Any client that reaches the\n        service directly can then choose its own address, so use it only when the VIP is\n        reachable solely through the CDN or proxy.\n    compression: Response compression (``http`` only; ADR 0117).\n    cache: Response cache (``http`` only; ADR 0117).\n    labels: Free key/value tags for finding the service (``?label=``; ADR 0198). Never rendered.\n    forward_mode: IPVS forwarding method (``udp`` only): ``nat`` (default), ``dr`` or\n        ``tunnel`` (ADR 0192). The last two need every member on the service port.\n    dns: DNS address records the controller keeps pointing at the VIP (ADR 0193).",
         "properties": {
           "allow_list_id": {
             "anyOf": [
@@ -25144,6 +25144,11 @@
           },
           "protocol": {
             "$ref": "#/components/schemas/Protocol"
+          },
+          "restore_client_ip_from_any_source": {
+            "default": false,
+            "title": "Restore Client Ip From Any Source",
+            "type": "boolean"
           },
           "restore_client_ip_header": {
             "anyOf": [
@@ -25340,6 +25345,11 @@
           },
           "protocol": {
             "$ref": "#/components/schemas/Protocol"
+          },
+          "restore_client_ip_from_any_source": {
+            "default": false,
+            "title": "Restore Client Ip From Any Source",
+            "type": "boolean"
           },
           "restore_client_ip_header": {
             "anyOf": [
@@ -25696,6 +25706,17 @@
               }
             ]
           },
+          "restore_client_ip_from_any_source": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restore Client Ip From Any Source"
+          },
           "restore_client_ip_header": {
             "anyOf": [
               {
@@ -25905,6 +25926,11 @@
           },
           "protocol": {
             "$ref": "#/components/schemas/Protocol"
+          },
+          "restore_client_ip_from_any_source": {
+            "default": false,
+            "title": "Restore Client Ip From Any Source",
+            "type": "boolean"
           },
           "restore_client_ip_header": {
             "anyOf": [
@@ -32965,6 +32991,7 @@
                     "enforce_allow_list",
                     "deny_list_id",
                     "restore_client_ip_header",
+                    "restore_client_ip_from_any_source",
                     "routes"
                   ]
                 },
@@ -63203,6 +63230,7 @@
                         }
                       ],
                       "protocol": "http",
+                      "restore_client_ip_from_any_source": false,
                       "routes": [],
                       "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
                       "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
@@ -63376,6 +63404,7 @@
                   }
                 ],
                 "protocol": "http",
+                "restore_client_ip_from_any_source": false,
                 "restore_client_ip_header": null,
                 "routes": [],
                 "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
@@ -63729,6 +63758,7 @@
                     }
                   ],
                   "protocol": "http",
+                  "restore_client_ip_from_any_source": false,
                   "routes": [],
                   "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
                   "tenant_id": "0192f3a0-0000-7000-8000-000000000001",

@@ -121,12 +121,40 @@ class TestVirtualService:
         )
         assert ok.ports[0].https_redirect_port == 443
 
-    def test_allow_list_options_need_a_list(self) -> None:
-        with pytest.raises(ValidationError, match="allow_list_id"):
+    def test_enforcing_an_allow_list_needs_a_list(self) -> None:
+        with pytest.raises(ValidationError, match="enforce_allow_list needs allow_list_id"):
             vs(enforce_allow_list=True)
-        with pytest.raises(ValidationError, match="allow_list_id"):
+        assert vs(allow_list_id=T, enforce_allow_list=True).enforce_allow_list
+
+    def test_restore_client_ip_with_a_trusted_list(self) -> None:
+        ok = vs(allow_list_id=T, restore_client_ip_header="CF-Connecting-IP")
+        assert ok.allow_list_id == T
+        assert ok.restore_client_ip_from_any_source is False
+
+    def test_restore_client_ip_without_a_list_must_be_explicit(self) -> None:
+        with pytest.raises(ValidationError, match="restore_client_ip_from_any_source=true"):
             vs(restore_client_ip_header="CF-Connecting-IP")
-        assert vs(allow_list_id=T, restore_client_ip_header="CF-Connecting-IP").allow_list_id == T
+        ok = vs(restore_client_ip_header="CF-Connecting-IP", restore_client_ip_from_any_source=True)
+        assert ok.allow_list_id is None
+        assert ok.restore_client_ip_from_any_source is True
+
+    def test_any_source_needs_a_header_and_excludes_a_list(self) -> None:
+        with pytest.raises(ValidationError, match="needs restore_client_ip_header"):
+            vs(restore_client_ip_from_any_source=True)
+        with pytest.raises(ValidationError, match="conflicts with allow_list_id"):
+            vs(
+                allow_list_id=T,
+                restore_client_ip_header="CF-Connecting-IP",
+                restore_client_ip_from_any_source=True,
+            )
+
+    def test_any_source_is_http_only(self) -> None:
+        with pytest.raises(ValidationError, match="only valid for http"):
+            vs(
+                protocol="tcp",
+                restore_client_ip_header="CF-Connecting-IP",
+                restore_client_ip_from_any_source=True,
+            )
 
     def test_udp_needs_a_default_pool(self) -> None:
         with pytest.raises(ValidationError, match="default_pool_id"):

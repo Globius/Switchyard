@@ -31,8 +31,9 @@ routes:
   `order` before them.
 - A route targets one pool, a **weighted split** of two to eight pools (weights add up to 100, drawn per request), or a
   redirect. `fallback_pool_ids` adds priority groups: the next pool takes over when every server of the previous one is down.
-- `restore_client_ip_header` (for example `CF-Connecting-IP`) restores the real client address behind a CDN; allow lists,
-  rate limits and logs then see that address.
+- `restore_client_ip_header` (for example `CF-Connecting-IP`) restores the real client address behind a CDN; deny lists,
+  rate limits and logs then see that address. With `allow_list_id` only listed sources are believed; without a list set
+  `restore_client_ip_from_any_source: true` to accept it from anyone (see the warning in `render.md`, ADR 0229).
 - `GET .../virtual-services/{id}/rendered` shows the exact HAProxy configuration, and
   `.../virtual-services/{service}/engines/{engine}/rendered` every file one engine gets.
 

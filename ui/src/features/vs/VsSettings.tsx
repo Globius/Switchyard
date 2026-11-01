@@ -949,6 +949,30 @@ function SettingsForm({
               ))}
             </select>
           </Field>
+          {form.restore_client_ip_header && !form.allow_list_id && (
+            <Field
+              label={t("Trust the header from any source")}
+              name="restore_client_ip_from_any_source"
+              changed={changed("restore_client_ip_from_any_source")}
+              live={liveText("restore_client_ip_from_any_source")}
+              onRevert={revert("restore_client_ip_from_any_source")}
+              errors={er("restore_client_ip_from_any_source")}
+            >
+              <div className="flex items-center gap-3">
+                <Switch
+                  aria-label={t("Trust the header from any source")}
+                  disabled={disabled}
+                  checked={form.restore_client_ip_from_any_source}
+                  onCheckedChange={(on) => set("restore_client_ip_from_any_source", on)}
+                />
+                <span className="text-sm text-muted-foreground">
+                  {t(
+                    "Required without an allow list. Anyone who can reach this address directly can choose the client IP, so use it only when the VIP is reachable through the CDN alone.",
+                  )}
+                </span>
+              </div>
+            </Field>
+          )}
         </div>
       </SettingsCard>
 

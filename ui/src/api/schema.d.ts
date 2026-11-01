@@ -16863,7 +16863,13 @@ export interface components {
          *         deny_list_id: Allow-list policy set whose networks are refused (for example a country or
          *             reputation list, ADR 0147). Applies to the client address after restoration.
          *         restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real
-         *             client address; honoured only when the connection source is in the allow list.
+         *             client address. With ``allow_list_id`` set it is honoured only when the connection
+         *             source is in that list (and stripped otherwise); without a list it needs
+         *             ``restore_client_ip_from_any_source`` (ADR 0229).
+         *         restore_client_ip_from_any_source: Explicit opt-in to honour ``restore_client_ip_header``
+         *             from every source when there is no ``allow_list_id``. Any client that reaches the
+         *             service directly can then choose its own address, so use it only when the VIP is
+         *             reachable solely through the CDN or proxy.
          *         compression: Response compression (``http`` only; ADR 0117).
          *         cache: Response cache (``http`` only; ADR 0117).
          *         labels: Free key/value tags for finding the service (``?label=``; ADR 0198). Never rendered.
@@ -16917,6 +16923,11 @@ export interface components {
             /** Ports */
             ports: components["schemas"]["VsPort"][];
             protocol: components["schemas"]["Protocol"];
+            /**
+             * Restore Client Ip From Any Source
+             * @default false
+             */
+            restore_client_ip_from_any_source: boolean;
             /** Restore Client Ip Header */
             restore_client_ip_header?: string | null;
             /**
@@ -16986,6 +16997,11 @@ export interface components {
             /** Ports */
             ports: components["schemas"]["VsPort"][];
             protocol: components["schemas"]["Protocol"];
+            /**
+             * Restore Client Ip From Any Source
+             * @default false
+             */
+            restore_client_ip_from_any_source: boolean;
             /** Restore Client Ip Header */
             restore_client_ip_header?: string | null;
             /**
@@ -17093,6 +17109,8 @@ export interface components {
             /** Ports */
             ports?: components["schemas"]["VsPort"][] | null;
             protocol?: components["schemas"]["Protocol"] | null;
+            /** Restore Client Ip From Any Source */
+            restore_client_ip_from_any_source?: boolean | null;
             /** Restore Client Ip Header */
             restore_client_ip_header?: string | null;
             /** Routes */
@@ -17161,6 +17179,11 @@ export interface components {
             /** Ports */
             ports: components["schemas"]["VsPort"][];
             protocol: components["schemas"]["Protocol"];
+            /**
+             * Restore Client Ip From Any Source
+             * @default false
+             */
+            restore_client_ip_from_any_source: boolean;
             /** Restore Client Ip Header */
             restore_client_ip_header?: string | null;
             /**
@@ -21672,6 +21695,7 @@ export interface operations {
                      *         "enforce_allow_list",
                      *         "deny_list_id",
                      *         "restore_client_ip_header",
+                     *         "restore_client_ip_from_any_source",
                      *         "routes"
                      *       ]
                      *     }
@@ -41389,6 +41413,7 @@ export interface operations {
                      *             }
                      *           ],
                      *           "protocol": "http",
+                     *           "restore_client_ip_from_any_source": false,
                      *           "routes": [],
                      *           "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
                      *           "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
@@ -41490,6 +41515,7 @@ export interface operations {
                  *         }
                  *       ],
                  *       "protocol": "http",
+                 *       "restore_client_ip_from_any_source": false,
                  *       "restore_client_ip_header": null,
                  *       "routes": [],
                  *       "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
@@ -41611,6 +41637,7 @@ export interface operations {
                      *         }
                      *       ],
                      *       "protocol": "http",
+                     *       "restore_client_ip_from_any_source": false,
                      *       "routes": [],
                      *       "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
                      *       "tenant_id": "0192f3a0-0000-7000-8000-000000000001",

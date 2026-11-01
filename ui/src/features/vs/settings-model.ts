@@ -23,6 +23,7 @@ export const EDITABLE = [
   "enforce_allow_list",
   "deny_list_id",
   "restore_client_ip_header",
+  "restore_client_ip_from_any_source",
   "compression",
   "cache",
   "labels",

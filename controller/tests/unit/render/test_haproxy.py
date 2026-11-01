@@ -18,7 +18,7 @@ from switchyard.domain.errors import DomainValidationError
 from switchyard.domain.loader import snapshot_from_mapping, symbolic_uuid
 from switchyard.domain.models import Algorithm, Pool, RedirectAction, RouteMatch
 from switchyard.render.escape import RenderError
-from switchyard.render.haproxy import _Renderer, render_haproxy
+from switchyard.render.haproxy import _ADDR_CHARS, _Renderer, render_haproxy
 from tests.factories import base_data
 
 GROUP = uuid.UUID(symbolic_uuid("seg-1"))
@@ -249,6 +249,9 @@ class TestRedirects:
         assert "redirect location /b%%20c code 301" in cfg(data)
 
 
+_STRIP_INVALID = "http-request del-header CF-Connecting-IP if !{ req.fhdr_cnt("
+
+
 class TestClientAddress:
     def data(self, **vs: Any) -> dict[str, Any]:
         data = base_data()
@@ -271,12 +274,61 @@ class TestClientAddress:
         set_src = next(i for i, r in enumerate(rules) if "set-src" in r)
         assert trusted < set_src, "trust must be decided before set-src changes `src`"
         assert (
-            "if { var(txn.trusted) -m bool } { hdr(CF-Connecting-IP) -m found }" in rules[set_src]
+            "set-src req.hdr_ip(CF-Connecting-IP) if { var(txn.trusted) -m bool } {"
+            in rules[set_src]
         )
         assert any(
             r == "http-request del-header CF-Connecting-IP if !{ var(txn.trusted) -m bool }"
             for r in rules
         )
+        assert any(r.startswith(_STRIP_INVALID) for r in rules), "invalid values are removed"
+
+    def test_any_source_has_no_trust_flag_and_still_validates(self) -> None:
+        data = self.data()
+        data["virtual_services"][0].pop("allow_list_id")
+        data["virtual_services"][0].update(
+            restore_client_ip_header="CF-Connecting-IP", restore_client_ip_from_any_source=True
+        )
+        text = cfg(data)
+        rules = [r for r in lines(text) if r.startswith("http-request")]
+        assert "txn.trusted" not in text
+        set_src = [r for r in rules if "set-src" in r]
+        assert len(set_src) == 1
+        for check in (
+            "req.fhdr_cnt(CF-Connecting-IP) eq 1",
+            f"req.fhdr(CF-Connecting-IP) -m reg {_ADDR_CHARS}",
+            "req.hdr_ip(CF-Connecting-IP) -m found",
+        ):
+            assert f"{{ {check} }}" in set_src[0]
+            assert f"!{{ {check} }}" in "".join(r for r in rules if r.startswith(_STRIP_INVALID))
+        # the header is overwritten, never trusted: X-Forwarded-For is still dropped
+        assert "http-request del-header X-Forwarded-For" in rules
+        assert rules.index(set_src[0]) < rules.index("http-request del-header X-Forwarded-For")
+
+    @pytest.mark.parametrize(
+        ("value", "accepted"),
+        [
+            ("203.0.113.9", True),
+            ("2001:db8::1", True),
+            ("::1", True),
+            ("::ffff:1.2.3.4", True),
+            ("1.2.3.4:80", False),  # one colon: an address with a port is not an address
+            ("[2001:db8::1]:443", False),
+            ("fe80::1%eth0", False),
+            ("1.2.3.4, 5.6.7.8", False),
+            ("not-an-ip", False),
+            ("", False),
+        ],
+    )
+    def test_address_shape_accepts_only_bare_addresses(self, value: str, accepted: bool) -> None:
+        # Value-range checks (``999.1.1.1``) are left to HAProxy's ``req.hdr_ip``; this is the shape gate.
+        assert bool(re.fullmatch(_ADDR_CHARS, value)) is accepted
+
+    def test_header_without_list_or_opt_in_is_refused_before_rendering(self) -> None:
+        data = self.data(restore_client_ip_header="CF-Connecting-IP")
+        data["virtual_services"][0].pop("allow_list_id")
+        with pytest.raises(ValidationError, match="restore_client_ip_from_any_source"):
+            snapshot_from_mapping(data)
 
     def test_no_restore_rules_without_header(self) -> None:
         text = cfg(self.data())

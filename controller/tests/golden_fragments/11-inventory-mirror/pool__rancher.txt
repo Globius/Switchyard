@@ -1,4 +1,4 @@
-==> haproxy/haproxy.cfg (haproxy, lines 171-179)
+==> haproxy/haproxy.cfg (haproxy, lines 172-180)
 backend pool_rancher
     mode http
     balance roundrobin

@@ -33,7 +33,7 @@ virtual_services:
 ```
 
 `deny_list_id` refuses the list on HTTP (403) and TCP (connection reset) services. On HTTP it judges the client address after
-`restore_client_ip_header` has been applied, so behind Cloudflare it is the real client. UDP services cannot use it. A service has
+`restore_client_ip_header` has been applied (the header does not need an allow list, ADR 0229), so behind Cloudflare it is the real client. UDP services cannot use it. A service has
 one deny list.
 
 ## How it stays current

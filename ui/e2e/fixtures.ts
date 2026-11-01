@@ -77,6 +77,7 @@ export const VS = {
   allow_list_id: null,
   enforce_allow_list: false,
   restore_client_ip_header: null,
+  restore_client_ip_from_any_source: false,
   version: 3,
   draft_status: "unchanged",
   changed_fields: [],
