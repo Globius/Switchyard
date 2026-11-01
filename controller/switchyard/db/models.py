@@ -351,6 +351,9 @@ class VirtualServiceRow(TenantOwnedMixin, Base):
         Boolean, nullable=False, server_default=text("false")
     )
     restore_client_ip_header: Mapped[str | None] = mapped_column(Text)
+    restore_client_ip_from_any_source: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     compression: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     cache: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     labels: Mapped[dict[str, str]] = mapped_column(

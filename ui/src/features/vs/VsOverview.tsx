@@ -433,7 +433,10 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
               {v.restore_client_ip_header && (
                 <>
                   <dt className="text-muted-foreground">{t("Client IP header")}</dt>
-                  <dd>{v.restore_client_ip_header}</dd>
+                  <dd>
+                    {v.restore_client_ip_header}
+                    {v.restore_client_ip_from_any_source ? ` · ${t("any source")}` : ""}
+                  </dd>
                 </>
               )}
               {(policyIds.length > 0 || v.allow_list_id) && (

@@ -92,7 +92,7 @@ var Definitions = []Definition{
 		Slug:      "virtual-services",
 		Doc:       "",
 		Resource:  true,
-		PatchKeys: []string{"allow_list_id", "cache", "certificate_ids", "compression", "default_pool_id", "deny_list_id", "dns", "enabled", "enforce_allow_list", "forward_mode", "labels", "name", "policy_set_ids", "ports", "protocol", "restore_client_ip_header", "routes", "se_group_id", "vip", "vip_pool_id"},
+		PatchKeys: []string{"allow_list_id", "cache", "certificate_ids", "compression", "default_pool_id", "deny_list_id", "dns", "enabled", "enforce_allow_list", "forward_mode", "labels", "name", "policy_set_ids", "ports", "protocol", "restore_client_ip_from_any_source", "restore_client_ip_header", "routes", "se_group_id", "vip", "vip_pool_id"},
 		Attrs: []Attr{
 			{Name: "allow_list_id", Kind: KindString},
 			{Name: "cache", Kind: KindObject, Doc: "HAProxy small-object cache for the responses of an ``http`` service (ADR 0117).", Attrs: []Attr{
@@ -132,6 +132,7 @@ var Definitions = []Definition{
 				{Name: "tls_profile", Kind: KindString, Doc: "Protocol versions and ciphers a TLS port offers (Mozilla's server-side TLS guidelines).", Enum: []string{"modern", "intermediate", "legacy"}},
 			}}},
 			{Name: "protocol", Kind: KindString, Required: true, Doc: "Virtual service protocol. ``udp`` renders to IPVS via Keepalived, not HAProxy (M6).", Enum: []string{"http", "tcp", "udp"}},
+			{Name: "restore_client_ip_from_any_source", Kind: KindBool},
 			{Name: "restore_client_ip_header", Kind: KindString},
 			{Name: "routes", Kind: KindList, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
 				{Name: "fallback_pool_ids", Kind: KindList, Elem: &Attr{Kind: KindString}},

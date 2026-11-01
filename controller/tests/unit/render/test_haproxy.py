@@ -249,6 +249,9 @@ class TestRedirects:
         assert "redirect location /b%%20c code 301" in cfg(data)
 
 
+_STRIP_INVALID = "http-request del-header CF-Connecting-IP if !{ req.fhdr_cnt("
+
+
 class TestClientAddress:
     def data(self, **vs: Any) -> dict[str, Any]:
         data = base_data()
@@ -271,12 +274,42 @@ class TestClientAddress:
         set_src = next(i for i, r in enumerate(rules) if "set-src" in r)
         assert trusted < set_src, "trust must be decided before set-src changes `src`"
         assert (
-            "if { var(txn.trusted) -m bool } { hdr(CF-Connecting-IP) -m found }" in rules[set_src]
+            "set-src req.hdr_ip(CF-Connecting-IP) if { var(txn.trusted) -m bool } {"
+            in rules[set_src]
         )
         assert any(
             r == "http-request del-header CF-Connecting-IP if !{ var(txn.trusted) -m bool }"
             for r in rules
         )
+        assert any(r.startswith(_STRIP_INVALID) for r in rules), "invalid values are removed"
+
+    def test_any_source_has_no_trust_flag_and_still_validates(self) -> None:
+        data = self.data()
+        data["virtual_services"][0].pop("allow_list_id")
+        data["virtual_services"][0].update(
+            restore_client_ip_header="CF-Connecting-IP", restore_client_ip_from_any_source=True
+        )
+        text = cfg(data)
+        rules = [r for r in lines(text) if r.startswith("http-request")]
+        assert "txn.trusted" not in text
+        set_src = [r for r in rules if "set-src" in r]
+        assert len(set_src) == 1
+        for check in (
+            "req.fhdr_cnt(CF-Connecting-IP) eq 1",
+            "req.fhdr(CF-Connecting-IP) -m reg ^[0-9A-Fa-f:.]+$",
+            "req.hdr_ip(CF-Connecting-IP) -m found",
+        ):
+            assert f"{{ {check} }}" in set_src[0]
+            assert f"!{{ {check} }}" in "".join(r for r in rules if r.startswith(_STRIP_INVALID))
+        # the header is overwritten, never trusted: X-Forwarded-For is still dropped
+        assert "http-request del-header X-Forwarded-For" in rules
+        assert rules.index(set_src[0]) < rules.index("http-request del-header X-Forwarded-For")
+
+    def test_header_without_list_or_opt_in_is_refused_before_rendering(self) -> None:
+        data = self.data(restore_client_ip_header="CF-Connecting-IP")
+        data["virtual_services"][0].pop("allow_list_id")
+        with pytest.raises(ValidationError, match="restore_client_ip_from_any_source"):
+            snapshot_from_mapping(data)
 
     def test_no_restore_rules_without_header(self) -> None:
         text = cfg(self.data())

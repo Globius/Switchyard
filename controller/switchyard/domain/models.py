@@ -873,7 +873,13 @@ class VirtualService(TenantOwned):
         deny_list_id: Allow-list policy set whose networks are refused (for example a country or
             reputation list, ADR 0147). Applies to the client address after restoration.
         restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real
-            client address; honoured only when the connection source is in the allow list.
+            client address. With ``allow_list_id`` set it is honoured only when the connection
+            source is in that list (and stripped otherwise); without a list it needs
+            ``restore_client_ip_from_any_source`` (ADR 0229).
+        restore_client_ip_from_any_source: Explicit opt-in to honour ``restore_client_ip_header``
+            from every source when there is no ``allow_list_id``. Any client that reaches the
+            service directly can then choose its own address, so use it only when the VIP is
+            reachable solely through the CDN or proxy.
         compression: Response compression (``http`` only; ADR 0117).
         cache: Response cache (``http`` only; ADR 0117).
         labels: Free key/value tags for finding the service (``?label=``; ADR 0198). Never rendered.
@@ -896,6 +902,7 @@ class VirtualService(TenantOwned):
     enforce_allow_list: bool = False
     deny_list_id: UUID | None = None
     restore_client_ip_header: HeaderName | None = None
+    restore_client_ip_from_any_source: bool = False
     compression: Compression | None = None
     cache: CacheSettings | None = None
     labels: Labels = Field(default_factory=dict)
@@ -937,10 +944,23 @@ class VirtualService(TenantOwned):
                 raise ValueError(
                     "http2, http3 and https_redirect_port are only valid for http services"
                 )
-            if self.restore_client_ip_header is not None:
+            if self.restore_client_ip_header is not None or self.restore_client_ip_from_any_source:
                 raise ValueError("restore_client_ip_header is only valid for http services")
-        if (self.enforce_allow_list or self.restore_client_ip_header) and not self.allow_list_id:
-            raise ValueError("enforce_allow_list and restore_client_ip_header need allow_list_id")
+        if self.enforce_allow_list and not self.allow_list_id:
+            raise ValueError("enforce_allow_list needs allow_list_id")
+        if self.restore_client_ip_from_any_source:
+            if self.restore_client_ip_header is None:
+                raise ValueError("restore_client_ip_from_any_source needs restore_client_ip_header")
+            if self.allow_list_id:
+                raise ValueError(
+                    "restore_client_ip_from_any_source conflicts with allow_list_id: "
+                    "the allow list already restricts who is trusted"
+                )
+        elif self.restore_client_ip_header and not self.allow_list_id:
+            raise ValueError(
+                "restore_client_ip_header needs allow_list_id (trusted sources) or "
+                "restore_client_ip_from_any_source=true"
+            )
         tls_ports = {p.port for p in self.ports if p.tls}
         for p in self.ports:
             if p.https_redirect_port is not None and p.https_redirect_port not in tls_ports:

@@ -137,6 +137,10 @@ _ENV = Environment(  # nosemgrep: python-jinja2-xss-autoescape-false-atomic
 )
 
 
+#: Characters of an IPv4/IPv6 literal; a header value with anything else is not an address.
+_ADDR_CHARS = "^[0-9A-Fa-f:.]+$"
+
+
 @dataclass(frozen=True)
 class RenderWarning:
     """A structured renderer warning, as shown in a change set's diff.
@@ -1418,15 +1422,32 @@ class _Renderer:
             rules += self._loop_entry(inst)
         # Client address and header hygiene. The trusted flag is computed first because
         # ``set-src`` changes what ``src`` means for every later rule.
-        if allow is not None and svc.restore_client_ip_header:
+        if svc.restore_client_ip_header and (
+            allow is not None or svc.restore_client_ip_from_any_source
+        ):
             header = esc.header_name(svc.restore_client_ip_header)
-            lst = self._list_path(allow)
-            rules += [
-                f"http-request set-var(txn.trusted) bool(true) if {{ src -f {lst} }}",
-                f"http-request set-src hdr({header}) "
-                f"if {{ var(txn.trusted) -m bool }} {{ hdr({header}) -m found }}",
-                f"http-request del-header {header} if !{{ var(txn.trusted) -m bool }}",
-            ]
+            # Only a single, plain address is accepted (ADR 0229): exactly one header line, no
+            # comma list, only address characters, and ``req.hdr_ip`` must parse it (v4 or v6).
+            # Anything else never reaches ``set-src`` and is removed before the backend.
+            checks = (
+                f"req.fhdr_cnt({header}) eq 1",
+                f"req.fhdr({header}) -m reg {_ADDR_CHARS}",
+                f"req.hdr_ip({header}) -m found",
+            )
+            valid = " ".join(f"{{ {c} }}" for c in checks)
+            invalid = " || ".join(f"!{{ {c} }}" for c in checks)
+            if allow is not None:
+                lst = self._list_path(allow)
+                rules += [
+                    f"http-request set-var(txn.trusted) bool(true) if {{ src -f {lst} }}",
+                    f"http-request set-src req.hdr_ip({header}) "
+                    f"if {{ var(txn.trusted) -m bool }} {valid}",
+                    f"http-request del-header {header} if !{{ var(txn.trusted) -m bool }}",
+                ]
+            else:
+                # ADR 0229: explicit opt-in, every source is trusted.
+                rules.append(f"http-request set-src req.hdr_ip({header}) if {valid}")
+            rules.append(f"http-request del-header {header} if {invalid}")
         if deny is not None:
             # After the client address is restored (behind a CDN ``src`` is the real client), and
             # before anything else touches the request.

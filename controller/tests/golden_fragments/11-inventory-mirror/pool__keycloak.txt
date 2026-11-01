@@ -1,4 +1,4 @@
-==> haproxy/haproxy.cfg (haproxy, lines 111-119)
+==> haproxy/haproxy.cfg (haproxy, lines 112-120)
 backend pool_keycloak
     mode http
     balance roundrobin

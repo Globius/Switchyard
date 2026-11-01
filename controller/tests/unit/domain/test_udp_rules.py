@@ -55,6 +55,7 @@ def test_a_plain_udp_service_is_valid() -> None:
         ({"policy_set_ids": ["ps-x"]}, "policy_set_ids"),
         ({"routes": [{"match": {"host": "a.example.test"}, "pool_id": "pool-wg"}]}, "routes"),
         ({"restore_client_ip_header": "CF-Connecting-IP"}, "restore_client_ip_header"),
+        ({"restore_client_ip_from_any_source": True}, "restore_client_ip_from_any_source"),
         ({"ports": [{"port": 51820, "tls": True}]}, "ports[0].tls"),
         ({"ports": [{"port": 51820, "proxy_protocol": True}]}, "ports[0].proxy_protocol"),
         ({"ports": [{"port": 51820, "tls": True, "http2": True}]}, "ports[0].http2"),
