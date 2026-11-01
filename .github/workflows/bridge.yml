@@ -38,7 +38,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       PR: ${{ github.event.pull_request.number }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4 # the base branch, on purpose
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # the base branch, on purpose
         with: {fetch-depth: 0}
       - name: Consume this review's label
         run: gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --remove-label ready-for-gitlab
