@@ -421,6 +421,7 @@ class VsRouteRow(Base):
     pool_weights: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB(none_as_null=True))
     fallback_pools: Mapped[list[str] | None] = mapped_column(JSONB(none_as_null=True))
     match_extra: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    client_ip: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
 
 
 class VsCertificateRow(Base):

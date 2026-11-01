@@ -258,6 +258,12 @@ Who may set the header is explicit, one of two modes:
 
 The two cannot be combined, and `enforce_allow_list` (reject sources outside the list) still needs `allow_list_id`.
 
+**Per host (ADR 0230).** A host-only route can carry `client_ip` that replaces these three settings for its host
+(`enabled: false` = no restoration there). Precedence: exact host > `*.` wildcard > service. Only when a service has such a
+route, the renderer first sets `txn.host`, then `txn.sy_cip` = the index of the matching override (wildcards first, so an exact
+host wins), appends `!{ var(txn.sy_cip) -m found }` to the service rules and `{ var(txn.sy_cip) -m int N }` to the rules of
+override N. All of it runs before the first use of `src`. See golden `37-per-route-client-ip`. Services without overrides render unchanged.
+
 With a list:
 
 ```text

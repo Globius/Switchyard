@@ -23,3 +23,8 @@ deny list denies nothing; an empty enforced allow list rejects everyone until it
 For CrowdSec bans enforced on the engines themselves (within seconds, per-service mode) see [CrowdSec](crowdsec.md).
 
 **Decisions:** [0010](../adr/0010-certificates-and-cloudflare.md), [0147](../adr/0147-country-and-reputation-ip-lists.md).
+
+**Trusted sources per host.** An allow list is also the set of sources whose client-IP header is believed. On a service
+shared by CDN hosts and directly reached hosts, give each host its own choice with the route's `client_ip` block
+(`allow_list_id` = trusted sources for that host, or `enabled: false` for none); it replaces the service-level
+`allow_list_id` for the header only, `enforce_allow_list` and deny lists stay service-wide (ADR 0230).

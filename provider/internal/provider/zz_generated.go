@@ -135,6 +135,12 @@ var Definitions = []Definition{
 			{Name: "restore_client_ip_from_any_source", Kind: KindBool},
 			{Name: "restore_client_ip_header", Kind: KindString},
 			{Name: "routes", Kind: KindList, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
+				{Name: "client_ip", Kind: KindObject, Doc: "Per-host override of the service's client-IP restoration (ADR 0230).", Attrs: []Attr{
+					{Name: "allow_list_id", Kind: KindString},
+					{Name: "enabled", Kind: KindBool},
+					{Name: "from_any_source", Kind: KindBool},
+					{Name: "header", Kind: KindString},
+				}},
 				{Name: "fallback_pool_ids", Kind: KindList, Elem: &Attr{Kind: KindString}},
 				{Name: "match", Kind: KindObject, Required: true, Doc: "Request match shared by routes and policy rules; every condition given must hold (AND).", Attrs: []Attr{
 					{Name: "headers", Kind: KindList, Elem: &Attr{Kind: KindObject, Attrs: []Attr{

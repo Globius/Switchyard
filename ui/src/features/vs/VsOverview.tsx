@@ -227,7 +227,18 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
                   {sorted.map((r, i) => (
                     <tr key={`${r.order}-${i}`}>
                       <td className="px-4 py-3">{i + 1}</td>
-                      <td className="px-4 py-3 font-mono">{r.match.host ?? t("any host")}</td>
+                      <td className="px-4 py-3 font-mono">
+                        {r.match.host ?? t("any host")}
+                        {r.client_ip && (
+                          <div className="font-sans text-xs text-muted-foreground">
+                            {r.client_ip.enabled === false
+                              ? t("client IP: not restored")
+                              : `${t("client IP")}: ${r.client_ip.header}${
+                                  r.client_ip.from_any_source ? ` · ${t("any source")}` : ""
+                                }`}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 font-mono">
                         {r.match.path_exact
                           ? `exact ${r.match.path_exact}`

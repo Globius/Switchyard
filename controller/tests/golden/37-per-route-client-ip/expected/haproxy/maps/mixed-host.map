@@ -1,0 +1,5 @@
+direct.example.test pool_site
+inherit.example.test pool_site
+keep.wild.example.test pool_site
+open.example.test pool_site
+other.example.test pool_site

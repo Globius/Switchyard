@@ -583,6 +583,12 @@ class _Renderer:
                 connection_rules.append(
                     f"tcp-request session reject if !{{ src -f {lst} }}{exempt}"
                 )
+        for _, route in self._client_ip_overrides(svc):
+            if route.client_ip is not None and route.client_ip.allow_list_id:
+                trusted = _allow_list(self.policies[route.client_ip.allow_list_id])
+                self.files[f"haproxy/lists/{esc.ident(trusted.name)}.cidr"] = self._allow_list_text(
+                    trusted
+                )
         deny = _allow_list(self.policies[svc.deny_list_id]) if svc.deny_list_id else None
         if deny is not None:
             self.files[f"haproxy/lists/{esc.ident(deny.name)}.cidr"] = self._allow_list_text(deny)
@@ -1412,6 +1418,52 @@ class _Renderer:
             f"use_backend {inst.backend} if {LOOP_OFF} {{ var(txn.sy_ad) -m int 2: }}",
         ]
 
+    def _client_ip_overrides(self, svc: dm.VirtualService) -> list[tuple[int, dm.VsRoute]]:
+        """Routes with a ``client_ip`` override, wildcard hosts before exact ones (ADR 0230)."""
+        found = [
+            (i, r)
+            for i, r in enumerate(svc.routes)
+            if r.client_ip is not None and r.match.host is not None
+        ]
+        return sorted(found, key=lambda ir: (not _is_wild(_need(ir[1].match.host, "host")), ir[0]))
+
+    def _restore_rules(
+        self,
+        header_name: str,
+        allow: dm.AllowListPolicySet | None,
+        any_source: bool,
+        gate: str,
+    ) -> list[str]:
+        """Rules restoring the client address from ``header_name`` (ADR 0229).
+
+        ``gate`` is an extra ACL ANDed to every rule (empty at service level).
+        """
+        rules: list[str] = []
+        header = esc.header_name(header_name)
+        # Only a single, plain address is accepted (ADR 0229): exactly one header line, no
+        # comma list, only address characters, and ``req.hdr_ip`` must parse it (v4 or v6).
+        # Anything else never reaches ``set-src`` and is removed before the backend.
+        checks = (
+            f"req.fhdr_cnt({header}) eq 1",
+            f"req.fhdr({header}) -m reg {_ADDR_CHARS}",
+            f"req.hdr_ip({header}) -m found",
+        )
+        valid = " ".join(f"{{ {c} }}" for c in checks)
+        invalid = " || ".join(f"!{{ {c} }}" for c in checks)
+        if allow is not None:
+            lst = self._list_path(allow)
+            rules += [
+                f"http-request set-var(txn.trusted) bool(true) if {{ src -f {lst} }}{gate}",
+                f"http-request set-src req.hdr_ip({header}) "
+                f"if {{ var(txn.trusted) -m bool }} {valid}{gate}",
+                f"http-request del-header {header} if !{{ var(txn.trusted) -m bool }}{gate}",
+            ]
+        else:
+            # ADR 0229: explicit opt-in, every source is trusted.
+            rules.append(f"http-request set-src req.hdr_ip({header}) if {valid}{gate}")
+        rules.append(f"http-request del-header {header} if {invalid}{gate}")
+        return rules
+
     def _request_rules(
         self,
         svc: dm.VirtualService,
@@ -1425,32 +1477,32 @@ class _Renderer:
             rules += self._loop_entry(inst)
         # Client address and header hygiene. The trusted flag is computed first because
         # ``set-src`` changes what ``src`` means for every later rule.
+        overrides = self._client_ip_overrides(svc)
+        gate = ""
+        if overrides:
+            # Per-host overrides (ADR 0230): settle the host first, then record which override (if
+            # any) applies. Wildcards are set first so an exact host overrides them, as in routing.
+            rules.append("http-request set-var(txn.host) req.hdr(host),field(1,:),lower")
+            for k, route in overrides:
+                rules.append(
+                    f"http-request set-var(txn.sy_cip) int({k + 1}) "
+                    f"if {' '.join(self._conditions(route.match))}"
+                )
+            gate = " !{ var(txn.sy_cip) -m found }"
         if svc.restore_client_ip_header and (
             allow is not None or svc.restore_client_ip_from_any_source
         ):
-            header = esc.header_name(svc.restore_client_ip_header)
-            # Only a single, plain address is accepted (ADR 0229): exactly one header line, no
-            # comma list, only address characters, and ``req.hdr_ip`` must parse it (v4 or v6).
-            # Anything else never reaches ``set-src`` and is removed before the backend.
-            checks = (
-                f"req.fhdr_cnt({header}) eq 1",
-                f"req.fhdr({header}) -m reg {_ADDR_CHARS}",
-                f"req.hdr_ip({header}) -m found",
+            rules += self._restore_rules(
+                svc.restore_client_ip_header, allow, svc.restore_client_ip_from_any_source, gate
             )
-            valid = " ".join(f"{{ {c} }}" for c in checks)
-            invalid = " || ".join(f"!{{ {c} }}" for c in checks)
-            if allow is not None:
-                lst = self._list_path(allow)
-                rules += [
-                    f"http-request set-var(txn.trusted) bool(true) if {{ src -f {lst} }}",
-                    f"http-request set-src req.hdr_ip({header}) "
-                    f"if {{ var(txn.trusted) -m bool }} {valid}",
-                    f"http-request del-header {header} if !{{ var(txn.trusted) -m bool }}",
-                ]
-            else:
-                # ADR 0229: explicit opt-in, every source is trusted.
-                rules.append(f"http-request set-src req.hdr_ip({header}) if {valid}")
-            rules.append(f"http-request del-header {header} if {invalid}")
+        for k, route in overrides:
+            ip = route.client_ip
+            if ip is None or not ip.enabled or ip.header is None:
+                continue  # restoration off for this host: the header is left alone
+            lst = _allow_list(self.policies[ip.allow_list_id]) if ip.allow_list_id else None
+            rules += self._restore_rules(
+                ip.header, lst, ip.from_any_source, f" {{ var(txn.sy_cip) -m int {k + 1} }}"
+            )
         if deny is not None:
             # After the client address is restored (behind a CDN ``src`` is the real client), and
             # before anything else touches the request.

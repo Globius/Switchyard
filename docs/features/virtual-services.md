@@ -34,6 +34,12 @@ routes:
 - `restore_client_ip_header` (for example `CF-Connecting-IP`) restores the real client address behind a CDN; deny lists,
   rate limits and logs then see that address. With `allow_list_id` only listed sources are believed; without a list set
   `restore_client_ip_from_any_source: true` to accept it from anyone (see the warning in `render.md`, ADR 0229).
+- **Per host.** A host-only route may carry `client_ip` (`enabled`, `header`, `allow_list_id`, `from_any_source`) that
+  *replaces* the three service settings for that host (`enabled: false` = do not restore there; absent = inherit).
+  Precedence: exact host > `*.` wildcard host > service. Routes with a path or any other condition cannot set it (422), nor
+  can two routes of one host, nor non-HTTP services. Example: a shared web service behind a CDN with
+  `{"match": {"host": "device.example.test"}, "pool_id": "...", "client_ip": {"enabled": false}}` for the host that clients
+  reach directly. ADR 0230.
 - `GET .../virtual-services/{id}/rendered` shows the exact HAProxy configuration, and
   `.../virtual-services/{service}/engines/{engine}/rendered` every file one engine gets.
 
