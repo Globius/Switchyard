@@ -14,6 +14,7 @@ import urllib.request
 
 import docker
 
+from tests import dockerhost
 from tests.golden_support import render_case
 from tests.haproxy_check import HAPROXY_IMAGE
 
@@ -53,7 +54,7 @@ def test_the_challenge_gates_requests_until_it_is_solved() -> None:
     container = client.containers.create(
         HAPROXY_IMAGE,
         command=["haproxy", "-f", "/etc/switchyard/haproxy/haproxy.cfg"],
-        ports={"8080/tcp": ("127.0.0.1", None)},
+        ports={"8080/tcp": (dockerhost.BIND, None)},
         user="root",
     )
     try:
@@ -62,7 +63,7 @@ def test_the_challenge_gates_requests_until_it_is_solved() -> None:
         time.sleep(2)
         container.reload()
         port = container.attrs["NetworkSettings"]["Ports"]["8080/tcp"][0]["HostPort"]
-        base = f"http://127.0.0.1:{port}/"
+        base = f"http://{dockerhost.HOST}:{port}/"
         status, page = _get(base)
         assert status == 200 and "Checking your browser" in page
         found = re.search(r'ts = "(\d+)", ip = "([^"]+)"', page)

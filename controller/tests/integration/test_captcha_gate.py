@@ -14,6 +14,7 @@ import time
 import docker
 import pytest
 
+from tests import dockerhost
 from tests.golden_support import render_case
 from tests.haproxy_check import HAPROXY_IMAGE
 
@@ -35,7 +36,7 @@ def _tar(files: dict[str, str]) -> bytes:
 def _request(
     port: str, method: str, path: str, *, cookie: str | None = None, body: str | None = None
 ) -> tuple[int, str, http.client.HTTPResponse]:
-    connection = http.client.HTTPConnection("127.0.0.1", int(port), timeout=30)
+    connection = http.client.HTTPConnection(dockerhost.HOST, int(port), timeout=30)
     headers = {"Host": "app.example.test"}
     if cookie:
         headers["Cookie"] = cookie
@@ -67,7 +68,7 @@ def test_the_gate_lets_a_verified_client_through() -> None:
     container = client.containers.create(
         HAPROXY_IMAGE,
         command=["haproxy", "-f", "/etc/switchyard/haproxy/haproxy.cfg"],
-        ports={"8080/tcp": ("127.0.0.1", None)},
+        ports={"8080/tcp": (dockerhost.BIND, None)},
         user="root",
     )
     try:

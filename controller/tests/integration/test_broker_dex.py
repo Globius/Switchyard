@@ -24,6 +24,7 @@ import yaml
 
 from switchyard.domain.loader import snapshot_from_mapping, symbolic_uuid
 from switchyard.render.broker import render_broker_files
+from tests import dockerhost
 
 DEX_IMAGE = "ghcr.io/dexidp/dex:v2.41.1-alpine"
 BROKER_URL = "https://auth.example.test/dex"
@@ -153,7 +154,7 @@ def instances() -> Iterator[dict[str, str]]:
                 DEX_IMAGE,
                 entrypoint=["sh", "-c", "mkdir -p /var/lib/dex && exec dex serve /etc/dex.yaml"],
                 user="root",
-                ports={f"{port}/tcp": ("127.0.0.1", None)},
+                ports={f"{port}/tcp": (dockerhost.BIND, None)},
             )
             started.append(container)
             container.put_archive("/etc", _tar("dex.yaml", yaml.safe_dump(config)))
@@ -161,7 +162,7 @@ def instances() -> Iterator[dict[str, str]]:
             container.reload()
             host_port = container.attrs["NetworkSettings"]["Ports"][f"{port}/tcp"][0]["HostPort"]
             name = path.removeprefix("dex/").removesuffix(".yaml")
-            urls[name] = f"http://127.0.0.1:{host_port}"
+            urls[name] = f"http://{dockerhost.HOST}:{host_port}"
         deadline = time.time() + 40
         for name, base in urls.items():
             issuer_path = "/dex/" + name.replace("-", "/", 1)
